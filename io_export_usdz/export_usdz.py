@@ -89,15 +89,15 @@ def saveImage(img, filePath):
     format = settings.file_format
     mode = settings.color_mode
     depth = settings.color_depth
-    
+
     # Change render settings to our target format
     settings.file_format = 'PNG'
     settings.color_mode = 'RGBA'
     settings.color_depth = '8'
-    
+
     # Save the image
     img.save_render(filePath)
-    
+
     # Restore previous render settings
     settings.file_format = format
     settings.color_mode = mode
@@ -140,7 +140,7 @@ def getIndexedNormals(mesh):
     for poly in mesh.polygons:
         if poly.use_smooth:
             for i in poly.vertices:
-                normal = obj.data.vertices[i].normal[:]
+                normal = mesh.vertices[i].normal[:]
                 if normal in normals:
                     indices += [normals.index(normal)]
                 else:
@@ -172,19 +172,19 @@ def getIndexedUVs(mesh):
 
 def exportMesh(obj, options):
     objCopy = copyObject(obj)
-    
+
     # Create UV Map if not avalible
     if len(objCopy.data.uv_layers) == 0:
         bpy.ops.uv.smart_project()
-    
+
     # Rotate to USD Coorinate Space
     objCopy.rotation_mode = 'XYZ'
     objCopy.rotation_euler = (-pi/2.0, 0.0, 0.0)
     bpy.ops.object.transform_apply(location = True, scale = True, rotation = True)
-    
+
     indexedNormals = getIndexedNormals(objCopy.data)
     indexedUVs = getIndexedUVs(objCopy.data)
-    
+
     mesh = {}
     mesh['name'] = obj.data.name.replace('.', '_')
     mesh['material'] = getObjectMaterialName(obj)
@@ -196,7 +196,7 @@ def exportMesh(obj, options):
     mesh['normals'] = indexedNormals[1]
     mesh['uvIndices'] = indexedUVs[0]
     mesh['uvs'] = indexedUVs[1]
-    
+
     deleteObject(objCopy)
     return mesh
 
@@ -352,7 +352,7 @@ def printShaderPrimvar(name):
     return src
 
 def printShaderTexture(compName, matName, default, comps, file):
-    src = 2*tab + 'def Shader "' + compName + '"\n' 
+    src = 2*tab + 'def Shader "' + compName + '"\n'
     src += 2*tab + '{\n'
     src += 3*tab + 'uniform token info:id = "UsdUVTexture"\n'
     src += 3*tab + 'float4 inputs:default = (' + printTuple(default) + ')\n'
@@ -370,24 +370,24 @@ def printShaderTexture(compName, matName, default, comps, file):
 
 def printMaterial(mat, options):
     name = mat['name']
-    
+
     src = tab + 'def Material "' + name + '"\n' + tab + '{\n'
-    
+
     src += 2*tab + 'token inputs:frame:stPrimvarName = "Texture_uv"\n'
     src += 2*tab + 'token outputs:displacement.connect = </Materials/' + name + '/pbr.outputs:displacement>\n'
     src += 2*tab + 'token outputs:surface.connect = </Materials/' + name + '/pbr.outputs:surface>\n'
     src += 2*tab + '\n'
-    
+
     src += printPbrShader(mat)
     src += printShaderPrimvar(name)
-    
+
     src += printShaderTexture('color_map', name, mat['color']+(1,), 3, mat['colorMap']) + '\n'
     src += printShaderTexture('normal_map', name, (0.0, 0.0, 1.0, 1.0), 3, mat['normalMap']) + '\n'
     src += printShaderTexture('ao_map', name, (0, 0, 0, 1), 1, mat['occlusionMap']) + '\n'
     src += printShaderTexture('emissive_map', name, mat['emissive']+(1,), 3, mat['emissiveMap']) + '\n'
     src += printShaderTexture('metallic_map', name, (mat['metallic'],) + (0, 0, 1), 1, mat['metallicMap']) + '\n'
     src += printShaderTexture('roughness_map', name, (mat['roughness'],) + (0, 0, 1), 1, mat['roughnessMap'])
-    
+
     src += tab + '}\n' + tab + '\n'
     return src
 
@@ -403,18 +403,18 @@ def printMaterials(materials, options):
 def writeUSDA(meshes, materials, options):
     usdaFile = options['tempPath'] + options['fileName'] + '.usda'
     src = '#usda 1.0\n'
-    
+
     # Write Default Primitive
     src += '(\n'
     src += tab + 'defaultPrim = "' + meshes[0]['name'] + '"\n'
     src += ')\n\n'
-    
+
     # Add the Meshes
     src += printMeshes(meshes, options)
-    
+
     # Add the Materials
     src += printMaterials(materials, options)
-    
+
     # Write to file
     f = open(usdaFile, 'w')
     f.write(src)
@@ -429,10 +429,10 @@ def writeUSDA(meshes, materials, options):
 def writeUSDZ(materials, options):
     usdaFile = options['tempPath'] + options['fileName'] + '.usda'
     usdzFile = options['basePath'] + options['fileName'] + '.usdz'
-    
+
     args = ['xcrun', 'usdz_converter', usdaFile, usdzFile]
     args += ['-v']
-    
+
     if options['exportMaterials']:
         for mat in materials:
             args += ['-m', '/Materials/' + mat['name']]
@@ -444,10 +444,10 @@ def writeUSDZ(materials, options):
                 g = '%.6g' % color[1]
                 b = '%.6g' % color[2]
                 a = '1.0'
-                args += ['-color_default', r, g, b, a] 
+                args += ['-color_default', r, g, b, a]
             if mat['normalMap'] != None:
                 args += ['-normal_map', mat['normalMap']]
-    
+
     subprocess.run(args)
 
 
@@ -457,19 +457,19 @@ def writeUSDZ(materials, options):
 ################################################################################
 
 def exportUSD(objects, options):
-    
+
     # Create Temp Directory
     tempDir = tempfile.mkdtemp()
     options['tempPath'] = options['basePath']
     if options['fileType'] == 'usdz' and not options['keepUSDA']:
         options['tempPath'] = tempDir + '/'
-    
+
     meshes = exportMeshes(objects, options)
     materials = exportMaterials(objects, options)
-    
+
     writeUSDA(meshes, materials, options)
     writeUSDZ(materials, options)
-    
+
     # Cleanup Temp Directory
     shutil.rmtree(tempDir)
 
@@ -482,7 +482,7 @@ def exportUSD(objects, options):
 def export_usdz(context, filepath = '', exportMaterials = True, keepUSDA = False):
     filePath, fileName = os.path.split(filepath)
     fileName, fileType = fileName.split('.')
-    
+
     if len(context.selected_objects) > 0 and context.active_object != None:
         options = {}
         options['basePath'] = filePath + '/'
@@ -490,7 +490,7 @@ def export_usdz(context, filepath = '', exportMaterials = True, keepUSDA = False
         options['fileType'] = 'usdz'
         options['exportMaterials'] = exportMaterials
         options['keepUSDA'] = keepUSDA
-        
+
         objects = organizeObjects(bpy.context.active_object, bpy.context.selected_objects)
         exportUSD(objects, options)
     return {'FINISHED'}
