@@ -33,7 +33,7 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
 
     filename_ext    = ".usdz"
 
-    joinObjects = BoolProperty(name="Join Objects", description="Combine multiple objects into one", default=True)
+    exportMaterials = BoolProperty(name="Export Materials", description="Export Materials from Objects", default=True)
     keepUSDA = BoolProperty(name="Keep USDA", description="Keep generated USDA and image files", default=False)
 
     def execute(self, context):
