@@ -237,6 +237,60 @@ def getDefaultMaterial():
     return mat
 
 
+def getOutputMaterialNode(mat):
+    for node in mat.node_tree.nodes:
+        if node.type == 'OUTPUT_MATERIAL':
+            return node
+    return None
+
+def getSurfaceShaderNode(mat):
+    node = getOutputMaterialNode(mat)
+    if node != None and 'Surface' in node.inputs.keys() and node.inputs['Surface'].is_linked:
+        return node.inputs['Surface'].links[0].from_node
+    return None
+
+def exportInputImage(input, fileName, options):
+    if input.is_linked and len(input.links) > 0:
+        for link in input.links:
+            node = link.from_node
+            if node.type == 'TEX_IMAGE' and node.image != None:
+                filePath = options['tempPath'] + fileName
+                saveImage(node.image, filePath)
+                return fileName
+    return None
+
+def exportPrincipledBSDF(node, name, options):
+    mat = getDefaultMaterial()
+    mat['color'] = node.inputs['Base Color'].default_value[:3]
+    mat['colorMap'] = exportInputImage(node.inputs['Base Color'], name+'_color.png', options)
+    mat['metallic'] = node.inputs['Metallic'].default_value
+    mat['metallicMap'] = exportInputImage(node.inputs['Metallic'], name+'_metallic.png', options)
+    mat['roughness'] = node.inputs['Roughness'].default_value
+    mat['roughnessMap'] = exportInputImage(node.inputs['Roughness'], name+'_roughness.png', options)
+    mat['normalMap'] = exportInputImage(node.inputs['Normal'], name+'_normal.png', options)
+    return mat
+
+def exportDiffuseBSDF(node, name, options):
+    mat = getDefaultMaterial()
+    mat['color'] = node.inputs['Color'].default_value[:3]
+    mat['colorMap'] = exportInputImage(node.inputs['Color'], name+'_color.png', options)
+    mat['roughness'] = node.inputs['Roughness'].default_value
+    mat['roughnessMap'] = exportInputImage(node.inputs['Roughness'], name+'_roughness.png', options)
+    mat['normalMap'] = exportInputImage(node.inputs['Normal'], name+'_normal.png', options)
+    return mat
+
+def exportCyclesMaterial(material, options):
+    mat = getDefaultMaterial()
+    node = getSurfaceShaderNode(material)
+    if node != None:
+        if node.type == 'BSDF_PRINCIPLED':
+            mat = exportPrincipledBSDF(node, material.name, options)
+        elif node.type == 'BSDF_DIFFUSE':
+            mat = exportDiffuseBSDF(node, material.name, options)
+    mat['name'] = material.name
+    return mat
+
+
 def extractInternalColorMap(mat, options):
     for slot in mat.texture_slots:
         if slot != None and slot.use_map_color_diffuse and slot.texture.type == 'IMAGE' and slot.texture.image != None:
@@ -271,6 +325,8 @@ def exportInternalMaterial(mat, options):
 def exportMaterial(obj, options):
     mat = getObjectMaterial(obj)
     if mat != None:
+        if mat.use_nodes:
+            return exportCyclesMaterial(mat, options)
         return exportInternalMaterial(mat, options)
     return getDefaultMaterial()
 
