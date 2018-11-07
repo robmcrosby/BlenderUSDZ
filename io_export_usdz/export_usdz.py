@@ -89,21 +89,29 @@ def saveImage(img, filePath):
     format = settings.file_format
     mode = settings.color_mode
     depth = settings.color_depth
-
+    
     # Change render settings to our target format
     settings.file_format = 'PNG'
     settings.color_mode = 'RGBA'
     settings.color_depth = '8'
-
+    
     # Save the image
     img.save_render(filePath)
-
+    
     # Restore previous render settings
     settings.file_format = format
     settings.color_mode = mode
     settings.color_depth = depth
 
 
+def createImage(name, width, height, file):
+    bpy.ops.image.new(name=name, width=width, height=height)
+    image = bpy.data.images[name]
+    image.use_alpha = True
+    image.alpha_mode = 'STRAIGHT'
+    image.filepath_raw = file
+    image.file_format = 'PNG'
+    return image
 
 ################################################################################
 ##                           Export Mesh Methods                              ##
@@ -172,19 +180,19 @@ def getIndexedUVs(mesh):
 
 def exportMesh(obj, options):
     objCopy = copyObject(obj)
-
+    
     # Create UV Map if not avalible
     if len(objCopy.data.uv_layers) == 0:
         bpy.ops.uv.smart_project()
-
+    
     # Rotate to USD Coorinate Space
     objCopy.rotation_mode = 'XYZ'
     objCopy.rotation_euler = (-pi/2.0, 0.0, 0.0)
     bpy.ops.object.transform_apply(location = True, scale = True, rotation = True)
-
+    
     indexedNormals = getIndexedNormals(objCopy.data)
     indexedUVs = getIndexedUVs(objCopy.data)
-
+    
     mesh = {}
     mesh['name'] = obj.data.name.replace('.', '_')
     mesh['material'] = getObjectMaterialName(obj)
@@ -196,7 +204,7 @@ def exportMesh(obj, options):
     mesh['normals'] = indexedNormals[1]
     mesh['uvIndices'] = indexedUVs[0]
     mesh['uvs'] = indexedUVs[1]
-
+    
     deleteObject(objCopy)
     return mesh
 
@@ -219,10 +227,10 @@ def getDefaultMaterial():
     mat['name'] = defaultMaterialName
     mat['clearcoat'] = 0.0
     mat['clearcoatRoughness'] = 0.0
-    mat['color'] = (0.0, 0.0, 0.0)
+    mat['color'] = (0.0, 0.0, 0.0, 1.0)
     mat['colorMap'] = None
     mat['displacement'] = 0.0
-    mat['emissive'] = (0.0, 0.0, 0.0)
+    mat['emissive'] = (0.0, 0.0, 0.0, 1.0)
     mat['emissiveMap'] = None
     mat['ior'] = 1.5
     mat['metallic'] = 0.0
@@ -261,10 +269,14 @@ def exportInputImage(input, fileName, options):
 
 def exportPrincipledBSDF(node, name, options):
     mat = getDefaultMaterial()
-    mat['color'] = node.inputs['Base Color'].default_value[:3]
+    mat['name'] = name
+    mat['clearcoat'] = node.inputs['Clearcoat'].default_value
+    mat['clearcoatRoughness'] = node.inputs['Clearcoat Roughness'].default_value
+    mat['color'] = node.inputs['Base Color'].default_value[:]
     mat['colorMap'] = exportInputImage(node.inputs['Base Color'], name+'_color.png', options)
     mat['metallic'] = node.inputs['Metallic'].default_value
     mat['metallicMap'] = exportInputImage(node.inputs['Metallic'], name+'_metallic.png', options)
+    mat['ior'] = node.inputs['IOR'].default_value
     mat['roughness'] = node.inputs['Roughness'].default_value
     mat['roughnessMap'] = exportInputImage(node.inputs['Roughness'], name+'_roughness.png', options)
     mat['normalMap'] = exportInputImage(node.inputs['Normal'], name+'_normal.png', options)
@@ -272,7 +284,8 @@ def exportPrincipledBSDF(node, name, options):
 
 def exportDiffuseBSDF(node, name, options):
     mat = getDefaultMaterial()
-    mat['color'] = node.inputs['Color'].default_value[:3]
+    mat['name'] = name
+    mat['color'] = node.inputs['Color'].default_value[:]
     mat['colorMap'] = exportInputImage(node.inputs['Color'], name+'_color.png', options)
     mat['roughness'] = node.inputs['Roughness'].default_value
     mat['roughnessMap'] = exportInputImage(node.inputs['Roughness'], name+'_roughness.png', options)
@@ -314,9 +327,9 @@ def extractInternalNormalMap(mat, options):
 def exportInternalMaterial(mat, options):
     material = getDefaultMaterial()
     material['name'] = mat.name.replace('.', '_')
-    material['color'] = mat.diffuse_color[:]
+    material['color'] = mat.diffuse_color[:] + (1.0,)
     material['colorMap'] = extractInternalColorMap(mat, options)
-    material['emissive'] = tuple([mat.emit*s for s in mat.diffuse_color[:]])
+    material['emissive'] = tuple([mat.emit*s for s in mat.diffuse_color[:]]) + (1.0,)
     material['normalMap'] = extractInternalNormalMap(mat, options)
     material['specular'] = mat.specular_color[:]
     return material
@@ -331,6 +344,33 @@ def exportMaterial(obj, options):
     return getDefaultMaterial()
 
 
+def bakeAO(obj, file, options):
+    if len(obj.data.uv_textures) > 0:
+        # Create an image
+        img = createImage('export_ao', 1024, 1024, options['tempPath'] + file)
+        selectObject(obj)
+    
+        # Set the UV coordinates
+        obj.data.uv_textures[0].active = True
+        for d in obj.data.uv_textures[0].data:
+            d.image = img
+    
+        bpy.data.scenes["Scene"].render.bake_margin = 4
+        bpy.data.scenes["Scene"].render.bake_type = "AO"
+        bpy.data.worlds["World"].light_settings.use_ambient_occlusion = True
+        bpy.data.worlds["World"].light_settings.samples = options['samples']
+        bpy.ops.object.bake_image()
+        img.save()
+        
+        # Cleanup
+        for d in obj.data.uv_textures[0].data:
+            d.image = None
+        bpy.data.images.remove(img)
+        
+        return file
+    return None
+
+
 def exportMaterials(objs, options):
     materialNames = set()
     materials = []
@@ -338,7 +378,11 @@ def exportMaterials(objs, options):
         name = getObjectMaterialName(obj)
         if name not in materialNames:
             materialNames.add(name)
-            materials.append(exportMaterial(obj, options))
+            mat = exportMaterial(obj, options)
+            if options['bakeAO']:
+                file = mat['name'] + '_ao.png'
+                mat['occlusionMap'] = bakeAO(obj, file, options)
+            materials.append(mat)
     return materials
 
 
@@ -408,7 +452,7 @@ def printShaderPrimvar(name):
     return src
 
 def printShaderTexture(compName, matName, default, comps, file):
-    src = 2*tab + 'def Shader "' + compName + '"\n'
+    src = 2*tab + 'def Shader "' + compName + '"\n' 
     src += 2*tab + '{\n'
     src += 3*tab + 'uniform token info:id = "UsdUVTexture"\n'
     src += 3*tab + 'float4 inputs:default = (' + printTuple(default) + ')\n'
@@ -426,24 +470,24 @@ def printShaderTexture(compName, matName, default, comps, file):
 
 def printMaterial(mat, options):
     name = mat['name']
-
+    
     src = tab + 'def Material "' + name + '"\n' + tab + '{\n'
-
+    
     src += 2*tab + 'token inputs:frame:stPrimvarName = "Texture_uv"\n'
     src += 2*tab + 'token outputs:displacement.connect = </Materials/' + name + '/pbr.outputs:displacement>\n'
     src += 2*tab + 'token outputs:surface.connect = </Materials/' + name + '/pbr.outputs:surface>\n'
     src += 2*tab + '\n'
-
+    
     src += printPbrShader(mat)
     src += printShaderPrimvar(name)
-
-    src += printShaderTexture('color_map', name, mat['color']+(1,), 3, mat['colorMap']) + '\n'
+    
+    src += printShaderTexture('color_map', name, mat['color'], 3, mat['colorMap']) + '\n'
     src += printShaderTexture('normal_map', name, (0.0, 0.0, 1.0, 1.0), 3, mat['normalMap']) + '\n'
     src += printShaderTexture('ao_map', name, (0, 0, 0, 1), 1, mat['occlusionMap']) + '\n'
-    src += printShaderTexture('emissive_map', name, mat['emissive']+(1,), 3, mat['emissiveMap']) + '\n'
-    src += printShaderTexture('metallic_map', name, (mat['metallic'],) + (0, 0, 1), 1, mat['metallicMap']) + '\n'
-    src += printShaderTexture('roughness_map', name, (mat['roughness'],) + (0, 0, 1), 1, mat['roughnessMap'])
-
+    src += printShaderTexture('emissive_map', name, mat['emissive'], 3, mat['emissiveMap']) + '\n'
+    src += printShaderTexture('metallic_map', name, (mat['metallic'], mat['metallic'], mat['metallic'], 1.0), 1, mat['metallicMap']) + '\n'
+    src += printShaderTexture('roughness_map', name, (mat['roughness'], mat['roughness'], mat['roughness'], 1.0), 1, mat['roughnessMap'])
+    
     src += tab + '}\n' + tab + '\n'
     return src
 
@@ -459,18 +503,18 @@ def printMaterials(materials, options):
 def writeUSDA(meshes, materials, options):
     usdaFile = options['tempPath'] + options['fileName'] + '.usda'
     src = '#usda 1.0\n'
-
+    
     # Write Default Primitive
     src += '(\n'
     src += tab + 'defaultPrim = "' + meshes[0]['name'] + '"\n'
     src += ')\n\n'
-
+    
     # Add the Meshes
     src += printMeshes(meshes, options)
-
+    
     # Add the Materials
     src += printMaterials(materials, options)
-
+    
     # Write to file
     f = open(usdaFile, 'w')
     f.write(src)
@@ -485,10 +529,10 @@ def writeUSDA(meshes, materials, options):
 def writeUSDZ(materials, options):
     usdaFile = options['tempPath'] + options['fileName'] + '.usda'
     usdzFile = options['basePath'] + options['fileName'] + '.usdz'
-
+    
     args = ['xcrun', 'usdz_converter', usdaFile, usdzFile]
     args += ['-v']
-
+    
     if options['exportMaterials']:
         for mat in materials:
             args += ['-m', '/Materials/' + mat['name']]
@@ -499,11 +543,13 @@ def writeUSDZ(materials, options):
                 r = '%.6g' % color[0]
                 g = '%.6g' % color[1]
                 b = '%.6g' % color[2]
-                a = '1.0'
-                args += ['-color_default', r, g, b, a]
+                a = '%.6g' % color[3]
+                args += ['-color_default', r, g, b, a] 
             if mat['normalMap'] != None:
                 args += ['-normal_map', mat['normalMap']]
-
+            if mat['occlusionMap'] != None:
+                args += ['-ao_map', mat['occlusionMap']]
+    
     subprocess.run(args)
 
 
@@ -513,19 +559,19 @@ def writeUSDZ(materials, options):
 ################################################################################
 
 def exportUSD(objects, options):
-
+    
     # Create Temp Directory
     tempDir = tempfile.mkdtemp()
     options['tempPath'] = options['basePath']
     if options['fileType'] == 'usdz' and not options['keepUSDA']:
         options['tempPath'] = tempDir + '/'
-
+    
     meshes = exportMeshes(objects, options)
     materials = exportMaterials(objects, options)
-
+    
     writeUSDA(meshes, materials, options)
     writeUSDZ(materials, options)
-
+    
     # Cleanup Temp Directory
     shutil.rmtree(tempDir)
 
@@ -535,10 +581,10 @@ def exportUSD(objects, options):
 ##                         Export Interface Function                          ##
 ################################################################################
 
-def export_usdz(context, filepath = '', exportMaterials = True, keepUSDA = False):
+def export_usdz(context, filepath = '', exportMaterials = True, keepUSDA = False, bakeAO = False, samples = 8):
     filePath, fileName = os.path.split(filepath)
     fileName, fileType = fileName.split('.')
-
+    
     if len(context.selected_objects) > 0 and context.active_object != None:
         options = {}
         options['basePath'] = filePath + '/'
@@ -546,7 +592,9 @@ def export_usdz(context, filepath = '', exportMaterials = True, keepUSDA = False
         options['fileType'] = 'usdz'
         options['exportMaterials'] = exportMaterials
         options['keepUSDA'] = keepUSDA
-
+        options['bakeAO'] = bakeAO
+        options['samples'] = samples
+        
         objects = organizeObjects(bpy.context.active_object, bpy.context.selected_objects)
         exportUSD(objects, options)
     return {'FINISHED'}

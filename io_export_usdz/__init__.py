@@ -13,6 +13,7 @@ import bpy
 from bpy.props import (
         BoolProperty,
         FloatProperty,
+        IntProperty,
         StringProperty,
         EnumProperty,
         )
@@ -35,6 +36,8 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
 
     exportMaterials = BoolProperty(name="Export Materials", description="Export Materials from Objects", default=True)
     keepUSDA = BoolProperty(name="Keep USDA", description="Keep generated USDA and image files", default=False)
+    bakeAO = BoolProperty(name="Bake AO", description="Bake Ambiant Occlusion Texture", default=False)
+    samples = IntProperty(name="Samples", description="Number of Samples for Ambiant Occlusion", min=1, max=1000, default= 8)
 
     def execute(self, context):
         from . import export_usdz
