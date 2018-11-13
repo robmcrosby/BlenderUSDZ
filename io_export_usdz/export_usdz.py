@@ -190,29 +190,43 @@ def exportMesh(obj, options):
     objCopy.rotation_euler = (-pi/2.0, 0.0, 0.0)
     bpy.ops.object.transform_apply(location = True, scale = True, rotation = True)
     
-    indexedNormals = getIndexedNormals(objCopy.data)
-    indexedUVs = getIndexedUVs(objCopy.data)
+    name = obj.data.name.replace('.', '_')
+    multiMat = len(obj.material_slots) > 1
     
-    mesh = {}
-    mesh['name'] = obj.data.name.replace('.', '_')
-    mesh['material'] = getObjectMaterialName(obj)
-    mesh['extent'] = getObjectExtents(objCopy)
-    mesh['faceVertexCounts'] = getFaceVertexCounts(objCopy.data)
-    mesh['faceVertexIndices'] = getFaceVertexIndices(objCopy.data)
-    mesh['points'] = getVertexPoints(objCopy.data)
-    mesh['normalIndices'] = indexedNormals[0]
-    mesh['normals'] = indexedNormals[1]
-    mesh['uvIndices'] = indexedUVs[0]
-    mesh['uvs'] = indexedUVs[1]
+    # Seperate the Mesh by Material
+    objs = [objCopy]
+    if multiMat:
+        bpy.ops.mesh.separate(type='MATERIAL')
+        objs = bpy.context.selected_objects
     
-    deleteObject(objCopy)
-    return mesh
+    meshes = []
+    for obj in objs:
+        indexedNormals = getIndexedNormals(obj.data)
+        indexedUVs = getIndexedUVs(obj.data)
+    
+        mesh = {}
+        mesh['name'] = name
+        mesh['material'] = getObjectMaterialName(obj)
+        mesh['extent'] = getObjectExtents(obj)
+        mesh['faceVertexCounts'] = getFaceVertexCounts(obj.data)
+        mesh['faceVertexIndices'] = getFaceVertexIndices(obj.data)
+        mesh['points'] = getVertexPoints(obj.data)
+        mesh['normalIndices'] = indexedNormals[0]
+        mesh['normals'] = indexedNormals[1]
+        mesh['uvIndices'] = indexedUVs[0]
+        mesh['uvs'] = indexedUVs[1]
+        
+        if multiMat:
+            mesh['name'] += mesh['material']
+        deleteObject(obj)
+        meshes.append(mesh)
+    return meshes
 
 def exportMeshes(objs, options):
     meshes = []
     for obj in objs:
         if obj.type == 'MESH':
-            meshes.append(exportMesh(obj, options))
+            meshes += exportMesh(obj, options)
     selectObjects(objs)
     return meshes
 
@@ -335,15 +349,6 @@ def exportInternalMaterial(mat, options):
     return material
 
 
-def exportMaterial(obj, options):
-    mat = getObjectMaterial(obj)
-    if mat != None:
-        if mat.use_nodes:
-            return exportCyclesMaterial(mat, options)
-        return exportInternalMaterial(mat, options)
-    return getDefaultMaterial()
-
-
 def bakeAO(obj, file, options):
     if len(obj.data.uv_textures) > 0:
         # Create an image
@@ -371,18 +376,28 @@ def bakeAO(obj, file, options):
     return None
 
 
+def exportMaterial(mat, options):
+    if mat != None:
+        if mat.use_nodes:
+            return exportCyclesMaterial(mat, options)
+        return exportInternalMaterial(mat, options)
+    return getDefaultMaterial()
+
+
 def exportMaterials(objs, options):
     materialNames = set()
     materials = []
+    
     for obj in objs:
-        name = getObjectMaterialName(obj)
-        if name not in materialNames:
-            materialNames.add(name)
-            mat = exportMaterial(obj, options)
-            if options['bakeAO']:
-                file = mat['name'] + '_ao.png'
-                mat['occlusionMap'] = bakeAO(obj, file, options)
-            materials.append(mat)
+        if obj.type == 'MESH' and len(obj.data.materials) > 0:
+            for mat in obj.data.materials:
+                if mat != None:
+                    name = mat.name.replace('.', '_')
+                    if not name in materialNames:
+                        materialNames.add(name)
+                        materials.append(exportMaterial(mat, options))
+    if len(materials) == 0:
+        materials.append(getDefaultMaterial())
     return materials
 
 
