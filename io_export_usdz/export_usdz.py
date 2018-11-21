@@ -1,5 +1,6 @@
 import bpy
 import os
+import mathutils
 import subprocess
 import tempfile
 import shutil
@@ -178,7 +179,7 @@ def getIndexedUVs(mesh):
     return (indices, uvs)
 
 
-def exportMesh(obj, options):
+def exportMeshes(obj, options):
     objCopy = copyObject(obj)
     
     # Create UV Map if not avalible
@@ -186,9 +187,9 @@ def exportMesh(obj, options):
         bpy.ops.uv.smart_project()
     
     # Rotate to USD Coorinate Space
-    objCopy.rotation_mode = 'XYZ'
-    objCopy.rotation_euler = (-pi/2.0, 0.0, 0.0)
-    bpy.ops.object.transform_apply(location = True, scale = True, rotation = True)
+    #objCopy.rotation_mode = 'XYZ'
+    #objCopy.rotation_euler = (-pi/2.0, 0.0, 0.0)
+    #bpy.ops.object.transform_apply(location = True, scale = True, rotation = True)
     
     name = obj.data.name.replace('.', '_')
     multiMat = len(obj.material_slots) > 1
@@ -217,19 +218,35 @@ def exportMesh(obj, options):
         mesh['uvs'] = indexedUVs[1]
         
         if multiMat:
-            mesh['name'] += mesh['material']
+            mesh['name'] += '_' + mesh['material']
         deleteObject(obj)
         meshes.append(mesh)
     return meshes
 
-def exportMeshes(objs, options):
-    meshes = []
+def exportMatrix(matrix):
+    matrix = mathutils.Matrix.transposed(matrix)
+    return [col[:] for col in matrix[:]]
+
+def correctMatrix(matrix, options):
+    scale = mathutils.Matrix.Scale(options['scale'], 4)
+    rotation = mathutils.Matrix.Rotation(-pi/2.0, 4, 'X')
+    return rotation * scale * matrix
+
+def exportObject(obj, options):
+    object = {}
+    object['name'] = obj.name.replace('.', '_')
+    object['type'] = 'static'
+    object['meshes'] = exportMeshes(obj, options)
+    object['matrix'] = exportMatrix(correctMatrix(obj.matrix_world, options))
+    return object
+
+def exportObjects(objs, options):
+    objects = []
     for obj in objs:
         if obj.type == 'MESH':
-            meshes += exportMesh(obj, options)
+            objects.append(exportObject(obj, options))
     selectObjects(objs)
-    return meshes
-
+    return objects
 
 
 ################################################################################
@@ -407,23 +424,23 @@ def exportMaterials(objs, options):
 ################################################################################
 
 def printMesh(mesh, options):
-    src = 'def Mesh "' + mesh['name'] + '"\n'
-    src += '{\n'
-    src += tab + 'float3[] extent = [' + printVectors(mesh['extent']) + ']\n'
-    src += tab + 'int[] faceVertexCounts = [' + printIndices(mesh['faceVertexCounts']) + ']\n'
-    src += tab + 'int[] faceVertexIndices = [' + printIndices(mesh['faceVertexIndices']) + ']\n'
+    src = tab + 'def Mesh "' + mesh['name'] + '"\n'
+    src += tab + '{\n'
+    src += 2*tab + 'float3[] extent = [' + printVectors(mesh['extent']) + ']\n'
+    src += 2*tab + 'int[] faceVertexCounts = [' + printIndices(mesh['faceVertexCounts']) + ']\n'
+    src += 2*tab + 'int[] faceVertexIndices = [' + printIndices(mesh['faceVertexIndices']) + ']\n'
     if options['exportMaterials']:
-        src += tab + 'rel material:binding = </Materials/' + mesh['material'] + '>\n'
-    src += tab + 'point3f[] points = [' + printVectors(mesh['points']) + ']\n'
-    src += tab + 'normal3f[] primvars:normals = [' + printVectors(mesh['normals']) + '] (\n'
-    src += tab + tab + 'interpolation = "vertex"\n' + tab + ')\n'
-    src += tab + 'int[] primvars:normals:indices = [' + printIndices(mesh['normalIndices']) + ']\n'
-    src += tab + 'texCoord2f[] primvars:Texture_uv = [' + printVectors(mesh['uvs']) + '] (\n'
-    src += tab + tab + 'interpolation = "faceVarying"\n' + tab + ')\n'
-    src += tab + 'int[] primvars:Texture_uv:indices = [' + printIndices(mesh['uvIndices']) + ']\n'
-    src += tab + 'uniform token subdivisionScheme = "none"\n'
-    src += '}\n'
-    src += '\n'
+        src += 2*tab + 'rel material:binding = </Materials/' + mesh['material'] + '>\n'
+    src += 2*tab + 'point3f[] points = [' + printVectors(mesh['points']) + ']\n'
+    src += 2*tab + 'normal3f[] primvars:normals = [' + printVectors(mesh['normals']) + '] (\n'
+    src += 2*tab + tab + 'interpolation = "vertex"\n' + tab + ')\n'
+    src += 2*tab + 'int[] primvars:normals:indices = [' + printIndices(mesh['normalIndices']) + ']\n'
+    src += 2*tab + 'texCoord2f[] primvars:Texture_uv = [' + printVectors(mesh['uvs']) + '] (\n'
+    src += 2*tab + tab + 'interpolation = "faceVarying"\n' + tab + ')\n'
+    src += 2*tab + 'int[] primvars:Texture_uv:indices = [' + printIndices(mesh['uvIndices']) + ']\n'
+    src += 2*tab + 'uniform token subdivisionScheme = "none"\n'
+    src += tab + '}\n'
+    src += tab + '\n'
     return src
 
 def printMeshes(meshes, options):
@@ -432,16 +449,42 @@ def printMeshes(meshes, options):
         src += printMesh(mesh, options)
     return src
 
+def printMatrix(mtx):
+    return 'custom matrix4d xformOp:transform = (' + printVectors(mtx) + ')'
+
+def printObject(obj, options):
+    src = 'def Xform "' + obj['name'] + '"\n'
+    src += '{\n'
+    src += tab + printMatrix(obj['matrix']) + '\n'
+    src += tab + 'uniform token[] xformOpOrder = ["xformOp:transform"]\n'
+    src += tab + '\n'
+    src += printMeshes(obj['meshes'], options)
+    src += '}\n\n'
+    return src
+
+def printObjects(objs, options):
+    src = ''
+    for obj in objs:
+        src += printObject(obj, options)
+    return src
+
 def printPbrShader(mat):
     src = 2*tab + 'def Shader "pbr"\n'
     src += 2*tab + '{\n'
     src += 3*tab + 'uniform token info:id = "UsdPreviewSurface"\n'
     src += 3*tab + 'float inputs:clearcoat = %.6g\n' % mat['clearcoat']
     src += 3*tab + 'float inputs:clearcoatRoughness = %.6g\n' % mat['clearcoatRoughness']
-    src += 3*tab + 'color3f inputs:diffuseColor.connect = </Materials/' + mat['name'] + '/color_map.outputs:rgb>\n'
+    if mat['colorMap'] == None:
+        src += 3*tab + 'color3f inputs:diffuseColor = (' + printTuple(mat['color'][:3]) + ')\n'
+    else:
+        src += 3*tab + 'color3f inputs:diffuseColor.connect = </Materials/' + mat['name'] + '/color_map.outputs:rgb>\n'
     src += 3*tab + 'float inputs:displacement = %.6g\n' % mat['displacement']
-    src += 3*tab + 'color3f inputs:emissiveColor.connect = </Materials/' + mat['name'] + '/emissive_map.outputs:rgb>\n'
+    if mat['emissiveMap'] == None:
+        src += 3*tab + 'color3f inputs:emissiveColor = (' + printTuple(mat['emissive'][:3]) + ')\n'
+    else:
+        src += 3*tab + 'color3f inputs:emissiveColor.connect = </Materials/' + mat['name'] + '/emissive_map.outputs:rgb>\n'
     src += 3*tab + 'float inputs:ior = %.6g\n' % mat['ior']
+    
     src += 3*tab + 'float inputs:metallic.connect = </Materials/' + mat['name'] + '/metallic_map.outputs:r>\n'
     src += 3*tab + 'normal3f inputs:normal.connect = </Materials/' + mat['name'] + '/normal_map.outputs:rgb>\n'
     src += 3*tab + 'float inputs:occlusion.connect = </Materials/' + mat['name'] + '/ao_map.outputs:r>\n'
@@ -496,7 +539,8 @@ def printMaterial(mat, options):
     src += printPbrShader(mat)
     src += printShaderPrimvar(name)
     
-    src += printShaderTexture('color_map', name, mat['color'], 3, mat['colorMap']) + '\n'
+    if mat['colorMap'] != None:
+        src += printShaderTexture('color_map', name, mat['color'], 3, mat['colorMap']) + '\n'
     src += printShaderTexture('normal_map', name, (0.0, 0.0, 1.0, 1.0), 3, mat['normalMap']) + '\n'
     src += printShaderTexture('ao_map', name, (0, 0, 0, 1), 1, mat['occlusionMap']) + '\n'
     src += printShaderTexture('emissive_map', name, mat['emissive'], 3, mat['emissiveMap']) + '\n'
@@ -515,17 +559,12 @@ def printMaterials(materials, options):
         src += '}\n\n'
     return src
 
-def writeUSDA(meshes, materials, options):
+def writeUSDA(objs, materials, options):
     usdaFile = options['tempPath'] + options['fileName'] + '.usda'
     src = '#usda 1.0\n'
     
-    # Write Default Primitive
-    src += '(\n'
-    src += tab + 'defaultPrim = "' + meshes[0]['name'] + '"\n'
-    src += ')\n\n'
-    
-    # Add the Meshes
-    src += printMeshes(meshes, options)
+    #Add the Objects
+    src += printObjects(objs, options)
     
     # Add the Materials
     src += printMaterials(materials, options)
@@ -550,21 +589,16 @@ def writeUSDZ(materials, options):
     
     if options['exportMaterials']:
         for mat in materials:
-            args += ['-m', '/Materials/' + mat['name']]
+            mArgs = []
             if mat['colorMap'] != None:
-                args += ['-color_map', mat['colorMap']]
-            else:
-                color = mat['color']
-                r = '%.6g' % color[0]
-                g = '%.6g' % color[1]
-                b = '%.6g' % color[2]
-                a = '%.6g' % color[3]
-                args += ['-color_default', r, g, b, a] 
+                mArgs += ['-color_map', mat['colorMap']]
             if mat['normalMap'] != None:
-                args += ['-normal_map', mat['normalMap']]
+                mArgs += ['-normal_map', mat['normalMap']]
             if mat['occlusionMap'] != None:
-                args += ['-ao_map', mat['occlusionMap']]
-    
+                mArgs += ['-ao_map', mat['occlusionMap']]
+            # Add Material Arguments if any
+            if len(mArgs) > 0:
+                args += ['-m', '/Materials/' + mat['name']] + mArgs 
     subprocess.run(args)
 
 
@@ -573,7 +607,7 @@ def writeUSDZ(materials, options):
 ##                           USD Export Methods                               ##
 ################################################################################
 
-def exportUSD(objects, options):
+def exportUSD(objs, options):
     
     # Create Temp Directory
     tempDir = tempfile.mkdtemp()
@@ -581,10 +615,12 @@ def exportUSD(objects, options):
     if options['fileType'] == 'usdz' and not options['keepUSDA']:
         options['tempPath'] = tempDir + '/'
     
-    meshes = exportMeshes(objects, options)
-    materials = exportMaterials(objects, options)
+    #meshes = exportMeshes(objs, options)
+    objects = exportObjects(objs, options)
+    materials = exportMaterials(objs, options)
     
-    writeUSDA(meshes, materials, options)
+    #writeUSDA(meshes, materials, options)
+    writeUSDA(objects, materials, options)
     writeUSDZ(materials, options)
     
     # Cleanup Temp Directory
@@ -596,7 +632,7 @@ def exportUSD(objects, options):
 ##                         Export Interface Function                          ##
 ################################################################################
 
-def export_usdz(context, filepath = '', exportMaterials = True, keepUSDA = False, bakeAO = False, samples = 8):
+def export_usdz(context, filepath = '', exportMaterials = True, keepUSDA = False, bakeAO = False, samples = 8, scale = 1.0):
     filePath, fileName = os.path.split(filepath)
     fileName, fileType = fileName.split('.')
     
@@ -609,6 +645,7 @@ def export_usdz(context, filepath = '', exportMaterials = True, keepUSDA = False
         options['keepUSDA'] = keepUSDA
         options['bakeAO'] = bakeAO
         options['samples'] = samples
+        options['scale'] = scale
         
         objects = organizeObjects(bpy.context.active_object, bpy.context.selected_objects)
         exportUSD(objects, options)

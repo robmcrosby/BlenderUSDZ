@@ -38,6 +38,7 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
     keepUSDA = BoolProperty(name="Keep USDA", description="Keep generated USDA and image files", default=False)
     bakeAO = BoolProperty(name="Bake AO", description="Bake Ambiant Occlusion Texture", default=False)
     samples = IntProperty(name="Samples", description="Number of Samples for Ambiant Occlusion", min=1, max=1000, default= 8)
+    scale = FloatProperty(name="Scale", min=0.01, max=1000.0, default=1.0)
 
     def execute(self, context):
         from . import export_usdz
