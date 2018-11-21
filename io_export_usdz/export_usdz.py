@@ -227,17 +227,17 @@ def exportMatrix(matrix):
     matrix = mathutils.Matrix.transposed(matrix)
     return [col[:] for col in matrix[:]]
 
-def correctMatrix(matrix, options):
+def exportRootMatrix(matrix, options):
     scale = mathutils.Matrix.Scale(options['scale'], 4)
     rotation = mathutils.Matrix.Rotation(-pi/2.0, 4, 'X')
-    return rotation * scale * matrix
+    return exportMatrix(rotation * scale * matrix)
 
 def exportObject(obj, options):
     object = {}
     object['name'] = obj.name.replace('.', '_')
     object['type'] = 'static'
     object['meshes'] = exportMeshes(obj, options)
-    object['matrix'] = exportMatrix(correctMatrix(obj.matrix_world, options))
+    object['matrix'] = exportRootMatrix(obj.matrix_world, options)
     return object
 
 def exportObjects(objs, options):
@@ -407,12 +407,18 @@ def exportMaterials(objs, options):
     
     for obj in objs:
         if obj.type == 'MESH' and len(obj.data.materials) > 0:
+            aoMap = None
+            if options['bakeAO']:
+                aoFile = obj.data.materials[0].name.replace('.', '_') + '_ao.png'
+                aoMap = bakeAO(obj, aoFile, options)
+            
             for mat in obj.data.materials:
                 if mat != None:
                     name = mat.name.replace('.', '_')
                     if not name in materialNames:
                         materialNames.add(name)
                         materials.append(exportMaterial(mat, options))
+                        materials[-1]['occlusionMap'] = aoMap
     if len(materials) == 0:
         materials.append(getDefaultMaterial())
     return materials
@@ -468,28 +474,48 @@ def printObjects(objs, options):
         src += printObject(obj, options)
     return src
 
+
 def printPbrShader(mat):
     src = 2*tab + 'def Shader "pbr"\n'
     src += 2*tab + '{\n'
     src += 3*tab + 'uniform token info:id = "UsdPreviewSurface"\n'
     src += 3*tab + 'float inputs:clearcoat = %.6g\n' % mat['clearcoat']
     src += 3*tab + 'float inputs:clearcoatRoughness = %.6g\n' % mat['clearcoatRoughness']
+    
     if mat['colorMap'] == None:
         src += 3*tab + 'color3f inputs:diffuseColor = (' + printTuple(mat['color'][:3]) + ')\n'
     else:
         src += 3*tab + 'color3f inputs:diffuseColor.connect = </Materials/' + mat['name'] + '/color_map.outputs:rgb>\n'
-    src += 3*tab + 'float inputs:displacement = %.6g\n' % mat['displacement']
+    
     if mat['emissiveMap'] == None:
         src += 3*tab + 'color3f inputs:emissiveColor = (' + printTuple(mat['emissive'][:3]) + ')\n'
     else:
         src += 3*tab + 'color3f inputs:emissiveColor.connect = </Materials/' + mat['name'] + '/emissive_map.outputs:rgb>\n'
+    
+    src += 3*tab + 'float inputs:displacement = %.6g\n' % mat['displacement']
     src += 3*tab + 'float inputs:ior = %.6g\n' % mat['ior']
     
-    src += 3*tab + 'float inputs:metallic.connect = </Materials/' + mat['name'] + '/metallic_map.outputs:r>\n'
-    src += 3*tab + 'normal3f inputs:normal.connect = </Materials/' + mat['name'] + '/normal_map.outputs:rgb>\n'
-    src += 3*tab + 'float inputs:occlusion.connect = </Materials/' + mat['name'] + '/ao_map.outputs:r>\n'
+    if mat['metallicMap'] == None:
+        src += 3*tab + 'float inputs:metallic = %.6g\n' % mat['metallic']
+    else:
+        src += 3*tab + 'float inputs:metallic.connect = </Materials/' + mat['name'] + '/metallic_map.outputs:r>\n'
+    
+    if mat['normalMap'] == None:
+        src += 3*tab + 'normal3f inputs:normal = (0, 0, 1)\n'
+    else:
+        src += 3*tab + 'normal3f inputs:normal.connect = </Materials/' + mat['name'] + '/normal_map.outputs:rgb>\n'
+    
+    if mat['occlusionMap'] == None:
+        src += 3*tab + 'float inputs:occlusion = 0\n'
+    else:
+        src += 3*tab + 'float inputs:occlusion.connect = </Materials/' + mat['name'] + '/ao_map.outputs:r>\n'
+    
+    if mat['roughnessMap'] == None:
+        src += 3*tab + 'float inputs:roughness = %.6g\n' % mat['roughness']
+    else:
+        src += 3*tab + 'float inputs:roughness.connect = </Materials/' + mat['name'] + '/roughness_map.outputs:r>\n'
+    
     src += 3*tab + 'float inputs:opacity = %.6g\n' % mat['opacity']
-    src += 3*tab + 'float inputs:roughness.connect = </Materials/' + mat['name'] + '/roughness_map.outputs:r>\n'
     src += 3*tab + 'color3f inputs:specularColor = (' + printTuple(mat['specular']) + ')\n'
     src += 3*tab + 'int inputs:useSpecularWorkflow = %i\n' % int(mat['specularWorkflow'])
     src += 3*tab + 'token outputs:displacement\n'
@@ -541,11 +567,16 @@ def printMaterial(mat, options):
     
     if mat['colorMap'] != None:
         src += printShaderTexture('color_map', name, mat['color'], 3, mat['colorMap']) + '\n'
-    src += printShaderTexture('normal_map', name, (0.0, 0.0, 1.0, 1.0), 3, mat['normalMap']) + '\n'
-    src += printShaderTexture('ao_map', name, (0, 0, 0, 1), 1, mat['occlusionMap']) + '\n'
-    src += printShaderTexture('emissive_map', name, mat['emissive'], 3, mat['emissiveMap']) + '\n'
-    src += printShaderTexture('metallic_map', name, (mat['metallic'], mat['metallic'], mat['metallic'], 1.0), 1, mat['metallicMap']) + '\n'
-    src += printShaderTexture('roughness_map', name, (mat['roughness'], mat['roughness'], mat['roughness'], 1.0), 1, mat['roughnessMap'])
+    if mat['normalMap'] != None:
+        src += printShaderTexture('normal_map', name, (0, 0, 1, 1), 3, mat['normalMap']) + '\n'
+    if mat['occlusionMap'] != None:
+        src += printShaderTexture('ao_map', name, (0, 0, 0, 1), 1, mat['occlusionMap']) + '\n'
+    if mat['emissiveMap'] != None:
+        src += printShaderTexture('emissive_map', name, mat['emissive'], 3, mat['emissiveMap']) + '\n'
+    if mat['metallicMap'] != None:
+        src += printShaderTexture('metallic_map', name, (mat['metallic'], mat['metallic'], mat['metallic'], 1.0), 1, mat['metallicMap']) + '\n'
+    if mat['roughnessMap'] != None:
+        src += printShaderTexture('roughness_map', name, (mat['roughness'], mat['roughness'], mat['roughness'], 1.0), 1, mat['roughnessMap'])
     
     src += tab + '}\n' + tab + '\n'
     return src
