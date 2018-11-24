@@ -9,6 +9,7 @@ import shutil
 # Defines
 tab = '    '
 pi = 3.1415926
+epslon = 0.000001
 defaultMaterialName = 'DefaultMaterial'
 
 
@@ -142,6 +143,21 @@ def getFaceVertexIndices(mesh):
 def getVertexPoints(mesh):
     return [v.co[:] for v in mesh.vertices]
 
+def getVertexWeights(obj):
+    if len(obj.vertex_groups) > 0:
+        vertexWeights = []
+        for i in range(0, len(obj.data.vertices)):
+            weights = []
+            for group in obj.vertex_groups:
+                try:
+                    weight = group.weight(i)
+                    if weight > epslon:
+                        weights.append((group.index, weight))
+                except RuntimeError:
+                    pass
+            vertexWeights.append(weights)
+        return vertexWeights
+    return None
 
 def getIndexedNormals(mesh):
     indices = []
@@ -178,6 +194,17 @@ def getIndexedUVs(mesh):
             uvs.append(uv)
     return (indices, uvs)
 
+def getSkeletonPath(obj):
+    arm = obj.parent
+    if arm != None and arm.type == 'ARMATURE':
+        return '/' + obj.name.replace('.', '_') + '/' + arm.name.replace('.', '_')
+    return None
+
+def getAnimationPath(obj):
+    arm = obj.parent
+    if arm != None and arm.type == 'ARMATURE':
+        return '/' + obj.name.replace('.', '_') + '/' + arm.animation_data.action.name.replace('.', '_')
+    return None
 
 def exportMeshes(obj, options):
     objCopy = copyObject(obj)
@@ -193,6 +220,9 @@ def exportMeshes(obj, options):
     
     name = obj.data.name.replace('.', '_')
     multiMat = len(obj.material_slots) > 1
+    
+    skeleton = getSkeletonPath(obj)
+    animationSource = getAnimationPath(obj)
     
     # Seperate the Mesh by Material
     objs = [objCopy]
@@ -216,6 +246,9 @@ def exportMeshes(obj, options):
         mesh['normals'] = indexedNormals[1]
         mesh['uvIndices'] = indexedUVs[0]
         mesh['uvs'] = indexedUVs[1]
+        mesh['weights'] = getVertexWeights(obj)
+        mesh['skeleton'] = skeleton
+        mesh['animationSource'] = animationSource
         
         if multiMat:
             mesh['name'] += '_' + mesh['material']
@@ -232,12 +265,110 @@ def exportRootMatrix(matrix, options):
     rotation = mathutils.Matrix.Rotation(-pi/2.0, 4, 'X')
     return exportMatrix(rotation * scale * matrix)
 
+def getJointToken(bone):
+    name = bone.name.replace('.', '_')
+    if bone.parent != None:
+        return getJointToken(bone.parent) + '/' + name
+    return name
+
+def exportJointTokens(arm):
+    return [getJointToken(bone) for bone in arm.data.bones]
+
+def getBoneMatrix(bone):
+    trans = bone.head_local
+    transform = mathutils.Matrix.Translation(trans[:])
+    rotation = mathutils.Matrix.Rotation(pi/2.0, 4, 'X')
+    return transform * rotation
+
+def exportBoneMatrix(bone):
+    return exportMatrix(getBoneMatrix(bone))
+
+def exportBindTransforms(arm):
+    transforms = []
+    for bone in arm.data.bones:
+        matrix = bone.matrix_local
+        transforms.append(exportMatrix(matrix))
+    return transforms
+
+def exportRestTransforms(arm):
+    transforms = []
+    for bone in arm.data.bones:
+        matrix = bone.matrix_local
+        transforms.append(exportMatrix(matrix))
+    return transforms
+
+def exportSkeleton(obj, options):
+    arm = obj.parent
+    if arm != None and arm.type == 'ARMATURE':
+        skeleton = {}
+        skeleton['name'] = arm.name.replace('.', '_')
+        skeleton['matrix'] = exportMatrix(arm.matrix_world)
+        skeleton['jointTokens'] = exportJointTokens(arm)
+        skeleton['bindTransforms'] = exportBindTransforms(arm)
+        skeleton['restTransforms'] = exportRestTransforms(arm)
+        return skeleton
+    return None
+
+def getArmatureScales(arm, scale):
+    scales = []
+    for bone in arm.pose.bones:
+        if bone.parent != None:
+            scales.append(bone.scale[:])
+        else:
+            scales.append((bone.scale*scale)[:])
+    return scales
+
+def getArmatureTranslations(arm, scale):
+    translations = []
+    for bone in arm.pose.bones:
+        location = bone.location
+        if bone.parent != None:
+            location += mathutils.Vector((0, bone.parent.length, 0))
+        else:
+            location *= scale
+        translations.append(location[:])
+    return translations
+
+def exportSkelAnimation(arm, options):
+    scale = options['scale']
+    rotations = []
+    scales = []
+    translations = []
+    
+    options['animated'] = True
+    
+    originalFrame = bpy.context.scene.frame_current
+    action = arm.animation_data.action
+    frame_begin = options['startTimeCode']
+    frame_end = options['endTimeCode']
+    for frame in range(frame_begin, frame_end+1):
+        bpy.context.scene.frame_set(frame)
+        rotations.append((frame, [bone.rotation_quaternion[:] for bone in arm.pose.bones]))
+        scales.append((frame, getArmatureScales(arm, scale)))
+        translations.append((frame, getArmatureTranslations(arm, scale)))
+    bpy.context.scene.frame_set(originalFrame)
+    
+    animation = {}
+    animation['name'] = arm.animation_data.action.name.replace('.', '_')
+    animation['jointTokens'] = exportJointTokens(arm)
+    animation['rotations'] = rotations
+    animation['scales'] = scales
+    animation['translations'] = translations
+    return animation
+
+def exportAnimation(obj, options):
+    arm = obj.parent
+    if arm != None and arm.type == 'ARMATURE':
+        return exportSkelAnimation(arm, options)
+    return None
+
 def exportObject(obj, options):
     object = {}
     object['name'] = obj.name.replace('.', '_')
-    object['type'] = 'static'
     object['meshes'] = exportMeshes(obj, options)
     object['matrix'] = exportRootMatrix(obj.matrix_world, options)
+    object['skeleton'] = exportSkeleton(obj, options)
+    object['animation'] = exportAnimation(obj, options)
     return object
 
 def exportObjects(objs, options):
@@ -429,6 +560,40 @@ def exportMaterials(objs, options):
 ##                          USDA Export Methods                               ##
 ################################################################################
 
+def getJointIndices(vertexWeights, elements):
+    collection = []
+    for v in vertexWeights:
+        indices = elements*[0]
+        for i, g in enumerate(v[:elements]):
+            indices[i] = g[0]
+        collection += indices
+    return collection
+
+def printJointIndices(vertexWeights, elements):
+    indices = getJointIndices(vertexWeights, elements)
+    src = 2*tab + 'int[] primvars:skel:jointIndices = [' + printIndices(indices) + '] (\n'
+    src += 3*tab + 'elementSize = %d\n' %elements
+    src += 3*tab + 'interpolation = "vertex"\n'
+    src += 2*tab + ')\n'
+    return src
+
+def getJointWeights(vertexWeights, elements):
+    collection = []
+    for v in vertexWeights:
+        weights = elements*[0]
+        for i, g in enumerate(v[:elements]):
+            weights[i] = g[1]
+        collection += weights
+    return collection
+
+def printJointWeights(vertexWeights, elements):
+    weights = getJointWeights(vertexWeights, elements)
+    src = 2*tab + 'float[] primvars:skel:jointWeights = [' + printTuple(weights) + '] (\n'
+    src += 3*tab + 'elementSize = %d\n' %elements
+    src += 3*tab + 'interpolation = "vertex"\n'
+    src += 2*tab + ')\n'
+    return src
+
 def printMesh(mesh, options):
     src = tab + 'def Mesh "' + mesh['name'] + '"\n'
     src += tab + '{\n'
@@ -444,6 +609,12 @@ def printMesh(mesh, options):
     src += 2*tab + 'texCoord2f[] primvars:Texture_uv = [' + printVectors(mesh['uvs']) + '] (\n'
     src += 2*tab + tab + 'interpolation = "faceVarying"\n' + tab + ')\n'
     src += 2*tab + 'int[] primvars:Texture_uv:indices = [' + printIndices(mesh['uvIndices']) + ']\n'
+    if mesh['weights'] != None:
+        src += printJointIndices(mesh['weights'], 4)
+        src += printJointWeights(mesh['weights'], 4)
+    if mesh['skeleton'] != None and mesh['animationSource'] != None:
+        src += 2*tab + 'prepend rel skel:animationSource = <' + mesh['animationSource'] + '>\n'
+        src += 2*tab + 'prepend rel skel:skeleton = <' + mesh['skeleton'] + '>\n'
     src += 2*tab + 'uniform token subdivisionScheme = "none"\n'
     src += tab + '}\n'
     src += tab + '\n'
@@ -455,10 +626,42 @@ def printMeshes(meshes, options):
         src += printMesh(mesh, options)
     return src
 
+def printSkeleton(skeleton, options):
+    src = tab + 'def Skeleton "' + skeleton['name'] + '"\n'
+    src += tab + '{\n'
+    src += 2*tab + 'uniform token[] joints = [' + ', '.join('"' + t + '"' for t in skeleton['jointTokens']) + ']\n'
+    src += 2*tab + 'uniform matrix4d[] bindTransforms = [' + ', '.join('(' + printVectors(m) + ')' for m in skeleton['bindTransforms']) + ']\n'
+    src += 2*tab + 'uniform matrix4d[] restTransforms = [' + ', '.join('(' + printVectors(m) + ')' for m in skeleton['restTransforms']) + ']\n'
+    src += tab + '}\n'
+    return src
+
+def printTimeSamples(samples):
+    src = ''
+    for sample in samples:
+        src += 3*tab + '%d: [' % sample[0] + printVectors(sample[1]) + '],\n'
+    return src
+
+def printSkelAnimation(animation, options):
+    src = tab + 'def SkelAnimation "' + animation['name'] + '"\n'
+    src += tab + '{\n'
+    src += 2*tab + 'uniform token[] joints = [' + ', '.join('"' + t + '"' for t in animation['jointTokens']) + ']\n'
+    src += 2*tab + 'quatf[] rotations.timeSamples = {\n' + printTimeSamples(animation['rotations']) + 2*tab + '}\n'
+    src += 2*tab + 'half3[] scales.timeSamples = {\n' + printTimeSamples(animation['scales']) + 2*tab + '}\n'
+    src += 2*tab + 'float3[] translations.timeSamples = {\n' + printTimeSamples(animation['translations']) + 2*tab + '}\n'
+    src += tab + '}\n'
+    return src
+
 def printMatrix(mtx):
     return 'custom matrix4d xformOp:transform = (' + printVectors(mtx) + ')'
 
-def printObject(obj, options):
+def printTimeCodes(animation):
+    src = '(\n'
+    src += tab + 'endTimeCode = %d\n' % animation['endTimeCode']
+    src += tab + 'startTimeCode = %d\n' % animation['startTimeCode']
+    src += tab + 'timeCodesPerSecond = %d\n' % animation['timeCodesPerSecond']
+    return src + ')\n'
+
+def printRigidObject(obj, options):
     src = 'def Xform "' + obj['name'] + '"\n'
     src += '{\n'
     src += tab + printMatrix(obj['matrix']) + '\n'
@@ -468,10 +671,23 @@ def printObject(obj, options):
     src += '}\n\n'
     return src
 
+def printSkinnedObject(obj, options):
+    src = 'def SkelRoot "' + obj['name'] + '"\n'
+    src += '{\n'
+    src += printMeshes(obj['meshes'], options)
+    src += printSkeleton(obj['skeleton'], options)
+    src += tab + '\n'
+    src += printSkelAnimation(obj['animation'], options)
+    src += '}\n\n'
+    return src
+
 def printObjects(objs, options):
     src = ''
     for obj in objs:
-        src += printObject(obj, options)
+        if obj['skeleton'] == None:
+            src += printRigidObject(obj, options)
+        else:
+            src += printSkinnedObject(obj, options)
     return src
 
 
@@ -594,6 +810,10 @@ def writeUSDA(objs, materials, options):
     usdaFile = options['tempPath'] + options['fileName'] + '.usda'
     src = '#usda 1.0\n'
     
+    if options['animated']:
+        src += printTimeCodes(options)
+    src += '\n'
+    
     #Add the Objects
     src += printObjects(objs, options)
     
@@ -645,6 +865,11 @@ def exportUSD(objs, options):
     options['tempPath'] = options['basePath']
     if options['fileType'] == 'usdz' and not options['keepUSDA']:
         options['tempPath'] = tempDir + '/'
+    
+    options['animated'] = False
+    options['startTimeCode'] = bpy.context.scene.frame_start
+    options['endTimeCode'] = bpy.context.scene.frame_end
+    options['timeCodesPerSecond'] = bpy.context.scene.render.fps
     
     #meshes = exportMeshes(objs, options)
     objects = exportObjects(objs, options)
