@@ -362,6 +362,36 @@ def exportAnimation(obj, options):
         return exportSkelAnimation(arm, options)
     return None
 
+def exportRootTimeSamples(obj, options):
+    originalFrame = bpy.context.scene.frame_current
+    frame_begin = options['startTimeCode']
+    frame_end = options['endTimeCode']
+    samples = []
+    for frame in range(frame_begin, frame_end+1):
+        bpy.context.scene.frame_set(frame)
+        samples.append((frame, exportRootMatrix(obj.matrix_world, options)))
+    bpy.context.scene.frame_set(originalFrame)
+    return samples
+
+def exportLocalTimeSamples(obj, options):
+    originalFrame = bpy.context.scene.frame_current
+    frame_begin = options['startTimeCode']
+    frame_end = options['endTimeCode']
+    samples = []
+    for frame in range(frame_begin, frame_end+1):
+        bpy.context.scene.frame_set(frame)
+        samples.append((frame, exportMatrix(obj.matrix_local)))
+    bpy.context.scene.frame_set(originalFrame)
+    return samples
+
+def exportTimeSamples(obj, options):
+    if options['animated'] and obj.type != 'ARMATURE':
+        if obj.parent == None:
+            return exportRootTimeSamples(obj, options)
+        elif obj.parent.type != 'ARMATURE':
+            return exportLocalTimeSamples(obj, options)
+    return []
+
 def exportObject(obj, options):
     object = {}
     object['name'] = obj.name.replace('.', '_')
@@ -369,15 +399,53 @@ def exportObject(obj, options):
     object['matrix'] = exportRootMatrix(obj.matrix_world, options)
     object['skeleton'] = exportSkeleton(obj, options)
     object['animation'] = exportAnimation(obj, options)
+    object['parent'] = None
+    object['children'] = []
+    if obj.parent != None and obj.parent.type != 'ARMATURE':
+        object['parent'] = obj.parent.name
+        object['matrix'] = exportMatrix(obj.matrix_local)
+    object['timeSamples'] = exportTimeSamples(obj, options)
+    return object
+
+def exportEmpty(obj, options):
+    object = {}
+    object['name'] = obj.name.replace('.', '_')
+    object['meshes'] = []
+    object['matrix'] = exportRootMatrix(obj.matrix_world, options)
+    object['skeleton'] = None
+    object['animation'] = None
+    object['parent'] = None
+    object['children'] = []
+    if obj.parent != None and obj.parent.type != 'ARMATURE':
+        object['parent'] = obj.parent.name
+        object['matrix'] = exportMatrix(obj.matrix_local)
+    object['timeSamples'] = exportTimeSamples(obj, options)
     return object
 
 def exportObjects(objs, options):
-    objects = []
+    objMap = {}
     for obj in objs:
         if obj.type == 'MESH':
-            objects.append(exportObject(obj, options))
+            objMap[obj.name] = exportObject(obj, options)
+            parent = obj.parent
+            while parent != None and parent.type != 'ARMATURE':
+                if not parent.name in objMap :
+                    objMap[parent.name] = exportEmpty(parent, options)
+                parent = parent.parent
     selectObjects(objs)
+    for name, object in objMap.items():
+        if object['parent'] != None:
+            parent = objMap[object['parent']]
+            parent['children'].append(object)
+    objects = []
+    for object in objMap.values():
+        if object['parent'] == None:
+            objects.append(object)
     return objects
+
+
+
+
 
 
 ################################################################################
@@ -594,65 +662,78 @@ def printJointWeights(vertexWeights, elements):
     src += 2*tab + ')\n'
     return src
 
-def printMesh(mesh, options):
-    src = tab + 'def Mesh "' + mesh['name'] + '"\n'
-    src += tab + '{\n'
-    src += 2*tab + 'float3[] extent = [' + printVectors(mesh['extent']) + ']\n'
-    src += 2*tab + 'int[] faceVertexCounts = [' + printIndices(mesh['faceVertexCounts']) + ']\n'
-    src += 2*tab + 'int[] faceVertexIndices = [' + printIndices(mesh['faceVertexIndices']) + ']\n'
+def printMesh(mesh, options, indent):
+    src = indent + tab + 'def Mesh "' + mesh['name'] + '"\n'
+    src += indent + tab + '{\n'
+    src += indent + 2*tab + 'float3[] extent = [' + printVectors(mesh['extent']) + ']\n'
+    src += indent + 2*tab + 'int[] faceVertexCounts = [' + printIndices(mesh['faceVertexCounts']) + ']\n'
+    src += indent + 2*tab + 'int[] faceVertexIndices = [' + printIndices(mesh['faceVertexIndices']) + ']\n'
     if options['exportMaterials']:
-        src += 2*tab + 'rel material:binding = </Materials/' + mesh['material'] + '>\n'
-    src += 2*tab + 'point3f[] points = [' + printVectors(mesh['points']) + ']\n'
-    src += 2*tab + 'normal3f[] primvars:normals = [' + printVectors(mesh['normals']) + '] (\n'
-    src += 2*tab + tab + 'interpolation = "vertex"\n' + tab + ')\n'
-    src += 2*tab + 'int[] primvars:normals:indices = [' + printIndices(mesh['normalIndices']) + ']\n'
-    src += 2*tab + 'texCoord2f[] primvars:Texture_uv = [' + printVectors(mesh['uvs']) + '] (\n'
-    src += 2*tab + tab + 'interpolation = "faceVarying"\n' + tab + ')\n'
-    src += 2*tab + 'int[] primvars:Texture_uv:indices = [' + printIndices(mesh['uvIndices']) + ']\n'
+        src += indent + 2*tab + 'rel material:binding = </Materials/' + mesh['material'] + '>\n'
+    src += indent + 2*tab + 'point3f[] points = [' + printVectors(mesh['points']) + ']\n'
+    src += indent + 2*tab + 'normal3f[] primvars:normals = [' + printVectors(mesh['normals']) + '] (\n'
+    src += indent + 3*tab + 'interpolation = "vertex"\n'
+    src += indent + 2*tab + ')\n'
+    src += indent + 2*tab + 'int[] primvars:normals:indices = [' + printIndices(mesh['normalIndices']) + ']\n'
+    src += indent + 2*tab + 'texCoord2f[] primvars:Texture_uv = [' + printVectors(mesh['uvs']) + '] (\n'
+    src += indent + 3*tab + 'interpolation = "faceVarying"\n'
+    src += indent + 2*tab + ')\n'
+    src += indent + 2*tab + 'int[] primvars:Texture_uv:indices = [' + printIndices(mesh['uvIndices']) + ']\n'
     if mesh['weights'] != None:
         src += printJointIndices(mesh['weights'], 4)
         src += printJointWeights(mesh['weights'], 4)
     if mesh['skeleton'] != None and mesh['animationSource'] != None:
-        src += 2*tab + 'prepend rel skel:animationSource = <' + mesh['animationSource'] + '>\n'
-        src += 2*tab + 'prepend rel skel:skeleton = <' + mesh['skeleton'] + '>\n'
-    src += 2*tab + 'uniform token subdivisionScheme = "none"\n'
-    src += tab + '}\n'
-    src += tab + '\n'
+        src += indent + 2*tab + 'prepend rel skel:animationSource = <' + mesh['animationSource'] + '>\n'
+        src += indent + 2*tab + 'prepend rel skel:skeleton = <' + mesh['skeleton'] + '>\n'
+    src += indent + 2*tab + 'uniform token subdivisionScheme = "none"\n'
+    src += indent + tab + '}\n'
+    src += indent + tab + '\n'
     return src
 
-def printMeshes(meshes, options):
+def printMeshes(meshes, options, indent):
     src = ''
     for mesh in meshes:
-        src += printMesh(mesh, options)
+        src += printMesh(mesh, options, indent)
     return src
 
-def printSkeleton(skeleton, options):
-    src = tab + 'def Skeleton "' + skeleton['name'] + '"\n'
-    src += tab + '{\n'
-    src += 2*tab + 'uniform token[] joints = [' + ', '.join('"' + t + '"' for t in skeleton['jointTokens']) + ']\n'
-    src += 2*tab + 'uniform matrix4d[] bindTransforms = [' + ', '.join('(' + printVectors(m) + ')' for m in skeleton['bindTransforms']) + ']\n'
-    src += 2*tab + 'uniform matrix4d[] restTransforms = [' + ', '.join('(' + printVectors(m) + ')' for m in skeleton['restTransforms']) + ']\n'
-    src += tab + '}\n'
+def printSkeleton(skeleton, options, indent):
+    src = indent + tab + 'def Skeleton "' + skeleton['name'] + '"\n'
+    src += indent + tab + '{\n'
+    src += indent + 2*tab + 'uniform token[] joints = [' + ', '.join('"' + t + '"' for t in skeleton['jointTokens']) + ']\n'
+    src += indent + 2*tab + 'uniform matrix4d[] bindTransforms = [' + ', '.join('(' + printVectors(m) + ')' for m in skeleton['bindTransforms']) + ']\n'
+    src += indent + 2*tab + 'uniform matrix4d[] restTransforms = [' + ', '.join('(' + printVectors(m) + ')' for m in skeleton['restTransforms']) + ']\n'
+    src += indent + tab + '}\n'
     return src
 
-def printTimeSamples(samples):
+def printTimeSamples(samples, indent):
     src = ''
     for sample in samples:
-        src += 3*tab + '%d: [' % sample[0] + printVectors(sample[1]) + '],\n'
+        src += indent + 3*tab + '%d: [' % sample[0] + printVectors(sample[1]) + '],\n'
     return src
 
-def printSkelAnimation(animation, options):
-    src = tab + 'def SkelAnimation "' + animation['name'] + '"\n'
-    src += tab + '{\n'
-    src += 2*tab + 'uniform token[] joints = [' + ', '.join('"' + t + '"' for t in animation['jointTokens']) + ']\n'
-    src += 2*tab + 'quatf[] rotations.timeSamples = {\n' + printTimeSamples(animation['rotations']) + 2*tab + '}\n'
-    src += 2*tab + 'half3[] scales.timeSamples = {\n' + printTimeSamples(animation['scales']) + 2*tab + '}\n'
-    src += 2*tab + 'float3[] translations.timeSamples = {\n' + printTimeSamples(animation['translations']) + 2*tab + '}\n'
-    src += tab + '}\n'
+def printSkelAnimation(animation, options, indent):
+    src = indent + tab + 'def SkelAnimation "' + animation['name'] + '"\n'
+    src += indent + tab + '{\n'
+    src += indent + 2*tab + 'uniform token[] joints = [' + ', '.join('"' + t + '"' for t in animation['jointTokens']) + ']\n'
+    src += indent + 2*tab + 'quatf[] rotations.timeSamples = {\n' + printTimeSamples(animation['rotations'], indent)
+    src += indent + 2*tab + '}\n'
+    src += indent + 2*tab + 'half3[] scales.timeSamples = {\n' + printTimeSamples(animation['scales'], indent)
+    src += indent + 2*tab + '}\n'
+    src += indent + 2*tab + 'float3[] translations.timeSamples = {\n' + printTimeSamples(animation['translations'], indent)
+    src += indent + 2*tab + '}\n'
+    src += indent + tab + '}\n'
     return src
 
 def printMatrix(mtx):
     return 'custom matrix4d xformOp:transform = (' + printVectors(mtx) + ')'
+
+def printTimeTransforms(timeCodes, indent):
+    src = indent + tab + 'matrix4d xformOp:transform:transforms.timeSamples = {\n'
+    for time, mtx in timeCodes:
+        src += indent + 2*tab + '%d: (' % time + printVectors(mtx) + '),\n'
+    src += indent + tab + '}\n'
+    src += indent + tab + 'uniform token[] xformOpOrder = ["xformOp:transform:transforms"]\n'
+    return src
 
 def printTimeCodes(animation):
     src = '(\n'
@@ -661,33 +742,39 @@ def printTimeCodes(animation):
     src += tab + 'timeCodesPerSecond = %d\n' % animation['timeCodesPerSecond']
     return src + ')\n'
 
-def printRigidObject(obj, options):
-    src = 'def Xform "' + obj['name'] + '"\n'
-    src += '{\n'
-    src += tab + printMatrix(obj['matrix']) + '\n'
-    src += tab + 'uniform token[] xformOpOrder = ["xformOp:transform"]\n'
-    src += tab + '\n'
-    src += printMeshes(obj['meshes'], options)
-    src += '}\n\n'
+def printRigidObject(obj, options, indent):
+    src = indent + 'def Xform "' + obj['name'] + '"\n'
+    src += indent + '{\n'
+    if options['animated']:
+        src += printTimeTransforms(obj['timeSamples'], indent)
+    else:
+        src += indent + tab + printMatrix(obj['matrix']) + '\n'
+        src += indent + tab + 'uniform token[] xformOpOrder = ["xformOp:transform"]\n'
+    src += indent + tab + '\n'
+    if len(obj['children']):
+        src += printObjects(obj['children'], options, indent + tab)
+        src += indent + tab + '\n'
+    src += printMeshes(obj['meshes'], options, indent)
+    src += indent + '}\n\n'
     return src
 
-def printSkinnedObject(obj, options):
-    src = 'def SkelRoot "' + obj['name'] + '"\n'
-    src += '{\n'
-    src += printMeshes(obj['meshes'], options)
-    src += printSkeleton(obj['skeleton'], options)
-    src += tab + '\n'
-    src += printSkelAnimation(obj['animation'], options)
-    src += '}\n\n'
+def printSkinnedObject(obj, options, indent):
+    src = indent + 'def SkelRoot "' + obj['name'] + '"\n'
+    src += indent + '{\n'
+    src += printMeshes(obj['meshes'], options, indent)
+    src += printSkeleton(obj['skeleton'], options, indent)
+    src += indent + tab + '\n'
+    src += printSkelAnimation(obj['animation'], options, indent)
+    src += indent + '}\n\n'
     return src
 
-def printObjects(objs, options):
+def printObjects(objs, options, indent):
     src = ''
     for obj in objs:
         if obj['skeleton'] == None:
-            src += printRigidObject(obj, options)
+            src += printRigidObject(obj, options, indent)
         else:
-            src += printSkinnedObject(obj, options)
+            src += printSkinnedObject(obj, options, indent)
     return src
 
 
@@ -815,7 +902,7 @@ def writeUSDA(objs, materials, options):
     src += '\n'
     
     #Add the Objects
-    src += printObjects(objs, options)
+    src += printObjects(objs, options, '')
     
     # Add the Materials
     src += printMaterials(materials, options)
@@ -866,7 +953,6 @@ def exportUSD(objs, options):
     if options['fileType'] == 'usdz' and not options['keepUSDA']:
         options['tempPath'] = tempDir + '/'
     
-    options['animated'] = False
     options['startTimeCode'] = bpy.context.scene.frame_start
     options['endTimeCode'] = bpy.context.scene.frame_end
     options['timeCodesPerSecond'] = bpy.context.scene.render.fps
@@ -888,7 +974,7 @@ def exportUSD(objs, options):
 ##                         Export Interface Function                          ##
 ################################################################################
 
-def export_usdz(context, filepath = '', exportMaterials = True, keepUSDA = False, bakeAO = False, samples = 8, scale = 1.0):
+def export_usdz(context, filepath = '', exportMaterials = True, keepUSDA = False, bakeAO = False, samples = 8, scale = 1.0, animated = False):
     filePath, fileName = os.path.split(filepath)
     fileName, fileType = fileName.split('.')
     
@@ -897,6 +983,7 @@ def export_usdz(context, filepath = '', exportMaterials = True, keepUSDA = False
         options['basePath'] = filePath + '/'
         options['fileName'] = fileName
         options['fileType'] = 'usdz'
+        options['animated'] = animated
         options['exportMaterials'] = exportMaterials
         options['keepUSDA'] = keepUSDA
         options['bakeAO'] = bakeAO
