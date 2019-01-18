@@ -38,7 +38,7 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
             options={'HIDDEN'},
             )
 
-    exportMaterials = BoolProperty(
+    materials = BoolProperty(
         name="Export Materials",
         description="Export Materials from Objects",
         default=True,
