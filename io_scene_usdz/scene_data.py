@@ -1,19 +1,9 @@
 import bpy
-import mathutils
+import object_utils
 import file_data
+
+from object_utils import *
 from file_data import FileData, FileItem
-
-pi = 3.1415926
-
-
-def matrix_data(matrix):
-    matrix = mathutils.Matrix.transposed(matrix)
-    return (matrix[0][:], matrix[1][:], matrix[2][:], matrix[3][:])
-
-def root_matrix_data(matrix, scale):
-    scale = mathutils.Matrix.Scale(scale, 4)
-    rotation = mathutils.Matrix.Rotation(-pi/2.0, 4, 'X')
-    return matrix_data(rotation @ scale @ matrix)
 
 
 
@@ -31,18 +21,73 @@ class Object:
             return root_matrix_data(self.object.matrix_world, scale)
         return matrix_data(self.object.matrix_local)
 
-    def exportMeshItems(self, scale):
+    def getMaterialName(self, material):
+        if material < 0 or material >= len(self.object.material_slots):
+            return ''
+        return self.object.material_slots[material].name.replace('.', '_')
+
+    def exportMeshUvItems(self, material):
+        mesh = self.object.data
+        items = []
+        for layer in mesh.uv_layers:
+            indices, uvs = export_mesh_uvs(mesh, layer, material)
+            name = layer.name.replace('.', '_')
+            items.append(FileItem('int[]', 'primvars:'+name+':indices', indices))
+            items.append(FileItem('texCoord2f[]', 'primvars:'+name, uvs))
+            items[-1].properties['interpolation'] = '"faceVarying"'
+        return items
+
+    def exportMeshItem(self, material = -1):
+        mesh = self.object.data
+        name = self.object.data.name.replace('.', '_')
+        if material >= 0:
+            name += '_' + self.getMaterialName(material)
+        item = FileItem('def Mesh', name)
+
+        extent = object_extents(self.object)
+        item.addItem('float3[]', 'extent', extent)
+
+        vertexCounts = mesh_vertex_counts(mesh, material)
+        item.addItem('int[]', 'faceVertexCounts', vertexCounts)
+
+        indices, points = export_mesh_vertices(mesh, material)
+        item.addItem('int[]', 'faceVertexIndices', indices)
+        item.addItem('point3f[]', 'points', points)
+
+        indices, normals = export_mesh_normals(mesh, material)
+        item.addItem('int[]', 'primvars:normals:indices', indices)
+        item.addItem('normal3f[]', 'primvars:normals', normals)
+        item.items[-1].properties['interpolation'] = '"faceVarying"'
+
+        item.items += self.exportMeshUvItems(material)
+        if material >= 0:
+            name = self.getMaterialName(material)
+            item.addItem('rel', 'material:binding', '</Materials/'+name+'>')
+        item.addItem('uniform token', 'subdivisionScheme', '"none"')
+        return item
+
+    def exportMeshItems(self, exportMaterials):
+        items = []
+        if exportMaterials and len(self.object.material_slots) > 0:
+            for mat in range(0, len(self.object.material_slots)):
+                items.append(self.exportMeshItem(mat))
+        else:
+            items.append(self.exportMeshItem())
+        return items
+
+    def exportItem(self, scale, exportMaterials):
         item = FileItem('def Xform', self.name)
         item.addItem('custom matrix4d', 'xformOp:transform', self.getTransform(scale))
         item.addItem('uniform token[]', 'xformOpOrder', ['"xformOp:transform"'])
 
         # Add Meshes if Mesh Object
-
+        if self.type == 'MESH':
+            item.items += self.exportMeshItems(exportMaterials)
 
         # Add Any Children
         for child in self.children:
-            item.items += child.exportMeshItems(scale)
-        return [item]
+            item.items.append(child.exportItem(scale, exportMaterials))
+        return item
 
 
 
@@ -70,7 +115,7 @@ class Scene:
     def addBpyObject(self, object, type = 'EMPTY'):
         obj = Object(object, type)
         if obj.name in self.objMap:
-            obj = self.map[obj.name]
+            obj = self.objMap[obj.name]
             if type != 'EMPTY':
                 obj.type = type
         elif object.parent != None:
@@ -90,5 +135,5 @@ class Scene:
     def exportObjectItems(self):
         items = []
         for obj in self.objects:
-            items += obj.exportMeshItems(self.scale)
+            items.append(obj.exportItem(self.scale, self.exportMaterials))
         return items
