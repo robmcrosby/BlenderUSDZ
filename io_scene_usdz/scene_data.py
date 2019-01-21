@@ -1,10 +1,26 @@
 import bpy
-from . import object_utils
-from . import file_data
+#from . import object_utils
+#from . import file_data
+import object_utils
+import file_data
 
-from .object_utils import *
-from .file_data import FileData, FileItem
+#from .object_utils import *
+#from .file_data import FileData, FileItem
+from object_utils import *
+from file_data import FileData, FileItem
 
+
+class Material:
+    """Wraper for Blender Material"""
+    def __init__(self, object, index):
+        self.object = object
+        self.index = index
+        self.material = object.mesh.material_slots[index].material
+        self.name = self.material.name.replace('.', '_')
+
+    def exportMaterialItem(self):
+        item = FileItem('def Material', self.name)
+        return item
 
 
 class Object:
@@ -12,6 +28,7 @@ class Object:
     def __init__(self, object, type = 'EMPTY'):
         self.object = object
         self.mesh = None
+        self.materials = []
         self.parent = None
         self.children = []
         self.type = type
@@ -33,9 +50,9 @@ class Object:
         return matrix_data(self.object.matrix_local)
 
     def getMaterialName(self, material):
-        if material < 0 or material >= len(self.object.material_slots):
+        if material < 0 or material >= len(self.materials):
             return ''
-        return self.object.material_slots[material].name.replace('.', '_')
+        return self.materials[material].name
 
     def exportMeshUvItems(self, material):
         mesh = self.mesh.data
@@ -80,7 +97,9 @@ class Object:
     def exportMeshItems(self, exportMaterials):
         items = []
         if exportMaterials and len(self.mesh.material_slots) > 0:
+            self.materials = []
             for mat in range(0, len(self.mesh.material_slots)):
+                self.materials.append(Material(self, mat))
                 items.append(self.exportMeshItem(mat))
         else:
             items.append(self.exportMeshItem())
@@ -110,6 +129,7 @@ class Scene:
         self.objects = []
         self.objMap = {}
         self.bpyObjects = []
+        self.bpyActive = None
         self.exportMaterials = False
         self.bakeAO = False
         self.bakeSamples = 8
@@ -121,6 +141,8 @@ class Scene:
             obj.cleanup()
         deselect_objects()
         select_objects(self.bpyObjects)
+        set_active_object(self.bpyActive)
+
 
     def loadContext(self, context):
         self.context = context
@@ -128,6 +150,7 @@ class Scene:
 
     def loadObjects(self, objects):
         self.bpyObjects = objects
+        self.bpyActive = active_object()
         for obj in objects:
             if (obj.type == 'MESH'):
                 self.addBpyObject(obj, obj.type)
@@ -147,9 +170,18 @@ class Scene:
             self.objMap[obj.name] = obj
         return obj
 
+    def getMaterials(self):
+        materials = {}
+        for obj in self.objects:
+            for mat in obj.materials:
+                materials[mat.name] = mat
+        return list(materials.values())
+
     def exportFileData(self):
         data = FileData()
         data.items += self.exportObjectItems()
+        if self.exportMaterials:
+            data.items.append(self.exportMaterialsItem())
         return data
 
     def exportObjectItems(self):
@@ -157,3 +189,9 @@ class Scene:
         for obj in self.objects:
             items.append(obj.exportItem(self.scale, self.exportMaterials))
         return items
+
+    def exportMaterialsItem(self):
+        item = FileItem('def', 'Materials')
+        for mat in self.getMaterials():
+            item.items.append(mat.exportMaterialItem())
+        return item

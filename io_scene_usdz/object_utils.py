@@ -15,14 +15,21 @@ def select_objects(objects):
     for obj in objects:
         obj.select_set(True)
 
+def active_object():
+    return bpy.context.view_layer.objects.active
+
+def set_active_object(object):
+    bpy.context.view_layer.objects.active = object
+
 def duplicate_object(object):
     select_object(object)
     bpy.ops.object.duplicate()
     return bpy.context.active_object
 
 def apply_object_modifers(object):
-    select_object(object)
-    bpy.ops.object.convert(target='MESH')
+    if object != None:
+        select_object(object)
+        bpy.ops.object.convert(target='MESH')
 
 def delete_object(object):
     select_object(object)
