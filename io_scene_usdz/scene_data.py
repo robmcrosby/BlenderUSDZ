@@ -1,9 +1,9 @@
 import bpy
-import object_utils
-import file_data
+from . import object_utils
+from . import file_data
 
-from object_utils import *
-from file_data import FileData, FileItem
+from .object_utils import *
+from .file_data import FileData, FileItem
 
 
 
@@ -11,10 +11,21 @@ class Object:
     """Wraper for Blender Objects"""
     def __init__(self, object, type = 'EMPTY'):
         self.object = object
+        self.mesh = None
         self.parent = None
         self.children = []
         self.type = type
         self.name = object.name.replace('.', '_')
+
+    def cleanup(self):
+        if self.mesh != None:
+            delete_object(self.mesh)
+            self.mesh = None
+
+    def createMesh(self):
+        if self.mesh == None:
+            self.mesh = duplicate_object(self.object)
+            apply_object_modifers(self.mesh)
 
     def getTransform(self, scale):
         if self.parent == None:
@@ -27,7 +38,7 @@ class Object:
         return self.object.material_slots[material].name.replace('.', '_')
 
     def exportMeshUvItems(self, material):
-        mesh = self.object.data
+        mesh = self.mesh.data
         items = []
         for layer in mesh.uv_layers:
             indices, uvs = export_mesh_uvs(mesh, layer, material)
@@ -38,13 +49,13 @@ class Object:
         return items
 
     def exportMeshItem(self, material = -1):
-        mesh = self.object.data
+        mesh = self.mesh.data
         name = self.object.data.name.replace('.', '_')
         if material >= 0:
             name += '_' + self.getMaterialName(material)
         item = FileItem('def Mesh', name)
 
-        extent = object_extents(self.object)
+        extent = object_extents(self.mesh)
         item.addItem('float3[]', 'extent', extent)
 
         vertexCounts = mesh_vertex_counts(mesh, material)
@@ -68,8 +79,8 @@ class Object:
 
     def exportMeshItems(self, exportMaterials):
         items = []
-        if exportMaterials and len(self.object.material_slots) > 0:
-            for mat in range(0, len(self.object.material_slots)):
+        if exportMaterials and len(self.mesh.material_slots) > 0:
+            for mat in range(0, len(self.mesh.material_slots)):
                 items.append(self.exportMeshItem(mat))
         else:
             items.append(self.exportMeshItem())
@@ -82,6 +93,7 @@ class Object:
 
         # Add Meshes if Mesh Object
         if self.type == 'MESH':
+            self.createMesh()
             item.items += self.exportMeshItems(exportMaterials)
 
         # Add Any Children
@@ -97,17 +109,25 @@ class Scene:
         self.context = None
         self.objects = []
         self.objMap = {}
+        self.bpyObjects = []
         self.exportMaterials = False
         self.bakeAO = False
         self.bakeSamples = 8
         self.scale = 1.0
         self.animated = False
 
+    def cleanup(self):
+        for obj in self.objects:
+            obj.cleanup()
+        deselect_objects()
+        select_objects(self.bpyObjects)
+
     def loadContext(self, context):
         self.context = context
         self.loadObjects(context.selected_objects)
 
     def loadObjects(self, objects):
+        self.bpyObjects = objects
         for obj in objects:
             if (obj.type == 'MESH'):
                 self.addBpyObject(obj, obj.type)

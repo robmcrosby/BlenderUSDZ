@@ -3,6 +3,30 @@ import mathutils
 
 pi = 3.1415926
 
+def deselect_objects():
+    bpy.ops.object.select_all(action='DESELECT')
+
+def select_object(object):
+    deselect_objects()
+    object.select_set(True)
+
+def select_objects(objects):
+    deselect_objects()
+    for obj in objects:
+        obj.select_set(True)
+
+def duplicate_object(object):
+    select_object(object)
+    bpy.ops.object.duplicate()
+    return bpy.context.active_object
+
+def apply_object_modifers(object):
+    select_object(object)
+    bpy.ops.object.convert(target='MESH')
+
+def delete_object(object):
+    select_object(object)
+    bpy.ops.object.delete()
 
 def matrix_data(matrix):
     matrix = mathutils.Matrix.transposed(matrix)

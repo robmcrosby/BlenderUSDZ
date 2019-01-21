@@ -1,11 +1,11 @@
 import bpy
 import os
 
-import file_data
-import scene_data
+from . import file_data
+from . import scene_data
 
-from file_data import *
-from scene_data import *
+from .file_data import *
+from .scene_data import *
 
 def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
                 bakeAO = False, samples = 8, scale = 1.0, animated = False):
@@ -24,5 +24,7 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
 
     data = scene.exportFileData()
     data.writeUsda(usdaFile)
+
+    scene.cleanup()
 
     return {'FINISHED'}
