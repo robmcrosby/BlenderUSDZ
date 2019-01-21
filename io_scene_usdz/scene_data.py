@@ -1,13 +1,28 @@
 import bpy
 #from . import object_utils
+#from . import material_utils
 #from . import file_data
 import object_utils
+import material_utils
 import file_data
 
 #from .object_utils import *
+#from .material_utils import *
 #from .file_data import FileData, FileItem
 from object_utils import *
+from material_utils import *
 from file_data import FileData, FileItem
+
+
+class ShaderInput:
+    """Shader Input Information"""
+    def __init__(self, type, name, default):
+        self.type = type
+        self.name = name
+        self.value = default
+
+    def exportShaderItem(self):
+        return FileItem(self.type, self.name, self.value)
 
 
 class Material:
@@ -17,9 +32,61 @@ class Material:
         self.index = index
         self.material = object.mesh.material_slots[index].material
         self.name = self.material.name.replace('.', '_')
+        self.outputNode = get_output_node(self.material)
+        self.shaderNode = get_shader_node(self.outputNode)
+        self.inputs = {
+            'diffuseColor':ShaderInput('color3f', 'inputs:diffuseColor', (0.18, 0.18, 0.18)),
+            'emissiveColor':ShaderInput('color3f', 'inputs:emissiveColor', (0.0, 0.0, 0.0)),
+            'clearcoat':ShaderInput('float', 'inputs:clearcoat', 0.0),
+            'clearcoatRoughness':ShaderInput('float', 'inputs:clearcoatRoughness', 0.0),
+            'displacement':ShaderInput('float', 'inputs:displacement', 0),
+            'ior':ShaderInput('float', 'inputs:ior', 1.5),
+            'metallic':ShaderInput('float', 'inputs:metallic', 0.0),
+            'normal':ShaderInput('normal3f', 'inputs:normal', (0.0, 0.0, 1.0)),
+            'occlusion':ShaderInput('float', 'inputs:occlusion', 0.0),
+            'roughness':ShaderInput('float', 'inputs:roughness', 0.0),
+            'opacity':ShaderInput('float', 'inputs:opacity', 1.0),
+            'specularColor':ShaderInput('color3f', 'inputs:specularColor', (1.0, 1.0, 1.0)),
+            'useSpecularWorkflow':ShaderInput('int', 'inputs:useSpecularWorkflow', 0),
+        }
+
+    def bakeColorTexture(self):
+        input = get_color_input(self.shaderNode)
+        if input != None:
+            self.inputs['diffuseColor'].value = input.default_value[:3]
+
+    def bakeRoughnessTexture(self):
+        input = get_roughness_input(self.shaderNode)
+        if input != None:
+            self.inputs['roughness'].value = input.default_value
+
+    def bakeMetallicTexture(self):
+        input = get_metallic_input(self.shaderNode)
+        if input != None:
+            value = input.default_value
+            self.inputs['metallic'].value = value
+            self.inputs['useSpecularWorkflow'].value = 0 if value > 0.0 else 1
+
+    def bakeTextures(self):
+        self.bakeColorTexture()
+        self.bakeRoughnessTexture()
+        self.bakeMetallicTexture()
+
+
+    def exportPbrShaderItem(self):
+        item = FileItem('def Shader', 'pbr')
+        item.addItem('uniform token', 'info:id', '"UsdPreviewSurface"')
+        for input in self.inputs.values():
+            item.append(input.exportShaderItem())
+        item.addItem('token', 'outputs:displacement')
+        item.addItem('token', 'outputs:surface')
+        return item
 
     def exportMaterialItem(self):
         item = FileItem('def Material', self.name)
+        item.addItem('token', 'outputs:displacement.connect', '</Materials/'+self.name+'/pbr.outputs:displacement>')
+        item.addItem('token', 'outputs:surface.connect', '</Materials/'+self.name+'/pbr.outputs:surface>')
+        item.append(self.exportPbrShaderItem())
         return item
 
 
@@ -100,6 +167,7 @@ class Object:
             self.materials = []
             for mat in range(0, len(self.mesh.material_slots)):
                 self.materials.append(Material(self, mat))
+                self.materials[-1].bakeTextures()
                 items.append(self.exportMeshItem(mat))
         else:
             items.append(self.exportMeshItem())
@@ -117,7 +185,7 @@ class Object:
 
         # Add Any Children
         for child in self.children:
-            item.items.append(child.exportItem(scale, exportMaterials))
+            item.append(child.exportItem(scale, exportMaterials))
         return item
 
 
@@ -181,7 +249,7 @@ class Scene:
         data = FileData()
         data.items += self.exportObjectItems()
         if self.exportMaterials:
-            data.items.append(self.exportMaterialsItem())
+            data.append(self.exportMaterialsItem())
         return data
 
     def exportObjectItems(self):
@@ -193,5 +261,5 @@ class Scene:
     def exportMaterialsItem(self):
         item = FileItem('def', 'Materials')
         for mat in self.getMaterials():
-            item.items.append(mat.exportMaterialItem())
+            item.append(mat.exportMaterialItem())
         return item

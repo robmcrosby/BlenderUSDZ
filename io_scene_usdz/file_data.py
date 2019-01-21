@@ -35,6 +35,10 @@ class FileItem:
         self.items.append(item)
         return item
 
+    def append(self, item):
+        if item != None:
+            self.items.append(item)
+
     def printUsda(self, indent):
         src = ''
         if 'def' in self.type:
@@ -67,6 +71,10 @@ class FileData:
         item = FileItem(type, name, data)
         self.items.append(item)
         return item
+
+    def append(self, item):
+        if item != None:
+            self.items.append(item)
 
     def printUsda(self):
         src = '#usda 1.0\n'
