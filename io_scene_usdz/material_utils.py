@@ -48,3 +48,19 @@ def get_transmission_input(node):
 
 def get_normal_input(node):
     return get_node_input(node, 'Normal')
+
+def get_input_uv_map(input, mesh):
+    #TODO
+    return 'UVMap'
+
+def save_image_to_file(image, file):
+    image.save_render(filepath = file)
+
+def bake_input_color_image(input, file, mesh):
+    node = input.links[0].from_node
+    if node.type == 'TEX_IMAGE' and node.image != None:
+        save_image_to_file(node.image, file)
+        return True
+    #TODO: Handle Other Setups
+    print('Error Baking Color Image')
+    return False

@@ -20,40 +20,67 @@ class ShaderInput:
         self.type = type
         self.name = name
         self.value = default
+        self.image = None
+        self.uvMap = None
+        self.asset = ''
 
-    def exportShaderItem(self):
-        return FileItem(self.type, self.name, self.value)
+    def exportShaderInputItem(self, material):
+        if self.image != None and self.uvMap != None:
+            path = '</Materials/'+material+'/'+self.name+'_map.outputs:rgb>'
+            return FileItem(self.type, 'inputs:'+self.name+'.connect', path)
+        return FileItem(self.type, 'inputs:'+self.name, self.value)
+
+    def exportShaderItem(self, material):
+        if self.image != None and self.uvMap != None:
+            path = '</Materials/'+material+'/primvar_'+self.uvMap+'.outputs:result>'
+            item = FileItem('def Shader', self.name+'_map')
+            item.addItem('uniform token', 'info:id', '"UsdUVTexture"')
+            item.addItem('float4', 'inputs:default', self.value+(1.0,))
+            item.addItem('asset', 'inputs:file', '@'+self.asset+'@')
+            item.addItem('float2', 'inputs:st.connect', path)
+            item.addItem('token', 'inputs:wrapS', '"repeat"')
+            item.addItem('token', 'inputs:wrapT', '"repeat"')
+            item.addItem('float3', 'outputs:rgb')
+            return item
+        return None
 
 
 class Material:
     """Wraper for Blender Material"""
-    def __init__(self, object, index):
+    def __init__(self, object, index, exportPath):
         self.object = object
         self.index = index
+        self.exportPath = exportPath
         self.material = object.mesh.material_slots[index].material
         self.name = self.material.name.replace('.', '_')
         self.outputNode = get_output_node(self.material)
         self.shaderNode = get_shader_node(self.outputNode)
         self.inputs = {
-            'diffuseColor':ShaderInput('color3f', 'inputs:diffuseColor', (0.18, 0.18, 0.18)),
-            'emissiveColor':ShaderInput('color3f', 'inputs:emissiveColor', (0.0, 0.0, 0.0)),
-            'clearcoat':ShaderInput('float', 'inputs:clearcoat', 0.0),
-            'clearcoatRoughness':ShaderInput('float', 'inputs:clearcoatRoughness', 0.0),
-            'displacement':ShaderInput('float', 'inputs:displacement', 0),
-            'ior':ShaderInput('float', 'inputs:ior', 1.5),
-            'metallic':ShaderInput('float', 'inputs:metallic', 0.0),
-            'normal':ShaderInput('normal3f', 'inputs:normal', (0.0, 0.0, 1.0)),
-            'occlusion':ShaderInput('float', 'inputs:occlusion', 0.0),
-            'roughness':ShaderInput('float', 'inputs:roughness', 0.0),
-            'opacity':ShaderInput('float', 'inputs:opacity', 1.0),
-            'specularColor':ShaderInput('color3f', 'inputs:specularColor', (1.0, 1.0, 1.0)),
-            'useSpecularWorkflow':ShaderInput('int', 'inputs:useSpecularWorkflow', 0),
+            'diffuseColor':ShaderInput('color3f', 'diffuseColor', (0.18, 0.18, 0.18)),
+            'emissiveColor':ShaderInput('color3f', 'emissiveColor', (0.0, 0.0, 0.0)),
+            'clearcoat':ShaderInput('float', 'clearcoat', 0.0),
+            'clearcoatRoughness':ShaderInput('float', 'clearcoatRoughness', 0.0),
+            'displacement':ShaderInput('float', 'displacement', 0),
+            'ior':ShaderInput('float', 'ior', 1.5),
+            'metallic':ShaderInput('float', 'metallic', 0.0),
+            'normal':ShaderInput('normal3f', 'normal', (0.0, 0.0, 1.0)),
+            'occlusion':ShaderInput('float', 'occlusion', 0.0),
+            'roughness':ShaderInput('float', 'roughness', 0.0),
+            'opacity':ShaderInput('float', 'opacity', 1.0),
+            'specularColor':ShaderInput('color3f', 'specularColor', (1.0, 1.0, 1.0)),
+            'useSpecularWorkflow':ShaderInput('int', 'useSpecularWorkflow', 0),
         }
 
     def bakeColorTexture(self):
         input = get_color_input(self.shaderNode)
         if input != None:
             self.inputs['diffuseColor'].value = input.default_value[:3]
+            if input.is_linked:
+                asset = self.name+'_color.png'
+                if bake_input_color_image(input, self.exportPath+'/'+asset, self.object):
+                    self.inputs['diffuseColor'].image = asset
+                    self.inputs['diffuseColor'].uvMap = get_input_uv_map(input, self.object)
+                    self.inputs['diffuseColor'].asset = asset
 
     def bakeRoughnessTexture(self):
         input = get_roughness_input(self.shaderNode)
@@ -72,21 +99,58 @@ class Material:
         self.bakeRoughnessTexture()
         self.bakeMetallicTexture()
 
+    def getUVMaps(self):
+        uvMaps = set()
+        for input in self.inputs.values():
+            if input.uvMap != None:
+                uvMaps.add(input.uvMap)
+        return list(uvMaps)
+
+    def exportPrimvarTokens(self):
+        items = []
+        uvMaps = self.getUVMaps()
+        for map in uvMaps:
+            items.append(FileItem('token', 'inputs:frame:stPrimvar_'+map, '"'+map+'"'))
+        return items
+
+    def exportPrimvarItems(self):
+        items = []
+        uvMaps = self.getUVMaps()
+        for map in uvMaps:
+            path = '</Materials/'+self.name+'.inputs:frame:stPrimvar_'+map+'>'
+            item = FileItem('def Shader', 'primvar_'+map)
+            item.addItem('uniform token', 'info:id', '"UsdPrimvarReader_float2"')
+            item.addItem('float2', 'inputs:default', (0.0, 0.0))
+            item.addItem('token', 'inputs:varname.connect', path)
+            item.addItem('float2', 'outputs:result')
+            items.append(item)
+        return items
+
+    def exportInputItems(self):
+        items = []
+        for input in self.inputs.values():
+            item = input.exportShaderItem(self.name)
+            if item != None:
+                items.append(item)
+        return items
 
     def exportPbrShaderItem(self):
         item = FileItem('def Shader', 'pbr')
         item.addItem('uniform token', 'info:id', '"UsdPreviewSurface"')
         for input in self.inputs.values():
-            item.append(input.exportShaderItem())
+            item.append(input.exportShaderInputItem(self.name))
         item.addItem('token', 'outputs:displacement')
         item.addItem('token', 'outputs:surface')
         return item
 
     def exportMaterialItem(self):
         item = FileItem('def Material', self.name)
+        item.items += self.exportPrimvarTokens()
         item.addItem('token', 'outputs:displacement.connect', '</Materials/'+self.name+'/pbr.outputs:displacement>')
         item.addItem('token', 'outputs:surface.connect', '</Materials/'+self.name+'/pbr.outputs:surface>')
         item.append(self.exportPbrShaderItem())
+        item.items += self.exportPrimvarItems()
+        item.items += self.exportInputItems()
         return item
 
 
@@ -161,19 +225,19 @@ class Object:
         item.addItem('uniform token', 'subdivisionScheme', '"none"')
         return item
 
-    def exportMeshItems(self, exportMaterials):
+    def exportMeshItems(self, exportMaterials, exportPath):
         items = []
         if exportMaterials and len(self.mesh.material_slots) > 0:
             self.materials = []
             for mat in range(0, len(self.mesh.material_slots)):
-                self.materials.append(Material(self, mat))
+                self.materials.append(Material(self, mat, exportPath))
                 self.materials[-1].bakeTextures()
                 items.append(self.exportMeshItem(mat))
         else:
             items.append(self.exportMeshItem())
         return items
 
-    def exportItem(self, scale, exportMaterials):
+    def exportItem(self, scale, exportMaterials, exportPath):
         item = FileItem('def Xform', self.name)
         item.addItem('custom matrix4d', 'xformOp:transform', self.getTransform(scale))
         item.addItem('uniform token[]', 'xformOpOrder', ['"xformOp:transform"'])
@@ -181,7 +245,7 @@ class Object:
         # Add Meshes if Mesh Object
         if self.type == 'MESH':
             self.createMesh()
-            item.items += self.exportMeshItems(exportMaterials)
+            item.items += self.exportMeshItems(exportMaterials, exportPath)
 
         # Add Any Children
         for child in self.children:
@@ -199,6 +263,7 @@ class Scene:
         self.bpyObjects = []
         self.bpyActive = None
         self.exportMaterials = False
+        self.exportPath = ''
         self.bakeAO = False
         self.bakeSamples = 8
         self.scale = 1.0
@@ -255,7 +320,7 @@ class Scene:
     def exportObjectItems(self):
         items = []
         for obj in self.objects:
-            items.append(obj.exportItem(self.scale, self.exportMaterials))
+            items.append(obj.exportItem(self.scale, self.exportMaterials, self.exportPath))
         return items
 
     def exportMaterialsItem(self):
@@ -263,3 +328,7 @@ class Scene:
         for mat in self.getMaterials():
             item.append(mat.exportMaterialItem())
         return item
+
+    def getUsdzConverterArgs(self):
+        args = []
+        return args

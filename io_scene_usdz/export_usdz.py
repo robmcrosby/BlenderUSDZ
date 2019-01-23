@@ -1,5 +1,6 @@
 import bpy
 import os
+import subprocess
 
 #from . import file_data
 #from . import scene_data
@@ -17,18 +18,26 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     fileName, fileType = fileName.split('.')
 
     usdaFile = filePath+'/'+fileName+'.usda'
+    usdzFile = filePath+'/'+fileName+'.usdz'
 
     scene = Scene()
     scene.loadContext(context)
     scene.exportMaterials = materials
+    scene.exportPath = filePath
     scene.bakeAO = bakeAO
     scene.bakeSamples = samples
     scene.scale = scale
     scene.animated = animated
 
+    # Export images and write the text USDA file
     data = scene.exportFileData()
     data.writeUsda(usdaFile)
 
-    scene.cleanup()
+    # Run the USDZ Converter Tool
+    args = ['xcrun', 'usdz_converter', usdaFile, usdzFile]
+    args += ['-v']
+    args += scene.getUsdzConverterArgs()
+    subprocess.run(args)
 
+    scene.cleanup()
     return {'FINISHED'}
