@@ -27,15 +27,19 @@ class ShaderInput:
     def exportShaderInputItem(self, material):
         if self.image != None and self.uvMap != None:
             path = '</Materials/'+material+'/'+self.name+'_map.outputs:rgb>'
+            if self.type == 'float':
+                path = '</Materials/'+material+'/'+self.name+'_map.outputs:r>'
             return FileItem(self.type, 'inputs:'+self.name+'.connect', path)
         return FileItem(self.type, 'inputs:'+self.name, self.value)
 
     def exportShaderItem(self, material):
         if self.image != None and self.uvMap != None:
+            v = self.value
+            default = (v, v, v, 1.0) if self.type == 'float' else v+(1.0,)
             path = '</Materials/'+material+'/primvar_'+self.uvMap+'.outputs:result>'
             item = FileItem('def Shader', self.name+'_map')
             item.addItem('uniform token', 'info:id', '"UsdUVTexture"')
-            item.addItem('float4', 'inputs:default', self.value+(1.0,))
+            item.addItem('float4', 'inputs:default', default)
             item.addItem('asset', 'inputs:file', '@'+self.asset+'@')
             item.addItem('float2', 'inputs:st.connect', path)
             item.addItem('token', 'inputs:wrapS', '"repeat"')
@@ -77,9 +81,9 @@ class Material:
             self.inputs['diffuseColor'].value = input.default_value[:3]
             if input.is_linked:
                 asset = self.name+'_color.png'
-                if bake_input_color_image(input, self.exportPath+'/'+asset, self.object):
+                if bake_input_color_image(input, self.exportPath+'/'+asset, self.object.mesh):
                     self.inputs['diffuseColor'].image = asset
-                    self.inputs['diffuseColor'].uvMap = get_input_uv_map(input, self.object)
+                    self.inputs['diffuseColor'].uvMap = get_input_uv_map(input, self.object.mesh)
                     self.inputs['diffuseColor'].asset = asset
 
     def bakeRoughnessTexture(self):

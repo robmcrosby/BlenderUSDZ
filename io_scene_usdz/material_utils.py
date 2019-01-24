@@ -49,18 +49,29 @@ def get_transmission_input(node):
 def get_normal_input(node):
     return get_node_input(node, 'Normal')
 
-def get_input_uv_map(input, mesh):
-    #TODO
+def get_active_uv_map(obj):
+    if obj.data.uv_layers.active != None:
+        return obj.data.uv_layers.active.name
     return 'UVMap'
+
+def get_input_uv_map(input, obj):
+    if input.is_linked:
+        node = input.links[0].from_node
+        if node.type == 'TEX_IMAGE':
+            return get_input_uv_map(node.inputs['Vector'], obj)
+        elif node.type == 'UVMAP' and node.uv_map != None:
+            return node.uv_map
+    return get_active_uv_map(obj)
 
 def save_image_to_file(image, file):
     image.save_render(filepath = file)
 
-def bake_input_color_image(input, file, mesh):
-    node = input.links[0].from_node
-    if node.type == 'TEX_IMAGE' and node.image != None:
-        save_image_to_file(node.image, file)
-        return True
+def bake_input_color_image(input, file, obj):
+    if input.is_linked:
+        node = input.links[0].from_node
+        if node.type == 'TEX_IMAGE' and node.image != None:
+            save_image_to_file(node.image, file)
+            return True
     #TODO: Handle Other Setups
     print('Error Baking Color Image')
     return False
