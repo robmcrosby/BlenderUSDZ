@@ -74,6 +74,42 @@ class Material:
             'specularColor':ShaderInput('color3f', 'specularColor', (1.0, 1.0, 1.0)),
             'useSpecularWorkflow':ShaderInput('int', 'useSpecularWorkflow', 0),
         }
+        self.bakeImageNode = None
+        self.bakeUVMapNode = None
+        self.bakeImage = None
+        self.activeNode = None
+
+    def setupBakeNodes(self):
+        if self.bakeImage == None:
+            images = bpy.data.images
+            self.bakeImage = images.new('BakeImage', 1024, 1024, alpha = True)
+            self.bakeImage.file_format = 'PNG'
+        nodes = self.material.node_tree.nodes
+        self.activeNode = nodes.active
+        if self.bakeImageNode == None:
+            self.bakeImageNode = nodes.new('ShaderNodeTexImage')
+            self.bakeImageNode.image = self.bakeImage
+            nodes.active = self.bakeImageNode
+        if self.bakeUVMapNode == None:
+            input = get_color_input(self.shaderNode)
+            self.bakeUVMapNode = nodes.new('ShaderNodeUVMap')
+            self.bakeUVMapNode.uv_map = get_input_uv_map(input, self.object.mesh)
+        links = self.material.node_tree.links
+        links.new(self.bakeImageNode.inputs[0], self.bakeUVMapNode.outputs[0])
+
+    def cleanupBakeNodes(self):
+        if self.bakeImage != None:
+            images = bpy.data.images
+            images.remove(self.bakeImage)
+            self.bakeImage = None
+        nodes = self.material.node_tree.nodes
+        nodes.active = self.activeNode
+        if self.bakeImageNode != None:
+            nodes.remove(self.bakeImageNode)
+            self.bakeImageNode = None
+        if self.bakeUVMapNode != None:
+            nodes.remove(self.bakeUVMapNode)
+            self.bakeUVMapNode = None
 
     def bakeColorTexture(self):
         input = get_color_input(self.shaderNode)
@@ -98,10 +134,24 @@ class Material:
             self.inputs['metallic'].value = value
             self.inputs['useSpecularWorkflow'].value = 0 if value > 0.0 else 1
 
-    def bakeTextures(self):
+    def bakeOcclusionTexture(self):
+        asset = self.name+'_occlusion.png'
+        self.bakeImage.filepath = self.exportPath+'/'+asset
+        set_active_object(self.object.mesh)
+        bpy.ops.object.bake(type='AO')
+        self.bakeImage.save()
+        self.inputs['occlusion'].image = asset
+        self.inputs['occlusion'].uvMap = self.bakeUVMapNode.uv_map
+        self.inputs['occlusion'].asset = asset
+
+    def bakeTextures(self, bakeAO):
+        self.setupBakeNodes()
         self.bakeColorTexture()
         self.bakeRoughnessTexture()
         self.bakeMetallicTexture()
+        if bakeAO:
+            self.bakeOcclusionTexture()
+        self.cleanupBakeNodes()
 
     def getUVMaps(self):
         uvMaps = set()
@@ -160,8 +210,9 @@ class Material:
 
 class Object:
     """Wraper for Blender Objects"""
-    def __init__(self, object, type = 'EMPTY'):
+    def __init__(self, object, scene, type = 'EMPTY'):
         self.object = object
+        self.scene = scene
         self.mesh = None
         self.materials = []
         self.parent = None
@@ -179,8 +230,9 @@ class Object:
             self.mesh = duplicate_object(self.object)
             apply_object_modifers(self.mesh)
 
-    def getTransform(self, scale):
+    def getTransform(self):
         if self.parent == None:
+            scale = self.scene.scale
             return root_matrix_data(self.object.matrix_world, scale)
         return matrix_data(self.object.matrix_local)
 
@@ -229,31 +281,32 @@ class Object:
         item.addItem('uniform token', 'subdivisionScheme', '"none"')
         return item
 
-    def exportMeshItems(self, exportMaterials, exportPath):
+    def exportMeshItems(self):
         items = []
-        if exportMaterials and len(self.mesh.material_slots) > 0:
+        if self.scene.exportMaterials and len(self.mesh.material_slots) > 0:
             self.materials = []
             for mat in range(0, len(self.mesh.material_slots)):
+                exportPath = self.scene.exportPath
                 self.materials.append(Material(self, mat, exportPath))
-                self.materials[-1].bakeTextures()
+                self.materials[-1].bakeTextures(self.scene.bakeAO)
                 items.append(self.exportMeshItem(mat))
         else:
             items.append(self.exportMeshItem())
         return items
 
-    def exportItem(self, scale, exportMaterials, exportPath):
+    def exportItem(self):
         item = FileItem('def Xform', self.name)
-        item.addItem('custom matrix4d', 'xformOp:transform', self.getTransform(scale))
+        item.addItem('custom matrix4d', 'xformOp:transform', self.getTransform())
         item.addItem('uniform token[]', 'xformOpOrder', ['"xformOp:transform"'])
 
         # Add Meshes if Mesh Object
         if self.type == 'MESH':
             self.createMesh()
-            item.items += self.exportMeshItems(exportMaterials, exportPath)
+            item.items += self.exportMeshItems()
 
         # Add Any Children
         for child in self.children:
-            item.append(child.exportItem(scale, exportMaterials))
+            item.append(child.exportItem())
         return item
 
 
@@ -293,7 +346,7 @@ class Scene:
                 self.addBpyObject(obj, obj.type)
 
     def addBpyObject(self, object, type = 'EMPTY'):
-        obj = Object(object, type)
+        obj = Object(object, self, type)
         if obj.name in self.objMap:
             obj = self.objMap[obj.name]
             if type != 'EMPTY':
@@ -323,8 +376,12 @@ class Scene:
 
     def exportObjectItems(self):
         items = []
+        engine = self.context.scene.render.engine
+        if self.exportMaterials:
+            self.context.scene.render.engine = 'CYCLES'
         for obj in self.objects:
-            items.append(obj.exportItem(self.scale, self.exportMaterials, self.exportPath))
+            items.append(obj.exportItem())
+        self.context.scene.render.engine = engine
         return items
 
     def exportMaterialsItem(self):
