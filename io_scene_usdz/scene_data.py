@@ -22,7 +22,6 @@ class ShaderInput:
         self.value = default
         self.image = None
         self.uvMap = None
-        self.asset = ''
 
     def exportShaderInputItem(self, material):
         if self.image != None and self.uvMap != None:
@@ -40,7 +39,7 @@ class ShaderInput:
             item = FileItem('def Shader', self.name+'_map')
             item.addItem('uniform token', 'info:id', '"UsdUVTexture"')
             item.addItem('float4', 'inputs:default', default)
-            item.addItem('asset', 'inputs:file', '@'+self.asset+'@')
+            item.addItem('asset', 'inputs:file', '@'+self.image+'@')
             item.addItem('float2', 'inputs:st.connect', path)
             item.addItem('token', 'inputs:wrapS', '"repeat"')
             item.addItem('token', 'inputs:wrapT', '"repeat"')
@@ -51,7 +50,7 @@ class ShaderInput:
 
 class Material:
     """Wraper for Blender Material"""
-    def __init__(self, object, index, exportPath):
+    def __init__(self, object, index, exportPath, bakeWidth = 1024, bakeHeight = 1024):
         self.object = object
         self.index = index
         self.exportPath = exportPath
@@ -74,20 +73,24 @@ class Material:
             'specularColor':ShaderInput('color3f', 'specularColor', (1.0, 1.0, 1.0)),
             'useSpecularWorkflow':ShaderInput('int', 'useSpecularWorkflow', 0),
         }
+        self.bakeUVMap = ''
         self.bakeImageNode = None
         self.bakeUVMapNode = None
+        self.bakeWidth = bakeWidth
+        self.bakeHeight = bakeHeight
         self.activeNode = None
 
     def setupBakeNodes(self):
         nodes = self.material.node_tree.nodes
         self.activeNode = nodes.active
+        input = get_color_input(self.shaderNode)
+        self.bakeUVMap = get_input_uv_map(input, self.object.mesh)
         if self.bakeImageNode == None:
             self.bakeImageNode = nodes.new('ShaderNodeTexImage')
             nodes.active = self.bakeImageNode
         if self.bakeUVMapNode == None:
-            input = get_color_input(self.shaderNode)
             self.bakeUVMapNode = nodes.new('ShaderNodeUVMap')
-            self.bakeUVMapNode.uv_map = get_input_uv_map(input, self.object.mesh)
+            self.bakeUVMapNode.uv_map = self.bakeUVMap
         links = self.material.node_tree.links
         links.new(self.bakeImageNode.inputs[0], self.bakeUVMapNode.outputs[0])
 
@@ -101,37 +104,49 @@ class Material:
             nodes.remove(self.bakeUVMapNode)
             self.bakeUVMapNode = None
 
-    def bakeColorInput(self, input, file):
-        node = input.links[0].from_node
-        if node.type == 'TEX_IMAGE' and node.image != None:
-            save_image_to_file(node.image, file)
-            return True
-
-        # Setup an Emission Shader
-        nodes = self.material.node_tree.nodes
-        links = self.material.node_tree.links
-        output = input.links[0].from_socket
-        emitNode = nodes.new('ShaderNodeEmission')
-        links.new(emitNode.inputs[0], output)
-        links.new(self.outputNode.inputs[0], emitNode.outputs[0])
-
-        # Bake the input as Emission to the Texture
+    def bakeToFile(self, type, file):
         images = bpy.data.images
-        bakeImage = images.new('BakeImage', 1024, 1024)
+        bakeImage = images.new('BakeImage', self.bakeWidth, self.bakeHeight)
         bakeImage.file_format = 'PNG'
         bakeImage.filepath = file
         self.bakeImageNode.image = bakeImage
-        set_active_object(self.object.mesh)
-        nodes.active = self.bakeImageNode
-        bpy.ops.object.bake(type='EMIT', use_clear=True)
+        bpy.ops.object.bake(type=type, use_clear=True)
         bakeImage.save()
-
-        # Remove the Emission Shader and restore links
         self.bakeImageNode.image = None
         images.remove(bakeImage)
+
+    def bakeColorOutput(self, output, file):
+        # Setup an Emission Shader
+        nodes = self.material.node_tree.nodes
+        links = self.material.node_tree.links
+        emitNode = nodes.new('ShaderNodeEmission')
+        links.new(emitNode.inputs[0], output)
+        links.new(self.outputNode.inputs[0], emitNode.outputs[0])
+        # Bake Emission
+        self.bakeToFile('EMIT', file)
+        # Remove the Emission Shader and restore Links
         nodes.remove(emitNode)
         links.new(self.outputNode.inputs[0], self.shaderNode.outputs[0])
-        return True
+
+    def bakeColorInput(self, input, file):
+        set_active_object(self.object.mesh)
+        node = input.links[0].from_node
+        if node.type == 'TEX_IMAGE' and node.image != None:
+            # Skip baking and copy the image
+            save_image_to_file(node.image, file)
+        else:
+            self.bakeColorOutput(input.links[0].from_socket, file)
+
+    def bakeFloatInput(self, input, file):
+        nodes = self.material.node_tree.nodes
+        links = self.material.node_tree.links
+        output = input.links[0].from_socket
+        convertNode = nodes.new('ShaderNodeCombineRGB')
+        links.new(convertNode.inputs[0], output)
+        links.new(convertNode.inputs[1], output)
+        links.new(convertNode.inputs[2], output)
+        self.bakeColorOutput(convertNode.outputs[0], file)
+        nodes.remove(convertNode)
 
     def bakeColorTexture(self):
         input = get_color_input(self.shaderNode)
@@ -139,40 +154,43 @@ class Material:
             self.inputs['diffuseColor'].value = input.default_value[:3]
             if input.is_linked:
                 asset = self.name+'_color.png'
-                if self.bakeColorInput(input, self.exportPath+'/'+asset):
-                    self.inputs['diffuseColor'].image = asset
-                    self.inputs['diffuseColor'].uvMap = get_input_uv_map(input, self.object.mesh)
-                    self.inputs['diffuseColor'].asset = asset
+                file = self.exportPath+'/'+asset
+                self.bakeColorInput(input, file)
+                self.inputs['diffuseColor'].image = asset
+                self.inputs['diffuseColor'].uvMap = self.bakeUVMap
 
     def bakeRoughnessTexture(self):
         input = get_roughness_input(self.shaderNode)
         if input != None:
             self.inputs['roughness'].value = input.default_value
+            if input.is_linked:
+                asset = self.name+'_roughness.png'
+                file = self.exportPath+'/'+asset
+                self.bakeFloatInput(input, file)
+                self.inputs['roughness'].image = asset
+                self.inputs['roughness'].uvMap = self.bakeUVMap
 
     def bakeMetallicTexture(self):
         input = get_metallic_input(self.shaderNode)
         if input != None:
             value = input.default_value
             self.inputs['metallic'].value = value
-            self.inputs['useSpecularWorkflow'].value = 0 if value > 0.0 else 1
+            if input.is_linked:
+                asset = self.name+'_metallic.png'
+                file = self.exportPath+'/'+asset
+                self.bakeFloatInput(input, file)
+                self.inputs['metallic'].image = asset
+                self.inputs['metallic'].uvMap = self.bakeUVMap
+                self.inputs['useSpecularWorkflow'].value = 0
+            else:
+                self.inputs['useSpecularWorkflow'].value = 0 if value > 0.0 else 1
 
     def bakeOcclusionTexture(self):
         asset = self.name+'_occlusion.png'
-        images = bpy.data.images
-        bakeImage = images.new('BakeImage', 1024, 1024)
-        bakeImage.file_format = 'PNG'
-        bakeImage.filepath = self.exportPath+'/'+asset
-        self.bakeImageNode.image = bakeImage
-
-        set_active_object(self.object.mesh)
-        bpy.ops.object.bake(type='AO', use_clear=True)
-        bakeImage.save()
-
-        self.bakeImageNode.image = None
-        images.remove(bakeImage)
+        file = self.exportPath+'/'+asset
+        self.bakeToFile('AO', file)
         self.inputs['occlusion'].image = asset
-        self.inputs['occlusion'].uvMap = self.bakeUVMapNode.uv_map
-        self.inputs['occlusion'].asset = asset
+        self.inputs['occlusion'].uvMap = self.bakeUVMap
 
     def bakeTextures(self, bakeAO):
         self.setupBakeNodes()

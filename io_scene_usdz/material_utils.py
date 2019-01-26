@@ -55,7 +55,7 @@ def get_active_uv_map(obj):
     return 'UVMap'
 
 def get_input_uv_map(input, obj):
-    if input.is_linked:
+    if input != None and input.is_linked:
         node = input.links[0].from_node
         if node.type == 'TEX_IMAGE':
             return get_input_uv_map(node.inputs['Vector'], obj)
