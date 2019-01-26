@@ -76,19 +76,13 @@ class Material:
         }
         self.bakeImageNode = None
         self.bakeUVMapNode = None
-        self.bakeImage = None
         self.activeNode = None
 
     def setupBakeNodes(self):
-        if self.bakeImage == None:
-            images = bpy.data.images
-            self.bakeImage = images.new('BakeImage', 1024, 1024, alpha = True)
-            self.bakeImage.file_format = 'PNG'
         nodes = self.material.node_tree.nodes
         self.activeNode = nodes.active
         if self.bakeImageNode == None:
             self.bakeImageNode = nodes.new('ShaderNodeTexImage')
-            self.bakeImageNode.image = self.bakeImage
             nodes.active = self.bakeImageNode
         if self.bakeUVMapNode == None:
             input = get_color_input(self.shaderNode)
@@ -98,10 +92,6 @@ class Material:
         links.new(self.bakeImageNode.inputs[0], self.bakeUVMapNode.outputs[0])
 
     def cleanupBakeNodes(self):
-        if self.bakeImage != None:
-            images = bpy.data.images
-            images.remove(self.bakeImage)
-            self.bakeImage = None
         nodes = self.material.node_tree.nodes
         nodes.active = self.activeNode
         if self.bakeImageNode != None:
@@ -111,13 +101,45 @@ class Material:
             nodes.remove(self.bakeUVMapNode)
             self.bakeUVMapNode = None
 
+    def bakeColorInput(self, input, file):
+        node = input.links[0].from_node
+        if node.type == 'TEX_IMAGE' and node.image != None:
+            save_image_to_file(node.image, file)
+            return True
+
+        # Setup an Emission Shader
+        nodes = self.material.node_tree.nodes
+        links = self.material.node_tree.links
+        output = input.links[0].from_socket
+        emitNode = nodes.new('ShaderNodeEmission')
+        links.new(emitNode.inputs[0], output)
+        links.new(self.outputNode.inputs[0], emitNode.outputs[0])
+
+        # Bake the input as Emission to the Texture
+        images = bpy.data.images
+        bakeImage = images.new('BakeImage', 1024, 1024)
+        bakeImage.file_format = 'PNG'
+        bakeImage.filepath = file
+        self.bakeImageNode.image = bakeImage
+        set_active_object(self.object.mesh)
+        nodes.active = self.bakeImageNode
+        bpy.ops.object.bake(type='EMIT', use_clear=True)
+        bakeImage.save()
+
+        # Remove the Emission Shader and restore links
+        self.bakeImageNode.image = None
+        images.remove(bakeImage)
+        nodes.remove(emitNode)
+        links.new(self.outputNode.inputs[0], self.shaderNode.outputs[0])
+        return True
+
     def bakeColorTexture(self):
         input = get_color_input(self.shaderNode)
         if input != None:
             self.inputs['diffuseColor'].value = input.default_value[:3]
             if input.is_linked:
                 asset = self.name+'_color.png'
-                if bake_input_color_image(input, self.exportPath+'/'+asset, self.object.mesh):
+                if self.bakeColorInput(input, self.exportPath+'/'+asset):
                     self.inputs['diffuseColor'].image = asset
                     self.inputs['diffuseColor'].uvMap = get_input_uv_map(input, self.object.mesh)
                     self.inputs['diffuseColor'].asset = asset
@@ -136,10 +158,18 @@ class Material:
 
     def bakeOcclusionTexture(self):
         asset = self.name+'_occlusion.png'
-        self.bakeImage.filepath = self.exportPath+'/'+asset
+        images = bpy.data.images
+        bakeImage = images.new('BakeImage', 1024, 1024)
+        bakeImage.file_format = 'PNG'
+        bakeImage.filepath = self.exportPath+'/'+asset
+        self.bakeImageNode.image = bakeImage
+
         set_active_object(self.object.mesh)
-        bpy.ops.object.bake(type='AO')
-        self.bakeImage.save()
+        bpy.ops.object.bake(type='AO', use_clear=True)
+        bakeImage.save()
+
+        self.bakeImageNode.image = None
+        images.remove(bakeImage)
         self.inputs['occlusion'].image = asset
         self.inputs['occlusion'].uvMap = self.bakeUVMapNode.uv_map
         self.inputs['occlusion'].asset = asset
@@ -269,15 +299,16 @@ class Object:
         item.addItem('int[]', 'faceVertexIndices', indices)
         item.addItem('point3f[]', 'points', points)
 
+        if material >= 0:
+            name = self.getMaterialName(material)
+            item.addItem('rel', 'material:binding', '</Materials/'+name+'>')
+
         indices, normals = export_mesh_normals(mesh, material)
         item.addItem('int[]', 'primvars:normals:indices', indices)
         item.addItem('normal3f[]', 'primvars:normals', normals)
         item.items[-1].properties['interpolation'] = '"faceVarying"'
 
         item.items += self.exportMeshUvItems(material)
-        if material >= 0:
-            name = self.getMaterialName(material)
-            item.addItem('rel', 'material:binding', '</Materials/'+name+'>')
         item.addItem('uniform token', 'subdivisionScheme', '"none"')
         return item
 
