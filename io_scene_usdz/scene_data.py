@@ -50,13 +50,11 @@ class ShaderInput:
 
 class Material:
     """Wraper for Blender Material"""
-    def __init__(self, object, index, exportPath, bakeWidth = 1024, bakeHeight = 1024):
-        self.object = object
-        self.index = index
+    def __init__(self, material, exportPath):
+        self.material = material
         self.exportPath = exportPath
-        self.material = object.mesh.material_slots[index].material
-        self.name = self.material.name.replace('.', '_')
-        self.outputNode = get_output_node(self.material)
+        self.name = get_material_name(material)
+        self.outputNode = get_output_node(material)
         self.shaderNode = get_shader_node(self.outputNode)
         self.inputs = {
             'diffuseColor':ShaderInput('color3f', 'diffuseColor', (0.18, 0.18, 0.18)),
@@ -76,15 +74,15 @@ class Material:
         self.bakeUVMap = ''
         self.bakeImageNode = None
         self.bakeUVMapNode = None
-        self.bakeWidth = bakeWidth
-        self.bakeHeight = bakeHeight
+        self.bakeWidth = 1024
+        self.bakeHeight = 1024
         self.activeNode = None
 
-    def setupBakeNodes(self):
+    def setupBakeNodes(self, mesh):
         nodes = self.material.node_tree.nodes
         self.activeNode = nodes.active
         input = get_color_input(self.shaderNode)
-        self.bakeUVMap = get_input_uv_map(input, self.object.mesh)
+        self.bakeUVMap = get_input_uv_map(input, mesh)
         if self.bakeImageNode == None:
             self.bakeImageNode = nodes.new('ShaderNodeTexImage')
             nodes.active = self.bakeImageNode
@@ -129,7 +127,6 @@ class Material:
         links.new(self.outputNode.inputs[0], self.shaderNode.outputs[0])
 
     def bakeColorInput(self, input, file):
-        set_active_object(self.object.mesh)
         node = input.links[0].from_node
         if node.type == 'TEX_IMAGE' and node.image != None:
             # Skip baking and copy the image
@@ -192,8 +189,8 @@ class Material:
         self.inputs['occlusion'].image = asset
         self.inputs['occlusion'].uvMap = self.bakeUVMap
 
-    def bakeTextures(self, bakeAO):
-        self.setupBakeNodes()
+    def bakeTextures(self, mesh, bakeAO):
+        self.setupBakeNodes(mesh)
         self.bakeColorTexture()
         self.bakeRoughnessTexture()
         self.bakeMetallicTexture()
@@ -284,10 +281,10 @@ class Object:
             return root_matrix_data(self.object.matrix_world, scale)
         return matrix_data(self.object.matrix_local)
 
-    def getMaterialName(self, material):
-        if material < 0 or material >= len(self.materials):
+    def getMaterialName(self, index):
+        if index < 0 or index >= len(self.object.material_slots):
             return ''
-        return self.materials[material].name
+        return get_material_name(self.object.material_slots[index].material)
 
     def exportMeshUvItems(self, material):
         mesh = self.mesh.data
@@ -336,8 +333,9 @@ class Object:
             self.materials = []
             for mat in range(0, len(self.mesh.material_slots)):
                 exportPath = self.scene.exportPath
-                self.materials.append(Material(self, mat, exportPath))
-                self.materials[-1].bakeTextures(self.scene.bakeAO)
+                material = self.object.material_slots[mat].material
+                self.materials.append(Material(material, exportPath))
+                self.materials[-1].bakeTextures(self.mesh, self.scene.bakeAO)
                 items.append(self.exportMeshItem(mat))
         else:
             items.append(self.exportMeshItem())

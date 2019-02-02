@@ -1,5 +1,8 @@
 import bpy
 
+def get_material_name(material):
+    return material.name.replace('.', '_')
+
 def get_output_node(material):
     for node in material.node_tree.nodes:
         if node.type == 'OUTPUT_MATERIAL' and node.is_active_output:
