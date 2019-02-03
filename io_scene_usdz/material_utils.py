@@ -19,7 +19,7 @@ def get_node_input(node, name):
         return node.inputs[name]
     return None
 
-def get_color_input(node):
+def get_diffuse_input(node):
     input = get_node_input(node, 'Base Color')
     if input == None:
         input = get_node_input(node, 'Color')
@@ -51,6 +51,67 @@ def get_transmission_input(node):
 
 def get_normal_input(node):
     return get_node_input(node, 'Normal')
+
+def get_diffuse_color(node, default = (0.6, 0.6, 0.6)):
+    input = get_diffuse_input(node)
+    if input == None:
+        return default
+    return input.default_value[:3]
+
+def get_specular_value(node, default = 0.5):
+    input = get_specular_input(node)
+    if input == None:
+        return default
+    return input.default_value
+
+def get_specular_tint_value(node, default = 0.0):
+    input = get_specular_tint_input(node)
+    if input == None:
+        return default
+    return input.default_value
+
+def get_specular_color(node):
+    specular = (get_specular_value(node),)*3
+    return specular
+
+def get_emissive_color(node, default = (0.0, 0.0, 0.0)):
+    return default
+
+def get_roughness_value(node, default = 0.0):
+    input = get_roughness_input(node)
+    if input == None:
+        return default
+    return input.default_value
+
+def get_metallic_value(node, default = 0.0):
+    input = get_metallic_input(node)
+    if input == None:
+        return default
+    return input.default_value
+
+def get_opacity_value(node, default = 1.0):
+    input = get_transmission_input(node)
+    if input == None:
+        return default
+    return 1.0 - input.default_value
+
+def get_ior_value(node, default = 1.5):
+    input = get_ior_input(node)
+    if input == None:
+        return default
+    return input.default_value
+
+def get_clearcoat_value(node, default = 0.0):
+    input = get_clearcoat_input(node)
+    if input == None:
+        return default
+    return input.default_value
+
+def get_clearcoat_roughness_value(node, default = 0.0):
+    input = get_clearcoat_roughness_input(node)
+    if input == None:
+        return default
+    return input.default_value
 
 def get_active_uv_map(obj):
     if obj.data.uv_layers.active != None:
