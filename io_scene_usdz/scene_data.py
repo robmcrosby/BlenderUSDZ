@@ -165,7 +165,7 @@ class Material:
     def setupBakeMetallic(self, asset):
         input = get_metallic_input(self.shaderNode)
         if self.setupBakeFloatInput(input):
-            self.inputs['metallic'].image = asset
+            self.inputs['metallic'].image = assetw
             self.inputs['metallic'].uvMap = self.object.bakeUVMap
             self.inputs['useSpecularWorkflow'].value = 0
             return True
@@ -262,14 +262,12 @@ class Object:
         self.createMaterials()
         self.createMeshes()
 
+    def __del__(self):
+        self.cleanup()
+
     def cleanup(self):
         self.clearMeshes()
         self.materials = []
-
-    def getPath(self):
-        if self.parent == None:
-            return '/'+self.name
-        return self.parent.getPath()+'/'+self.name
 
     def createMaterials(self):
         self.materials = []
@@ -287,6 +285,11 @@ class Object:
         for mesh in self.meshes:
             delete_object(mesh)
         self.meshes = []
+
+    def getPath(self):
+        if self.parent == None:
+            return '/'+self.name
+        return self.parent.getPath()+'/'+self.name
 
     def setupBakeImage(self, file):
         self.cleanupBakeImage()
@@ -318,65 +321,56 @@ class Object:
         for mat in self.materials:
             mat.cleanupBakeNodes()
 
+    def bakeToFile(self, type, file):
+        self.setupBakeImage(file)
+        bpy.ops.object.bake(type=type, use_clear=True)
+        self.bakeImage.save()
+        self.cleanupBakeImage()
+
     def bakeDiffuseTexture(self):
         asset = self.name+'_diffuse.png'
         bake = False
         for mat in self.materials:
-            if mat.setupBakeDiffuse(asset):
-                bake = True
+            bake = mat.setupBakeDiffuse(asset) or bake
         if bake:
-            file = self.scene.exportPath+'/'+asset
-            self.setupBakeImage(file)
-            bpy.ops.object.bake(type='EMIT', use_clear=True)
-            self.bakeImage.save()
-            self.cleanupBakeImage()
+            self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
 
     def bakeRoughnessTexture(self):
         asset = self.name+'_roughness.png'
         bake = False
         for mat in self.materials:
-            if mat.setupBakeRoughness(asset):
-                bake = True
+            bake = mat.setupBakeRoughness(asset) or bake
         if bake:
-            file = self.scene.exportPath+'/'+asset
-            self.setupBakeImage(file)
-            bpy.ops.object.bake(type='EMIT', use_clear=True)
-            self.bakeImage.save()
-            self.cleanupBakeImage()
+            self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
 
     def bakeMetallicTexture(self):
         asset = self.name+'_metallic.png'
         bake = False
         for mat in self.materials:
-            if mat.setupBakeMetallic(asset):
-                bake = True
+            bake = mat.setupBakeMetallic(asset) or bake
         if bake:
-            file = self.scene.exportPath+'/'+asset
-            self.setupBakeImage(file)
-            bpy.ops.object.bake(type='EMIT', use_clear=True)
-            self.bakeImage.save()
-            self.cleanupBakeImage()
+            self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
 
     def bakeOcclusionTexture(self):
         asset = self.name+'_occlusion.png'
+        bake = False
         for mat in self.materials:
             mat.inputs['occlusion'].image = asset
             mat.inputs['occlusion'].uvMap = self.bakeUVMap
-        file = self.scene.exportPath+'/'+asset
-        self.setupBakeImage(file)
-        bpy.ops.object.bake(type='AO', use_clear=True)
-        self.bakeImage.save()
-        self.cleanupBakeImage()
+            bake = True
+        if bake:
+            self.bakeToFile('AO', self.scene.exportPath+'/'+asset)
 
     def bakeTextures(self):
         select_object(self.meshes[0])
         self.setupBakeOutputNodes()
-        self.bakeDiffuseTexture()
-        self.bakeRoughnessTexture()
-        self.bakeMetallicTexture()
+        if self.scene.bakeTextures:
+            self.bakeDiffuseTexture()
+            self.bakeRoughnessTexture()
+            self.bakeMetallicTexture()
         if self.scene.bakeAO:
             self.bakeOcclusionTexture()
         self.cleanupBakeOutputNodes()
@@ -478,15 +472,20 @@ class Scene:
         self.animated = False
 
     def cleanup(self):
-        for obj in self.objMap.values():
-            obj.cleanup()
+        self.clearObjects()
         deselect_objects()
         select_objects(self.bpyObjects)
         set_active_object(self.bpyActive)
 
+    def clearObjects(self):
+        for obj in self.objMap.values():
+            obj.cleanup()
+        self.objects = []
+        self.objMap = {}
+
     def loadContext(self, context):
         self.context = context
-        self.bpyObjects = context.selected_objects
+        self.bpyObjects = context.selected_objects.copy()
         self.bpyActive = context.view_layer.objects.active
         self.loadObjects()
 

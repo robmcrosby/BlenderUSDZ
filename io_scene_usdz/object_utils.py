@@ -9,6 +9,7 @@ def deselect_objects():
 def select_object(object):
     deselect_objects()
     object.select_set(True)
+    set_active_object(object)
 
 def select_objects(objects):
     deselect_objects()
