@@ -54,6 +54,10 @@ def object_extents(object):
         high = max(high, v[:])
     return [low, high]
 
+def uv_smart_project(mesh):
+    select_object(mesh)
+    bpy.ops.uv.smart_project()
+
 def mesh_vertex_counts(mesh, material = -1):
     counts = []
     if material == -1:

@@ -171,6 +171,14 @@ class Material:
             return True
         return False
 
+    def setupBakeNormals(self, asset):
+        input = get_normal_input(self.shaderNode)
+        if input != None and input.is_linked:
+            self.inputs['normal'].image = asset
+            self.inputs['normal'].uvMap = self.object.bakeUVMap
+            return True
+        return False
+
     def cleanupBakeNodes(self):
         if len(self.bakeNodes) > 0:
             nodes = self.material.node_tree.nodes
@@ -280,11 +288,18 @@ class Object:
         mesh = duplicate_object(self.object)
         apply_object_modifers(mesh)
         self.meshes.append(mesh)
+        if self.uvMapNeeded:
+            uv_smart_project(mesh)
 
     def clearMeshes(self):
         for mesh in self.meshes:
             delete_object(mesh)
         self.meshes = []
+
+    def uvMapNeeded(self):
+        if self.scene.bakeTextures or self.scene.bakeAO:
+            return len(mesh.data.uv_layers) == 0
+        return False
 
     def getPath(self):
         if self.parent == None:
@@ -354,6 +369,15 @@ class Object:
             self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
 
+    def bakeNormalTexture(self):
+        asset = self.name+'_normal.png'
+        bake = False
+        for mat in self.materials:
+            bake = mat.setupBakeNormals(asset) or bake
+        if bake:
+            self.bakeToFile('NORMAL', self.scene.exportPath+'/'+asset)
+        self.cleanupBakeNodes()
+
     def bakeOcclusionTexture(self):
         asset = self.name+'_occlusion.png'
         bake = False
@@ -371,6 +395,7 @@ class Object:
             self.bakeDiffuseTexture()
             self.bakeRoughnessTexture()
             self.bakeMetallicTexture()
+            self.bakeNormalTexture()
         if self.scene.bakeAO:
             self.bakeOcclusionTexture()
         self.cleanupBakeOutputNodes()
