@@ -267,6 +267,7 @@ class Object:
         self.bakeWidth = 1024
         self.bakeHeight = 1024
         self.bakeImage = None
+        self.hidden = object.hide_render
         self.createMaterials()
         self.createMeshes()
 
@@ -276,6 +277,7 @@ class Object:
     def cleanup(self):
         self.clearMeshes()
         self.materials = []
+        self.object.hide_render = self.hidden
 
     def createMaterials(self):
         self.materials = []
@@ -287,6 +289,9 @@ class Object:
         self.clearMeshes()
         mesh = duplicate_object(self.object)
         apply_object_modifers(mesh)
+        add_to_collection(mesh, self.scene.collection)
+        mesh.hide_render = False
+        self.object.hide_render = True
         self.meshes.append(mesh)
         if self.uvMapNeeded:
             uv_smart_project(mesh)
@@ -495,12 +500,15 @@ class Scene:
         self.bakeSamples = 8
         self.scale = 1.0
         self.animated = False
+        self.collection = None
 
     def cleanup(self):
         self.clearObjects()
         deselect_objects()
         select_objects(self.bpyObjects)
         set_active_object(self.bpyActive)
+        delete_collection(self.collection)
+        self.collection = None
 
     def clearObjects(self):
         for obj in self.objMap.values():
@@ -515,6 +523,8 @@ class Scene:
         self.loadObjects()
 
     def loadObjects(self):
+        delete_collection(self.collection)
+        self.collection = create_collection('TempCollection')
         for obj in self.bpyObjects:
             if (obj.type == 'MESH'):
                 self.addBpyObject(obj, obj.type)

@@ -123,3 +123,16 @@ def export_mesh_uvs(mesh, layer, material = -1):
                     uvs.append(uv)
         index += len(poly.vertices)
     return (indices, uvs)
+
+def create_collection(name):
+    collection = bpy.data.collections.new(name)
+    bpy.context.scene.collection.children.link(collection)
+    return collection
+
+def delete_collection(collection):
+    if collection != None:
+        bpy.data.collections.remove(collection)
+
+def add_to_collection(object, collection):
+    if object != None and collection != None:
+        collection.objects.link(object)
