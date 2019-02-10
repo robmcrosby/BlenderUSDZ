@@ -284,7 +284,7 @@ class Object:
         mesh.hide_render = False
         self.object.hide_render = True
         self.meshes.append(mesh)
-        if self.uvMapNeeded:
+        if self.uvMapNeeded(mesh):
             uv_smart_project(mesh)
 
     def clearMeshes(self):
@@ -292,7 +292,7 @@ class Object:
             delete_object(mesh)
         self.meshes = []
 
-    def uvMapNeeded(self):
+    def uvMapNeeded(self, mesh):
         if self.scene.bakeTextures or self.scene.bakeAO:
             return len(mesh.data.uv_layers) == 0
         return False
