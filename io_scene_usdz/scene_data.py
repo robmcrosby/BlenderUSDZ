@@ -1,17 +1,8 @@
 import bpy
-#from . import object_utils
-#from . import material_utils
-#from . import file_data
-import object_utils
-import material_utils
-import file_data
 
-#from .object_utils import *
-#from .material_utils import *
-#from .file_data import FileData, FileItem
-from object_utils import *
-from material_utils import *
-from file_data import FileData, FileItem
+from io_scene_usdz.object_utils import *
+from io_scene_usdz.material_utils import *
+from io_scene_usdz.file_data import FileData, FileItem
 
 
 class ShaderInput:

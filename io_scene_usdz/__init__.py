@@ -53,9 +53,19 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
         description="Export Ridgid Body Animations",
         default=False,
         )
+    bakeTextures = BoolProperty(
+        name="Bake Textures",
+        description="Bake Diffuse, Roughness, Normal, etc",
+        default=False,
+        )
     bakeAO = BoolProperty(
         name="Bake AO",
         description="Bake Ambiant Occlusion Texture",
+        default=False,
+        )
+    bakeSeparate = BoolProperty(
+        name="Bake Seperate",
+        description="Bake Seperate images for each material",
         default=False,
         )
     samples = IntProperty(

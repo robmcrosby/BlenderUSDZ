@@ -2,15 +2,8 @@ import bpy
 import os
 import subprocess
 
-#from . import file_data
-#from . import scene_data
-import file_data
-import scene_data
-
-#from .file_data import *
-#from .scene_data import *
-from file_data import *
-from scene_data import *
+from io_scene_usdz.file_data import *
+from io_scene_usdz.scene_data import *
 
 def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
                 bakeTextures = False, bakeAO = False, bakeSeparate = False,
