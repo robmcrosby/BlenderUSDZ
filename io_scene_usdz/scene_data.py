@@ -259,8 +259,6 @@ class Object:
         self.bakeHeight = 1024
         self.bakeImage = None
         self.hidden = object.hide_render
-        self.createMaterials()
-        self.createMeshes()
 
     def __del__(self):
         self.cleanup()
@@ -291,6 +289,13 @@ class Object:
         for mesh in self.meshes:
             delete_object(mesh)
         self.meshes = []
+
+    def setAsMesh(self):
+        if self.type != 'MESH' and self.object.type == 'MESH':
+            print('Set As MESH!')
+            self.type = 'MESH'
+            self.createMaterials()
+            self.createMeshes()
 
     def uvMapNeeded(self, mesh):
         if self.scene.bakeTextures or self.scene.bakeAO:
@@ -521,11 +526,9 @@ class Scene:
                 self.addBpyObject(obj, obj.type)
 
     def addBpyObject(self, object, type = 'EMPTY'):
-        obj = Object(object, self, type)
+        obj = Object(object, self)
         if obj.name in self.objMap:
             obj = self.objMap[obj.name]
-            if type != 'EMPTY':
-                obj.type = type
         elif object.parent != None:
             obj.parent = self.addBpyObject(object.parent)
             obj.parent.children.append(obj)
@@ -533,6 +536,8 @@ class Scene:
         else:
             self.objects.append(obj)
             self.objMap[obj.name] = obj
+        if type == 'MESH':
+            obj.setAsMesh()
         return obj
 
     def bakeTextures(self):

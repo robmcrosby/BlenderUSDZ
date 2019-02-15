@@ -30,6 +30,7 @@ def duplicate_object(object):
 def apply_object_modifers(object):
     if object != None:
         select_object(object)
+        bpy.ops.object.make_single_user()
         bpy.ops.object.convert(target='MESH')
 
 def delete_object(object):
