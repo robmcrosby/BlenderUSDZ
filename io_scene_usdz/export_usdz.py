@@ -1,6 +1,8 @@
 import bpy
 import os
 import subprocess
+import tempfile
+import shutil
 
 from io_scene_usdz.file_data import *
 from io_scene_usdz.scene_data import *
@@ -13,6 +15,12 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
 
     usdaFile = filePath+'/'+fileName+'.usda'
     usdzFile = filePath+'/'+fileName+'.usdz'
+
+    tempPath = None
+    if not keepUSDA:
+        tempPath = tempfile.mkdtemp()
+        filePath = tempPath
+        usdaFile = tempPath+'/'+fileName+'.usda'
 
     scene = Scene()
     scene.exportMaterials = materials
@@ -37,4 +45,7 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     subprocess.run(args)
 
     scene.cleanup()
+    if tempPath != None:
+        shutil.rmtree(tempPath)
+
     return {'FINISHED'}
