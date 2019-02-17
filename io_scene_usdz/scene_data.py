@@ -496,6 +496,10 @@ class Scene:
         self.bakeSamples = 8
         self.scale = 1.0
         self.animated = False
+        self.startFrame = 0
+        self.endFrame = 0
+        self.curFrame = 0
+        self.fps = 30
         self.collection = None
 
     def cleanup(self):
@@ -516,6 +520,10 @@ class Scene:
         self.context = context
         self.bpyObjects = context.selected_objects.copy()
         self.bpyActive = context.view_layer.objects.active
+        self.startFrame = context.scene.frame_start
+        self.endFrame = context.scene.frame_end
+        self.curFrame = context.scene.frame_current
+        self.fps = context.scene.render.fps
         self.loadObjects()
 
     def loadObjects(self):
@@ -553,5 +561,10 @@ class Scene:
 
     def exportFileData(self):
         data = FileData()
+        data.properties['upAxis'] = '"Y"'
+        if self.animated:
+            data.properties['startTimeCode'] = self.startFrame
+            data.properties['endTimeCode'] = self.endFrame
+            data.properties['timeCodesPerSecond'] = self.fps
         data.items = self.exportObjectItems()
         return data
