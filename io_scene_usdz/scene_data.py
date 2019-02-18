@@ -463,10 +463,24 @@ class Object:
             items.append(mat.exportItem())
         return items
 
+    def exportMatrixTimeSamples(self):
+        item = FileItem('matrix4d', 'xformOp:transform:transforms.timeSamples')
+        start = self.scene.startFrame
+        end = self.scene.endFrame
+        for frame in range(start, end+1):
+            self.scene.context.scene.frame_set(frame)
+            item.addTimeSample(frame, self.getTransform())
+        self.scene.context.scene.frame_set(self.scene.curFrame)
+        return item
+
     def exportItem(self):
         item = FileItem('def Xform', self.name)
-        item.addItem('custom matrix4d', 'xformOp:transform', self.getTransform())
-        item.addItem('uniform token[]', 'xformOpOrder', ['"xformOp:transform"'])
+        if self.scene.animated and self.object.animation_data != None:
+            item.append(self.exportMatrixTimeSamples())
+            item.addItem('uniform token[]', 'xformOpOrder', ['"xformOp:transform:transforms"'])
+        else:
+            item.addItem('custom matrix4d', 'xformOp:transform', self.getTransform())
+            item.addItem('uniform token[]', 'xformOpOrder', ['"xformOp:transform"'])
 
         # Add Meshes if Mesh Object
         if self.type == 'MESH':

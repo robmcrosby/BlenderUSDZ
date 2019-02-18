@@ -21,6 +21,12 @@ def print_properties(properties, indent = ''):
         src += indent+tab + name + ' = ' + print_data(data) + '\n'
     return src + indent + ')\n'
 
+def print_time_samples(samples, indent = ''):
+    src = '{\n'
+    for frame, data in samples:
+        src += indent+tab + print_data(frame) + ': ' + print_data(data) + ',\n'
+    return src + indent + '}\n'
+
 
 class FileItem:
     def __init__(self, type, name = '', data = None):
@@ -34,6 +40,9 @@ class FileItem:
         item = FileItem(type, name, data)
         self.items.append(item)
         return item
+
+    def addTimeSample(self, frame, data):
+        self.append((frame, data))
 
     def append(self, item):
         if item != None:
@@ -57,7 +66,7 @@ class FileItem:
                 else:
                     src += '\n'
             elif len(self.items) > 0:
-                src += ' = ' + print_time_samples(self.items, indent) + '\n'
+                src += ' = ' + print_time_samples(self.items, indent)
             else:
                 src += '\n'
         return src
