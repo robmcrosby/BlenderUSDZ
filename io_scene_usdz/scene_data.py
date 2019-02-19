@@ -268,6 +268,10 @@ class Object:
         self.materials = []
         self.object.hide_render = self.hidden
 
+    def hasParent(self):
+        parent = self.object.parent
+        return parent != None and parent.type != 'ARMATURE'
+
     def createMaterials(self):
         self.materials = []
         if self.scene.exportMaterials:
@@ -551,7 +555,7 @@ class Scene:
         obj = Object(object, self)
         if obj.name in self.objMap:
             obj = self.objMap[obj.name]
-        elif object.parent != None:
+        elif obj.hasParent():
             obj.parent = self.addBpyObject(object.parent)
             obj.parent.children.append(obj)
             self.objMap[obj.name] = obj

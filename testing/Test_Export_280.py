@@ -44,6 +44,6 @@ export_usdz(
     bakeAO = False,
     bakeSeparate = False,
     samples = 8,
-    scale = 6.0,
+    scale = 4.0,
     animated = True,
     )
