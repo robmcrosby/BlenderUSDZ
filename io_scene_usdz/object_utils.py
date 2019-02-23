@@ -128,20 +128,18 @@ def export_mesh_uvs(mesh, layer, material = -1):
 
 def get_max_weights(obj, material = -1):
     size = 0
-    index = 0
     for poly in obj.data.polygons:
         if material == -1 or poly.material_index == material:
-            for i in range(index, index + len(poly.vertices)):
+            for index in poly.vertices:
                 count = 0
                 for group in obj.vertex_groups:
                     try:
-                        weight = group.weight(i)
+                        weight = group.weight(index)
                         if weight > epslon:
                             count += 1
                     except RuntimeError:
                         pass
                 size = max(size, count)
-        index += len(poly.vertices)
     return size
 
 def get_vertex_weights(index, groups, size):
