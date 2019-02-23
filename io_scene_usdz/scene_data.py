@@ -272,6 +272,12 @@ class Object:
         parent = self.object.parent
         return parent != None and parent.type != 'ARMATURE'
 
+    def getArmature(self):
+        parent = self.object.parent
+        if parent != None and parent.type == 'ARMATURE':
+            return parent
+        return None
+
     def createMaterials(self):
         self.materials = []
         if self.scene.exportMaterials:
@@ -296,7 +302,6 @@ class Object:
 
     def setAsMesh(self):
         if self.type != 'MESH' and self.object.type == 'MESH':
-            print('Set As MESH!')
             self.type = 'MESH'
             self.createMaterials()
             self.createMeshes()
@@ -422,6 +427,24 @@ class Object:
             items[-1].properties['interpolation'] = '"faceVarying"'
         return items
 
+    def exportSkeletonItems(self, material):
+        armature = self.getArmature()
+        mesh = self.meshes[0].data
+        items = []
+        if armature != None:
+            indices, weights, size = export_mesh_weights(self.meshes[0], material)
+            items.append(FileItem('int[]', 'primvars:skel:jointIndices', indices))
+            items[-1].properties['elementSize'] = size
+            items[-1].properties['interpolation'] = "vertex"
+            items.append(FileItem('float[]', 'primvars:skel:jointWeights', weights))
+            items[-1].properties['elementSize'] = size
+            items[-1].properties['interpolation'] = "vertex"
+            animation = '<'+self.getPath()+'/Animation>'
+            items.append(FileItem('prepend rel', 'skel:animationSource', animation))
+            skeleton = '<'+self.getPath()+'/'+armature.name.replace('.', '_')+'>'
+            items.append(FileItem('prepend rel', 'skel:skeleton', skeleton))
+        return items
+
     def exportMeshItem(self, material = -1):
         mesh = self.meshes[0].data
         name = self.object.data.name.replace('.', '_')
@@ -449,6 +472,7 @@ class Object:
         item.items[-1].properties['interpolation'] = '"faceVarying"'
 
         item.items += self.exportMeshUvItems(material)
+        item.items += self.exportSkeletonItems(material)
         item.addItem('uniform token', 'subdivisionScheme', '"none"')
         return item
 

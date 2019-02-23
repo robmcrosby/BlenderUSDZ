@@ -2,6 +2,7 @@ import bpy
 import mathutils
 
 pi = 3.1415926
+epslon = 0.000001
 
 def deselect_objects():
     bpy.ops.object.select_all(action='DESELECT')
@@ -124,6 +125,64 @@ def export_mesh_uvs(mesh, layer, material = -1):
                     uvs.append(uv)
         index += len(poly.vertices)
     return (indices, uvs)
+
+def get_max_weights(obj, material = -1):
+    size = 0
+    index = 0
+    for poly in obj.data.polygons:
+        if material == -1 or poly.material_index == material:
+            for i in range(index, index + len(poly.vertices)):
+                count = 0
+                for group in obj.vertex_groups:
+                    try:
+                        weight = group.weight(i)
+                        if weight > epslon:
+                            count += 1
+                    except RuntimeError:
+                        pass
+                size = max(size, count)
+        index += len(poly.vertices)
+    return size
+
+def get_vertex_weights(index, groups, size):
+    indices = []
+    weights = []
+    for group in groups:
+        try:
+            weight = group.weight(index)
+            if weight > epslon:
+                indices.append(group.index)
+                weights.append(weight)
+        except RuntimeError:
+            pass
+    indices = indices[:size]
+    weights = weights[:size]
+    while len(indices) < size:
+        indices.append(0)
+        weights.append(0.0)
+    return (indices, weights)
+
+def get_poly_weights(poly, groups, size):
+    indices = []
+    weights = []
+    for index in poly.vertices:
+        i, w = get_vertex_weights(index, groups, size)
+        indices += i
+        weights += w
+    return (indices, weights)
+
+def export_mesh_weights(obj, material = -1):
+    indices = []
+    weights = []
+    size = 0
+    if len(obj.vertex_groups) > 0:
+        size = get_max_weights(obj, material)
+        for poly in obj.data.polygons:
+            if material == -1 or poly.material_index == material:
+                i, w = get_poly_weights(poly, obj.vertex_groups, size)
+                indices += i
+                weights += w
+    return (indices, weights, size)
 
 def create_collection(name):
     collection = bpy.data.collections.new(name)
