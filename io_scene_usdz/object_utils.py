@@ -194,3 +194,26 @@ def delete_collection(collection):
 def add_to_collection(object, collection):
     if object != None and collection != None:
         collection.objects.link(object)
+
+def get_joint_token(bone):
+    name = bone.name.replace('.', '_')
+    if bone.parent != None:
+        return get_joint_token(bone.parent) + '/' + name
+    return name
+
+def get_joint_tokens(armature):
+    return ['"'+get_joint_token(bone)+'"' for bone in armature.data.bones]
+
+def get_bind_transforms(armature):
+    transforms = []
+    for bone in armature.data.bones:
+        matrix = bone.matrix_local
+        transforms.append(matrix_data(matrix))
+    return transforms
+
+def get_rest_transforms(armature):
+    transforms = []
+    for bone in armature.data.bones:
+        matrix = bone.matrix_local
+        transforms.append(matrix_data(matrix))
+    return transforms

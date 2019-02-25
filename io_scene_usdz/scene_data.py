@@ -1,4 +1,5 @@
 import bpy
+import mathutils
 
 from io_scene_usdz.object_utils import *
 from io_scene_usdz.material_utils import *
@@ -427,7 +428,7 @@ class Object:
             items[-1].properties['interpolation'] = '"faceVarying"'
         return items
 
-    def exportSkeletonItems(self, material):
+    def exportJointItems(self, material):
         armature = self.getArmature()
         mesh = self.meshes[0].data
         items = []
@@ -435,10 +436,10 @@ class Object:
             indices, weights, size = export_mesh_weights(self.meshes[0], material)
             items.append(FileItem('int[]', 'primvars:skel:jointIndices', indices))
             items[-1].properties['elementSize'] = size
-            items[-1].properties['interpolation'] = "vertex"
+            items[-1].properties['interpolation'] = '"vertex"'
             items.append(FileItem('float[]', 'primvars:skel:jointWeights', weights))
             items[-1].properties['elementSize'] = size
-            items[-1].properties['interpolation'] = "vertex"
+            items[-1].properties['interpolation'] = '"vertex"'
             animation = '<'+self.getPath()+'/Animation>'
             items.append(FileItem('prepend rel', 'skel:animationSource', animation))
             skeleton = '<'+self.getPath()+'/'+armature.name.replace('.', '_')+'>'
@@ -472,7 +473,7 @@ class Object:
         item.items[-1].properties['interpolation'] = '"faceVarying"'
 
         item.items += self.exportMeshUvItems(material)
-        item.items += self.exportSkeletonItems(material)
+        item.items += self.exportJointItems(material)
         item.addItem('uniform token', 'subdivisionScheme', '"none"')
         return item
 
@@ -491,6 +492,59 @@ class Object:
             items.append(mat.exportItem())
         return items
 
+    def exportSkeletonItems(self):
+        items = []
+        armature = self.getArmature()
+        if armature != None:
+            tokens = get_joint_tokens(armature)
+            bind = get_bind_transforms(armature)
+            rest = get_rest_transforms(armature)
+            item = FileItem('def Skeleton', armature.name.replace('.', '_'))
+            item.addItem('uniform token[]', 'joints', tokens)
+            item.addItem('uniform matrix4d[]', 'bindTransforms', bind)
+            item.addItem('uniform matrix4d[]', 'restTransforms', rest)
+            items.append(item)
+        return items
+
+    def exportArmatureAnimationItems(self, armature):
+        rotationItem = FileItem('quatf[]', 'rotations.timeSamples')
+        scaleItem = FileItem('half3[]', 'scales.timeSamples')
+        translationItem = FileItem('float3[]', 'translations.timeSamples')
+        start = self.scene.startFrame
+        end = self.scene.endFrame
+        for frame in range(start, end+1):
+            self.scene.context.scene.frame_set(frame)
+            rotations = []
+            scales = []
+            locations = []
+            for bone in armature.pose.bones:
+                scale = bone.scale.copy()
+                location = bone.location.copy()
+                if bone.parent != None:
+                    location = mathutils.Vector((0, bone.parent.length, 0))
+                else:
+                    scale *= self.scene.scale
+                    location *= self.scene.scale
+                rotations.append(bone.rotation_quaternion[:])
+                scales.append(scale[:])
+                locations.append(location[:])
+            rotationItem.addTimeSample(frame, rotations)
+            scaleItem.addTimeSample(frame, scales)
+            translationItem.addTimeSample(frame, locations)
+        self.scene.context.scene.frame_set(self.scene.curFrame)
+        return [rotationItem, scaleItem, translationItem]
+
+    def exportAnimationItems(self):
+        items = []
+        armature = self.getArmature()
+        if armature != None:
+            tokens = get_joint_tokens(armature)
+            item = FileItem('def SkelAnimation', 'Animation')
+            item.addItem('uniform token[]', 'joints', tokens)
+            item.items += self.exportArmatureAnimationItems(armature)
+            items.append(item)
+        return items
+
     def exportMatrixTimeSamples(self):
         item = FileItem('matrix4d', 'xformOp:transform:transforms.timeSamples')
         start = self.scene.startFrame
@@ -502,18 +556,24 @@ class Object:
         return item
 
     def exportItem(self):
+        armature = self.getArmature()
         item = FileItem('def Xform', self.name)
-        if self.scene.animated and self.object.animation_data != None:
-            item.append(self.exportMatrixTimeSamples())
-            item.addItem('uniform token[]', 'xformOpOrder', ['"xformOp:transform:transforms"'])
+        if armature != None:
+            item = FileItem('def SkelRoot', self.name)
         else:
-            item.addItem('custom matrix4d', 'xformOp:transform', self.getTransform())
-            item.addItem('uniform token[]', 'xformOpOrder', ['"xformOp:transform"'])
+            if self.scene.animated and self.object.animation_data != None:
+                item.append(self.exportMatrixTimeSamples())
+                item.addItem('uniform token[]', 'xformOpOrder', ['"xformOp:transform:transforms"'])
+            else:
+                item.addItem('custom matrix4d', 'xformOp:transform', self.getTransform())
+                item.addItem('uniform token[]', 'xformOpOrder', ['"xformOp:transform"'])
 
         # Add Meshes if Mesh Object
         if self.type == 'MESH':
             item.items += self.exportMeshItems()
             item.items += self.exportMaterialItems()
+            item.items += self.exportSkeletonItems()
+            item.items += self.exportAnimationItems()
 
         # Add Any Children
         for child in self.children:
