@@ -48,12 +48,14 @@ def root_matrix_data(matrix, scale):
     return matrix_data(rotation @ scale @ matrix)
 
 
-def object_extents(object):
+def object_extents(object, scale = 1.0):
     low = object.bound_box[0][:]
     high = object.bound_box[0][:]
     for v in object.bound_box:
         low = min(low, v[:])
         high = max(high, v[:])
+    low = tuple(i*scale for i in low)
+    high = tuple(i*scale for i in high)
     return [low, high]
 
 def uv_smart_project(mesh):

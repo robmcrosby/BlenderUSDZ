@@ -453,7 +453,7 @@ class Object:
             name += '_' + self.materials[material].name
         item = FileItem('def Mesh', name)
 
-        extent = object_extents(self.meshes[0])
+        extent = object_extents(self.meshes[0], self.scene.scale)
         item.addItem('float3[]', 'extent', extent)
 
         vertexCounts = mesh_vertex_counts(mesh, material)
@@ -619,6 +619,7 @@ class Scene:
         self.objMap = {}
 
     def loadContext(self, context):
+        bpy.ops.object.mode_set(mode='OBJECT')
         self.context = context
         self.bpyObjects = context.selected_objects.copy()
         self.bpyActive = context.view_layer.objects.active
