@@ -287,6 +287,9 @@ class Object:
 
     def createMeshes(self):
         self.clearMeshes()
+        armature = self.getArmature()
+        if armature != None:
+            armature.data.pose_position = 'REST'
         mesh = duplicate_object(self.object)
         apply_object_modifers(mesh)
         add_to_collection(mesh, self.scene.collection)
@@ -521,7 +524,10 @@ class Object:
                 scale = bone.scale.copy()
                 location = bone.location.copy()
                 if bone.parent != None:
-                    location = mathutils.Vector((0, bone.parent.length, 0))
+                    if bone.bone.use_connect:
+                        location = mathutils.Vector((0, bone.parent.length, 0))
+                    else:
+                        location += mathutils.Vector((0, bone.parent.length, 0))
                 else:
                     scale *= self.scene.scale
                     location *= self.scene.scale
@@ -538,6 +544,7 @@ class Object:
         items = []
         armature = self.getArmature()
         if armature != None:
+            armature.data.pose_position = 'POSE'
             tokens = get_joint_tokens(armature)
             item = FileItem('def SkelAnimation', 'Animation')
             item.addItem('uniform token[]', 'joints', tokens)
