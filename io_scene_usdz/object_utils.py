@@ -147,12 +147,14 @@ def get_max_weights(obj, material = -1):
 def get_vertex_weights(index, groups, size):
     indices = []
     weights = []
+    sum = 0.0
     for group in groups:
         try:
             weight = group.weight(index)
             if weight > epslon:
                 indices.append(group.index)
                 weights.append(weight)
+                sum += weight
         except RuntimeError:
             pass
     indices = indices[:size]
@@ -160,6 +162,8 @@ def get_vertex_weights(index, groups, size):
     while len(indices) < size:
         indices.append(0)
         weights.append(0.0)
+    if sum > 0.0:
+        weights = list(map(lambda i: i/sum, weights))
     return (indices, weights)
 
 def get_poly_weights(poly, groups, size):
