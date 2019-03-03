@@ -128,55 +128,43 @@ def export_mesh_uvs(mesh, layer, material = -1):
         index += len(poly.vertices)
     return (indices, uvs)
 
-def get_max_weights(obj, material = -1):
-    size = 0
-    indices = set()
-    for poly in obj.data.polygons:
-        if material == -1 or poly.material_index == material:
-            for index in poly.vertices:
-                count = 0
-                for group in obj.vertex_groups:
-                    try:
-                        indices.add(index)
-                        weight = group.weight(index)
-                        if weight > epslon:
-                            count += 1
-                    except RuntimeError:
-                        pass
-                size = max(size, count)
-    return (list(indices), size)
-
-def get_vertex_weights(index, groups, size):
+def get_weights(index, groups):
     indices = []
     weights = []
-    sum = 0.0
     for group in groups:
         try:
             weight = group.weight(index)
             if weight > epslon:
                 indices.append(group.index)
                 weights.append(weight)
-                sum += weight
         except RuntimeError:
             pass
-    indices = indices[:size]
-    weights = weights[:size]
-    while len(indices) < size:
-        indices.append(0)
-        weights.append(0.0)
     return (indices, weights)
 
+def get_weight_map(obj, material = -1):
+    size = 0
+    map = {}
+    for poly in obj.data.polygons:
+        if material == -1 or poly.material_index == material:
+            for index in poly.vertices:
+                if not index in map.keys():
+                    item = get_weights(index, obj.vertex_groups)
+                    size = max(size, len(item[0]))
+                    map[index] = item
+    return (map, size)
+
 def export_mesh_weights(obj, material = -1):
-    groups = []
+    indices = []
     weights = []
     size = 0
     if len(obj.vertex_groups) > 0:
-        indices, size = get_max_weights(obj, material)
-        for index in indices:
-                g, w = get_vertex_weights(index, obj.vertex_groups, size)
-                groups += g
-                weights += w
-    return (groups, weights, size)
+        map, size = get_weight_map(obj, material)
+        keys = set(map.keys())
+        for k in keys:
+            i, w = map[k]
+            indices += i + (size-len(i))*[0]
+            weights += w + (size-len(w))*[0.0]
+    return (indices, weights, size)
 
 def create_collection(name):
     collection = bpy.data.collections.new(name)
