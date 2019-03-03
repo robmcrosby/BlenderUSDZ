@@ -130,19 +130,21 @@ def export_mesh_uvs(mesh, layer, material = -1):
 
 def get_max_weights(obj, material = -1):
     size = 0
+    indices = set()
     for poly in obj.data.polygons:
         if material == -1 or poly.material_index == material:
             for index in poly.vertices:
                 count = 0
                 for group in obj.vertex_groups:
                     try:
+                        indices.add(index)
                         weight = group.weight(index)
                         if weight > epslon:
                             count += 1
                     except RuntimeError:
                         pass
                 size = max(size, count)
-    return size
+    return (list(indices), size)
 
 def get_vertex_weights(index, groups, size):
     indices = []
@@ -162,31 +164,19 @@ def get_vertex_weights(index, groups, size):
     while len(indices) < size:
         indices.append(0)
         weights.append(0.0)
-    if sum > 0.0:
-        weights = list(map(lambda i: i/sum, weights))
-    return (indices, weights)
-
-def get_poly_weights(poly, groups, size):
-    indices = []
-    weights = []
-    for index in poly.vertices:
-        i, w = get_vertex_weights(index, groups, size)
-        indices += i
-        weights += w
     return (indices, weights)
 
 def export_mesh_weights(obj, material = -1):
-    indices = []
+    groups = []
     weights = []
     size = 0
     if len(obj.vertex_groups) > 0:
-        size = get_max_weights(obj, material)
-        for poly in obj.data.polygons:
-            if material == -1 or poly.material_index == material:
-                i, w = get_poly_weights(poly, obj.vertex_groups, size)
-                indices += i
+        indices, size = get_max_weights(obj, material)
+        for index in indices:
+                g, w = get_vertex_weights(index, obj.vertex_groups, size)
+                groups += g
                 weights += w
-    return (indices, weights, size)
+    return (groups, weights, size)
 
 def create_collection(name):
     collection = bpy.data.collections.new(name)
