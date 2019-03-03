@@ -288,7 +288,7 @@ class Object:
     def createMeshes(self):
         self.clearMeshes()
         armature = self.getArmature()
-        if armature != None:
+        if armature != None and self.scene.animated:
             armature.data.pose_position = 'REST'
         mesh = duplicate_object(self.object)
         apply_object_modifers(mesh)
@@ -435,7 +435,7 @@ class Object:
         armature = self.getArmature()
         mesh = self.meshes[0].data
         items = []
-        if armature != None:
+        if armature != None and self.scene.animated:
             indices, weights, size = export_mesh_weights(self.meshes[0], material)
             items.append(FileItem('int[]', 'primvars:skel:jointIndices', indices))
             items[-1].properties['elementSize'] = size
@@ -498,7 +498,7 @@ class Object:
     def exportSkeletonItems(self):
         items = []
         armature = self.getArmature()
-        if armature != None:
+        if armature != None and self.scene.animated:
             tokens = get_joint_tokens(armature)
             bind = get_bind_transforms(armature)
             rest = get_rest_transforms(armature)
@@ -543,7 +543,7 @@ class Object:
     def exportAnimationItems(self):
         items = []
         armature = self.getArmature()
-        if armature != None:
+        if armature != None and self.scene.animated:
             armature.data.pose_position = 'POSE'
             tokens = get_joint_tokens(armature)
             item = FileItem('def SkelAnimation', 'Animation')
@@ -565,7 +565,7 @@ class Object:
     def exportItem(self):
         armature = self.getArmature()
         item = FileItem('def Xform', self.name)
-        if armature != None:
+        if armature != None and self.scene.animated:
             item = FileItem('def SkelRoot', self.name)
         else:
             if self.scene.animated and self.object.animation_data != None:
