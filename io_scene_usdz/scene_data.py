@@ -601,7 +601,7 @@ class Scene:
         self.exportMaterials = False
         self.exportPath = ''
         self.bakeAO = False
-        self.bakeSeparate = False
+        self.bakeTextures = False
         self.bakeSamples = 8
         self.scale = 1.0
         self.animated = False
@@ -634,6 +634,7 @@ class Scene:
         self.endFrame = context.scene.frame_end
         self.curFrame = context.scene.frame_current
         self.fps = context.scene.render.fps
+        self.renderEngine = context.scene.render.engine
         self.loadObjects()
 
     def loadObjects(self):
@@ -658,10 +659,19 @@ class Scene:
             obj.setAsMesh()
         return obj
 
-    def bakeTextures(self):
+    def exportBakedTextures(self):
+        # Set the Render Engine to Cycles and set Samples
+        renderEngine = self.context.scene.render.engine
+        self.context.scene.render.engine = 'CYCLES'
+        samples = self.context.scene.cycles.samples
+        self.context.scene.cycles.samples = self.bakeSamples
+        # Bake textures for each Object
         for obj in self.objMap.values():
             if obj.type:
                 obj.bakeTextures()
+        # Restore the previous Render Engine and Samples
+        self.context.scene.cycles.samples = samples
+        self.context.scene.render.engine = renderEngine
 
     def exportObjectItems(self):
         items = []

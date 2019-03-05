@@ -8,8 +8,8 @@ from io_scene_usdz.file_data import *
 from io_scene_usdz.scene_data import *
 
 def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
-                bakeTextures = False, bakeAO = False, bakeSeparate = False,
-                samples = 8, scale = 1.0, animated = False):
+                bakeTextures = False, bakeAO = False, samples = 64,
+                scale = 1.0, animated = False):
     filePath, fileName = os.path.split(filepath)
     fileName, fileType = fileName.split('.')
 
@@ -26,14 +26,14 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     scene.exportMaterials = materials
     scene.exportPath = filePath
     scene.bakeAO = bakeAO
-    scene.bakeSeparate = bakeSeparate
+    scene.bakeTextures = bakeTextures
     scene.bakeSamples = samples
     scene.scale = scale
     scene.animated = animated
     scene.loadContext(context)
 
-    if bakeTextures:
-        scene.bakeTextures()
+    if bakeTextures or bakeAO:
+        scene.exportBakedTextures()
 
     # Export images and write the text USDA file
     data = scene.exportFileData()

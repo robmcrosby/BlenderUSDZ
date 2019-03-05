@@ -40,10 +40,9 @@ export_usdz(
     filepath = exportsDir + 'test.usdz',
     materials = True,
     keepUSDA = True,
-    bakeTextures = False,
-    bakeAO = False,
-    bakeSeparate = False,
-    samples = 8,
+    bakeTextures = True,
+    bakeAO = True,
+    samples = 64,
     scale = 4.0,
     animated = True,
     )

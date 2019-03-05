@@ -63,17 +63,12 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
         description="Bake Ambiant Occlusion Texture",
         default=False,
         )
-    bakeSeparate = BoolProperty(
-        name="Bake Seperate",
-        description="Bake Seperate images for each material",
-        default=False,
-        )
     samples = IntProperty(
         name="Samples",
         description="Number of Samples for Ambiant Occlusion",
         min=1,
         max=1000,
-        default= 8,
+        default= 64,
         )
     scale = FloatProperty(
         name="Scale",
