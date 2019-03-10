@@ -141,30 +141,31 @@ def get_weights(index, groups):
             pass
     return (indices, weights)
 
-def get_weight_map(obj, material = -1):
-    size = 0
-    map = {}
+def get_mesh_indices(obj, material = -1):
+    if material == -1:
+        return [i for i in range(0, len(obj.data.vertices))]
+    indices = []
     for poly in obj.data.polygons:
-        if material == -1 or poly.material_index == material:
-            for index in poly.vertices:
-                if not index in map.keys():
-                    item = get_weights(index, obj.vertex_groups)
-                    size = max(size, len(item[0]))
-                    map[index] = item
-    return (map, size)
+        if poly.material_index == material:
+            for i in poly.vertices:
+                if not i in indices:
+                    indices.append(i)
+    return indices
 
 def export_mesh_weights(obj, material = -1):
-    indices = []
+    groups = []
     weights = []
     size = 0
-    if len(obj.vertex_groups) > 0:
-        map, size = get_weight_map(obj, material)
-        keys = set(map.keys())
-        for k in keys:
-            i, w = map[k]
-            indices += i + (size-len(i))*[0]
-            weights += w + (size-len(w))*[0.0]
-    return (indices, weights, size)
+    indices = get_mesh_indices(obj, material)
+    items = []
+    for index in indices:
+        item = get_weights(index, obj.vertex_groups)
+        size = max(size, len(item[0]))
+        items.append(item)
+    for g, w in items:
+        groups += g + (size-len(g))*[0]
+        weights += w + (size-len(w))*[0.0]
+    return (groups, weights, size)
 
 def create_collection(name):
     collection = bpy.data.collections.new(name)
