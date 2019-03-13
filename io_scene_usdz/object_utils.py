@@ -8,6 +8,7 @@ def deselect_objects():
     bpy.ops.object.select_all(action='DESELECT')
 
 def select_object(object):
+    bpy.ops.object.mode_set(mode='OBJECT')
     deselect_objects()
     object.select_set(True)
     set_active_object(object)
