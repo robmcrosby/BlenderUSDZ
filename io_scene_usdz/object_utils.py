@@ -8,7 +8,6 @@ def deselect_objects():
     bpy.ops.object.select_all(action='DESELECT')
 
 def select_object(object):
-    bpy.ops.object.mode_set(mode='OBJECT')
     deselect_objects()
     object.select_set(True)
     set_active_object(object)
@@ -28,6 +27,42 @@ def duplicate_object(object):
     select_object(object)
     bpy.ops.object.duplicate()
     return bpy.context.active_object
+
+def duplicate_skinned_object(mesh, armature):
+    select_objects([mesh, armature])
+    set_active_object(armature)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.duplicate()
+    for obj in bpy.context.selected_objects:
+        if obj.type == 'ARMATURE':
+            armature = obj
+        else:
+            mesh = obj
+    return (mesh, armature)
+
+def convert_to_fk(fkArmature, ikArmature, start, end):
+    select_object(fkArmature)
+    # Select all the pose bones
+    for bone in fkArmature.pose.bones:
+            bone.bone.select = True
+    bpy.ops.object.mode_set(mode='POSE')
+    # Remove all pose bone contraints
+    for bone in fkArmature.pose.bones:
+        for constraint in bone.constraints:
+            bone.constraints.remove(constraint)
+    bpy.ops.object.mode_set(mode='EDIT')
+    # Remove all non-deforming bones
+    for bone in bpy.data.armatures[fkArmature.data.name].edit_bones:
+        if bone.use_deform == False:
+            bpy.data.armatures[fkArmature.data.name].edit_bones.remove(bone)
+    bpy.ops.object.mode_set(mode='POSE')
+    # Create copy transform constraints to the ik rig
+    for bone in bpy.context.selected_pose_bones:
+        copyTransforms = bone.constraints.new('COPY_TRANSFORMS')
+        copyTransforms.target = ikArmature
+        copyTransforms.subtarget = bone.name
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.nla.bake(frame_start=start, frame_end=end, only_selected=True, visual_keying=True, clear_constraints=True, use_current_action=True, bake_types={'POSE'})
 
 def apply_object_modifers(object):
     if object != None:

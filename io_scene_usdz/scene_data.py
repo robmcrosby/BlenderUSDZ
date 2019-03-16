@@ -253,7 +253,8 @@ class Object:
         self.type = type
         self.parent = None
         self.children = []
-        self.meshes = []
+        self.objectCopy = None
+        self.armatueCopy = None
         self.materials = []
         self.bakeUVMap = ''
         self.bakeWidth = 1024
@@ -265,7 +266,7 @@ class Object:
         self.cleanup()
 
     def cleanup(self):
-        self.clearMeshes()
+        self.clearCopies()
         self.materials = []
         self.object.hide_render = self.hidden
 
@@ -285,30 +286,39 @@ class Object:
             for slot in self.object.material_slots:
                 self.materials.append(Material(self, slot.material))
 
-    def createMeshes(self):
-        self.clearMeshes()
-        armature = self.getArmature()
-        if armature != None and self.scene.animated:
-            armature.data.pose_position = 'REST'
-        mesh = duplicate_object(self.object)
-        apply_object_modifers(mesh)
-        add_to_collection(mesh, self.scene.collection)
-        mesh.hide_render = False
+    def createCopies(self):
+        self.clearCopies()
+        self.armature = self.getArmature()
+        if self.armature != None and self.scene.animated:
+            obj, arm = duplicate_skinned_object(self.object, self.armature)
+            self.objectCopy = obj
+            convert_to_fk(arm, self.armature, self.scene.startFrame, self.scene.endFrame)
+            self.armatueCopy = arm
+            self.armatueCopy.data.pose_position = 'REST'
+            add_to_collection(self.armatueCopy, self.scene.collection)
+            add_to_collection(self.objectCopy, self.scene.collection)
+        else:
+            self.objectCopy = duplicate_object(self.object)
+            add_to_collection(self.objectCopy, self.scene.collection)
+        apply_object_modifers(self.objectCopy)
+        self.objectCopy.hide_render = False
         self.object.hide_render = True
-        self.meshes.append(mesh)
-        if self.uvMapNeeded(mesh):
-            uv_smart_project(mesh)
+        if self.uvMapNeeded(self.objectCopy):
+            uv_smart_project(self.objectCopy)
 
-    def clearMeshes(self):
-        for mesh in self.meshes:
-            delete_object(mesh)
-        self.meshes = []
+    def clearCopies(self):
+        if self.objectCopy != None:
+            delete_object(self.objectCopy)
+            self.objectCopy = None
+        if self.armatueCopy != None:
+            delete_object(self.armatueCopy)
+            self.armatueCopy = None
 
     def setAsMesh(self):
         if self.type != 'MESH' and self.object.type == 'MESH':
             self.type = 'MESH'
             self.createMaterials()
-            self.createMeshes()
+            self.createCopies()
 
     def uvMapNeeded(self, mesh):
         if self.scene.bakeTextures or self.scene.bakeAO:
@@ -403,7 +413,7 @@ class Object:
             self.bakeToFile('AO', self.scene.exportPath+'/'+asset)
 
     def bakeTextures(self):
-        select_object(self.meshes[0])
+        select_object(self.objectCopy)
         self.setupBakeOutputNodes()
         if self.scene.bakeTextures:
             self.bakeDiffuseTexture()
@@ -421,7 +431,7 @@ class Object:
         return matrix_data(self.object.matrix_local)
 
     def exportMeshUvItems(self, material):
-        mesh = self.meshes[0].data
+        mesh = self.objectCopy.data
         items = []
         for layer in mesh.uv_layers:
             indices, uvs = export_mesh_uvs(mesh, layer, material)
@@ -432,11 +442,10 @@ class Object:
         return items
 
     def exportJointItems(self, material):
-        armature = self.getArmature()
-        mesh = self.meshes[0].data
+        mesh = self.objectCopy.data
         items = []
-        if armature != None and self.scene.animated:
-            indices, weights, size = export_mesh_weights(self.meshes[0], material)
+        if self.armatueCopy != None and self.scene.animated:
+            indices, weights, size = export_mesh_weights(self.objectCopy, material)
             items.append(FileItem('int[]', 'primvars:skel:jointIndices', indices))
             items[-1].properties['elementSize'] = size
             items[-1].properties['interpolation'] = '"vertex"'
@@ -445,18 +454,18 @@ class Object:
             items[-1].properties['interpolation'] = '"vertex"'
             animation = '<'+self.getPath()+'/Animation>'
             items.append(FileItem('prepend rel', 'skel:animationSource', animation))
-            skeleton = '<'+self.getPath()+'/'+armature.name.replace('.', '_')+'>'
+            skeleton = '<'+self.getPath()+'/'+self.armature.name.replace('.', '_')+'>'
             items.append(FileItem('prepend rel', 'skel:skeleton', skeleton))
         return items
 
     def exportMeshItem(self, material = -1):
-        mesh = self.meshes[0].data
+        mesh = self.objectCopy.data
         name = self.object.data.name.replace('.', '_')
         if material >= 0:
             name += '_' + self.materials[material].name
         item = FileItem('def Mesh', name)
 
-        extent = object_extents(self.meshes[0], self.scene.scale)
+        extent = object_extents(self.objectCopy, self.scene.scale)
         item.addItem('float3[]', 'extent', extent)
 
         vertexCounts = mesh_vertex_counts(mesh, material)
@@ -497,12 +506,11 @@ class Object:
 
     def exportSkeletonItems(self):
         items = []
-        armature = self.getArmature()
-        if armature != None and self.scene.animated:
-            tokens = get_joint_tokens(armature)
-            bind = get_bind_transforms(armature)
-            rest = get_rest_transforms(armature)
-            item = FileItem('def Skeleton', armature.name.replace('.', '_'))
+        if self.armatueCopy != None and self.scene.animated:
+            tokens = get_joint_tokens(self.armatueCopy)
+            bind = get_bind_transforms(self.armatueCopy)
+            rest = get_rest_transforms(self.armatueCopy)
+            item = FileItem('def Skeleton', self.armature.name.replace('.', '_'))
             item.addItem('uniform token[]', 'joints', tokens)
             item.addItem('uniform matrix4d[]', 'bindTransforms', bind)
             item.addItem('uniform matrix4d[]', 'restTransforms', rest)
@@ -547,13 +555,12 @@ class Object:
 
     def exportAnimationItems(self):
         items = []
-        armature = self.getArmature()
-        if armature != None and self.scene.animated:
-            armature.data.pose_position = 'POSE'
-            tokens = get_joint_tokens(armature)
+        if self.armatueCopy != None and self.scene.animated:
+            self.armatueCopy.data.pose_position = 'POSE'
+            tokens = get_joint_tokens(self.armatueCopy)
             item = FileItem('def SkelAnimation', 'Animation')
             item.addItem('uniform token[]', 'joints', tokens)
-            item.items += self.exportArmatureAnimationItems(armature)
+            item.items += self.exportArmatureAnimationItems(self.armatueCopy)
             items.append(item)
         return items
 
@@ -568,9 +575,8 @@ class Object:
         return item
 
     def exportItem(self):
-        armature = self.getArmature()
         item = FileItem('def Xform', self.name)
-        if armature != None and self.scene.animated:
+        if self.armatueCopy != None and self.scene.animated:
             item = FileItem('def SkelRoot', self.name)
         else:
             if self.scene.animated and self.object.animation_data != None:
