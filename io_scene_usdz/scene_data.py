@@ -534,6 +534,7 @@ class Object:
             for bone in armature.pose.bones:
                 scale = bone.scale.copy()
                 location = bone.location.copy()
+                rotation = bone.bone.matrix.to_quaternion() @ bone.rotation_quaternion
                 if bone.parent != None:
                     if bone.bone.use_connect:
                         location = mathutils.Vector((0, bone.parent.length, 0))
@@ -542,7 +543,8 @@ class Object:
                 else:
                     scale *= self.scene.scale
                     location *= self.scene.scale
-                rotations.append(bone.rotation_quaternion[:])
+                    rotation = bone.rotation_quaternion
+                rotations.append(rotation[:])
                 scales.append(scale[:])
                 locations.append(location[:])
             rotationItem.addTimeSample(frame, rotations)

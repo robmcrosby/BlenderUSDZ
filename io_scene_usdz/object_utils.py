@@ -58,6 +58,7 @@ def convert_to_fk(fkArmature, ikArmature, start, end):
     bpy.ops.object.mode_set(mode='POSE')
     # Create copy transform constraints to the ik rig
     for bone in bpy.context.selected_pose_bones:
+        bone.rotation_mode = 'QUATERNION'
         copyTransforms = bone.constraints.new('COPY_TRANSFORMS')
         copyTransforms.target = ikArmature
         copyTransforms.subtarget = bone.name
