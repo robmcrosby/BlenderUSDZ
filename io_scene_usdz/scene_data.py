@@ -531,7 +531,8 @@ class Object:
             rotations = []
             scales = []
             locations = []
-            for bone in armature.pose.bones:
+            for bone in armature.data.bones:
+                bone = armature.pose.bones[bone.name]
                 scale = bone.scale.copy()
                 location = bone.location.copy()
                 rotation = bone.bone.matrix.to_quaternion() @ bone.rotation_quaternion
