@@ -14,6 +14,7 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     fileName, fileType = fileName.split('.')
 
     usdaFile = filePath+'/'+fileName+'.usda'
+    usdcFile = filePath+'/'+fileName+'.usdc'
     usdzFile = filePath+'/'+fileName+'.usdz'
 
     tempPath = None
@@ -38,6 +39,7 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     # Export images and write the text USDA file
     data = scene.exportFileData()
     data.writeUsda(usdaFile)
+    data.writeUsdc(usdcFile)
 
     # Run the USDZ Converter Tool
     args = ['xcrun', 'usdz_converter', usdaFile, usdzFile]
