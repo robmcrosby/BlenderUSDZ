@@ -48,6 +48,15 @@ class FileItem:
         if item != None:
             self.items.append(item)
 
+    def getTokens(self, tokens):
+        if 'def' in self.type:
+            tokens.add('def')
+            tokens.add(self.type[4:])
+            for item in self.items:
+                item.getTokens(tokens)
+        else:
+            tokens.add(self.type)
+
     def printUsda(self, indent):
         src = ''
         if 'def' in self.type:
@@ -85,6 +94,14 @@ class FileData:
         if item != None:
             self.items.append(item)
 
+    def getTokens(self):
+        tokens = set()
+        for token in self.properties.keys():
+            tokens.add(token)
+        for item in self.items:
+            item.getTokens(tokens)
+        return tokens
+
     def printUsda(self):
         src = '#usda 1.0\n'
 
@@ -113,13 +130,18 @@ class FileData:
         # Table of Contents Offset
         file.write(toc.to_bytes(8, byteorder='little'))
         file.write(bytes(64))
-        #file.write(toc.to_bytes(64, byteorder='little'))
-        # Write Reserved Space
-        #file.write(bytes(512))
 
     def writeTokensSection(self, file, toc):
         start = file.tell()
-        file.write(bytes(36))
+        tokens = self.getTokens()
+        buffer = b''
+        for token in tokens:
+            buffer += token.encode() + b'\0'
+        compressed = buffer
+        file.write(len(tokens).to_bytes(8, byteorder='little'))
+        file.write(len(compressed).to_bytes(8, byteorder='little'))
+        file.write(len(buffer).to_bytes(8, byteorder='little'))
+        file.write(compressed)
         size = file.tell() - start
         toc.append((b'TOKENS', start, size))
 
