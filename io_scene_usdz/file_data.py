@@ -1,4 +1,6 @@
 import os
+
+from io_scene_usdz.compression_utils import *
 tab = '   '
 
 def print_data(data):
@@ -137,10 +139,10 @@ class FileData:
         buffer = b''
         for token in tokens:
             buffer += token.encode() + b'\0'
-        compressed = buffer
+        compressed = lz4Compress(buffer)
         file.write(len(tokens).to_bytes(8, byteorder='little'))
-        file.write(len(compressed).to_bytes(8, byteorder='little'))
         file.write(len(buffer).to_bytes(8, byteorder='little'))
+        file.write(len(compressed).to_bytes(8, byteorder='little'))
         file.write(compressed)
         size = file.tell() - start
         toc.append((b'TOKENS', start, size))
