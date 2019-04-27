@@ -179,10 +179,10 @@ def lz4DecompressChunk(src):
     srcLen = len(src)
     srcPtr = 0
     while srcPtr < srcLen:
-        token = src[srcPtr]
+        token = memoryview(src)[srcPtr:srcPtr +  1]
         srcPtr += 1
         # Get Literal Length
-        litLen = (token >> 4) & 0x0F
+        litLen = (token[0] >> 4) & 0x0F
         if litLen == 15:
             while src[srcPtr] == 255:
                 litLen += 255
@@ -199,8 +199,9 @@ def lz4DecompressChunk(src):
         offset = int.from_bytes(src[srcPtr:srcPtr + 2], 'little')
         srcPtr += 2
         # Get match length
-        matchLen = token & 0x0F
+        matchLen = token[0] & 0x0F
         if matchLen == 15:
+            print('Extended Match')
             while src[srcPtr] == 255:
                 matchLen += 255
                 srcPtr += 1
@@ -218,17 +219,18 @@ def lz4DecompressChunk(src):
 
 def lz4Decompress(src):
     dst = bytearray()
-    chunks = src[0]
-    if chunks == 0:
-        dst = lz4DecompressChunk(memoryview(src)[1:])
-    else:
-        srcPtr = 1
-        while chunks > 0:
-            chunkSize = int.from_bytes(src[srcPtr:srcPtr + 4], 'little')
-            srcPtr += 4
-            dst += lz4DecompressChunk(memoryview(src)[srcPtr:srcPtr + chunkSize])
-            srcPtr += chunkSize
-            chunks -= 1
+    if len(src) > 0:
+        chunks = src[0]
+        if chunks == 0:
+            dst = lz4DecompressChunk(memoryview(src)[1:])
+        else:
+            srcPtr = 1
+            while chunks > 0:
+                chunkSize = int.from_bytes(src[srcPtr:srcPtr + 4], 'little')
+                srcPtr += 4
+                dst += lz4DecompressChunk(memoryview(src)[srcPtr:srcPtr + chunkSize])
+                srcPtr += chunkSize
+                chunks -= 1
     return dst
 
 
@@ -259,13 +261,13 @@ def usdInt32Compress(values):
 
 
 def usdInt32Decompress(data, numInts):
+    values = []
     numCodes = (numInts * 2 + 7) // 8
     commonValue = int.from_bytes(data[:4], 'little', signed=True)
     data = data[4:]
     codes = memoryview(data)[:numCodes]
     vints = memoryview(data)[numCodes:]
     preValue = 0
-    values = []
     cp = 0
     vp = 0
     while cp < numInts:
@@ -281,6 +283,34 @@ def usdInt32Decompress(data, numInts):
         else:
             preValue += int.from_bytes(vints[vp:vp+4], 'little', signed=True)
             vp += 4
+        values.append(preValue)
+        cp += 1
+    return values
+
+
+def usdInt64Decompress(data, numInts):
+    values = []
+    numCodes = (numInts * 2 + 7) // 8
+    commonValue = int.from_bytes(data[:8], 'little', signed=True)
+    data = data[8:]
+    codes = memoryview(data)[:numCodes]
+    vints = memoryview(data)[numCodes:]
+    preValue = 0
+    cp = 0
+    vp = 0
+    while cp < numInts:
+        code = (codes[cp//4] >> (cp%4)*2) & 0x3
+        if code == 0:
+            preValue += commonValue
+        elif code == 1:
+            preValue += int.from_bytes(vints[vp:vp+2], 'little', signed=True)
+            vp += 2
+        elif code == 2:
+            preValue += int.from_bytes(vints[vp:vp+4], 'little', signed=True)
+            vp += 4
+        else:
+            preValue += int.from_bytes(vints[vp:vp+8], 'little', signed=True)
+            vp += 8
         values.append(preValue)
         cp += 1
     return values

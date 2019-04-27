@@ -21,20 +21,21 @@ from io_scene_usdz.compression_utils import lz4Decompress, lz4Compress, usdInt32
 
 exportsDir = bpy.path.abspath("//") + 'exports/'
 #filepath = exportsDir + 'test.usdc'
-filepath = exportsDir + 'testCopy.usdc'
+filepath = exportsDir + 'testMat.usdc'
+#filepath = exportsDir + 'testCopy.usdc'
 #filepath = exportsDir + 'testEmpty.usdc'
 
 print(filepath)
 
 
-def readInt(file, size, byteorder='little'):
-    return int.from_bytes(file.read(size), byteorder=byteorder)
+def readInt(file, size, byteorder='little', signed=False):
+    return int.from_bytes(file.read(size), byteorder, signed=signed)
 
 def readStr(file, size, encoding='utf-8'):
     data = file.read(size)
     return data[:data.find(0)].decode(encoding=encoding)
 
-def readStrings(data, count):
+def decodeStrings(data, count):
     strings = []
     while count > 0:
         p = data.find(0)
@@ -44,6 +45,17 @@ def readStrings(data, count):
         data = data[p+1:]
         count -= 1
     return strings
+
+def decodeInts(data, count, size, byteorder='little', signed=False):
+    ints = []
+    for i in range(count):
+        if i * size > len(data):
+            print('Over Run Data')
+            break
+        value = int.from_bytes(data[i*size:i*size + size], byteorder, signed=signed)
+        ints.append(value)
+    return ints
+    
 
 with open(filepath, 'rb') as file:
     file.seek(16)
@@ -65,56 +77,95 @@ with open(filepath, 'rb') as file:
     numTokens = readInt(file, 8)
     dataSize = readInt(file, 8)
     compressedSize = readInt(file, 8)
-    #print('%d tokens found' % numTokens)
-    #print('data size %d' % dataSize)
-    #print('comrpessed size %d' % compressedSize)
-    
     data = file.read(compressedSize)
     data = lz4Decompress(data)
     
-    tokens = readStrings(data, numTokens)
-    #print(tokens)
+    tokens = decodeStrings(data, numTokens)
+    print('\nTOKENS')
+    print(tokens)
     
     offset, size = toc['STRINGS']
     file.seek(offset)
-    data = file.read(size)
-    #print('STRINGS')
-    #print(data)
+    numStrings = readInt(file, 8)
+    data = file.read(numStrings*4)
+    strings = decodeInts(data, numStrings, 4)
+    print('\nSTRINGS')
+    print(strings)
     
     offset, size = toc['FIELDS']
     file.seek(offset)
-    
-    #data = file.read(size)
     numFields = readInt(file, 8)
     compressedSize = readInt(file, 8)
-    print('Number of Fields %d' % numFields)
-    print('comrpessed size %d' % compressedSize)
     data = file.read(compressedSize)
-    print(data)
     data = lz4Decompress(data)
     fields = usdInt32Decompress(data, numFields)
-    #print('FIELDS')
-    #print(fields)
-    data = usdInt32Compress(fields)
-    data = lz4Compress(data)
-    print(data)
+    compressedSize = readInt(file, 8)
+    data = file.read(compressedSize)
+    data = lz4Decompress(data)
+    reps = decodeInts(data, numFields, 8)
+    print('\nFIELDS')
+    print('fields:', fields)
+    print('reps:', reps)
     
     
     offset, size = toc['FIELDSETS']
     file.seek(offset)
-    data = file.read(size)
-    #print('FIELDSETS')
-    #print(data)
+    numFieldSets = readInt(file, 8)
+    compressedSize = readInt(file, 8)
+    data = file.read(compressedSize)
+    data = lz4Decompress(data)
+    fieldSets = usdInt32Decompress(data, numFieldSets)
+    print('\nFIELDSETS')
+    print(fieldSets)
     
     offset, size = toc['PATHS']
     file.seek(offset)
-    data = file.read(size)
-    #print('PATHS')
+    totalPaths = readInt(file, 8)
+    numPaths = readInt(file, 8)
+    # Get Path Indices
+    compressedSize = readInt(file, 8)
+    data = file.read(compressedSize)
+    data = lz4Decompress(data)
+    pathIndices = usdInt32Decompress(data, numPaths)
+    # Get Element Token Indices
+    compressedSize = readInt(file, 8)
+    data = file.read(compressedSize)
+    data = lz4Decompress(data)
+    elementTokenIndices = usdInt32Decompress(data, numPaths)
+    # Get Jumps
+    compressedSize = readInt(file, 8)
+    data = file.read(compressedSize)
+    data = lz4Decompress(data)
+    jumps = usdInt32Decompress(data, numPaths)
+    #data = file.read(size)
+    print('\nPATHS')
+    print('pathIndices:', pathIndices)
+    print('elementTokenIndices:', elementTokenIndices)
+    print('jumps:', jumps)
     #print(data)
     
     offset, size = toc['SPECS']
     file.seek(offset)
-    data = file.read(size)
-    #print('SPECS')
+    numSpecs = readInt(file, 8)
+    # Get path indices
+    compressedSize = readInt(file, 8)
+    data = file.read(compressedSize)
+    data = lz4Decompress(data)
+    pathIndices = usdInt32Decompress(data, numSpecs)
+    # Get fset indices
+    compressedSize = readInt(file, 8)
+    data = file.read(compressedSize)
+    data = lz4Decompress(data)
+    fsetIndices = usdInt32Decompress(data, numSpecs)
+    # Get spec types
+    compressedSize = readInt(file, 8)
+    data = file.read(compressedSize)
+    data = lz4Decompress(data)
+    specTypes = usdInt32Decompress(data, numSpecs)
+    #data = file.read(size)
+    print('\nSPECS')
+    print('pathIndices:', pathIndices)
+    print('fsetIndices:', fsetIndices)
+    print('specTypes:', specTypes)
     #print(data)
 
