@@ -1,4 +1,6 @@
 
+from collections import Counter
+
 MAX_BLOCK_INPUT_SIZE = 0x7E000000
 
 MAX_OFFSET = 65535
@@ -228,3 +230,57 @@ def lz4Decompress(src):
             srcPtr += chunkSize
             chunks -= 1
     return dst
+
+
+def usdInt32Compress(values):
+    data = bytearray()
+    preValue = 0
+    for i in range(len(values)):
+        value = values[i]
+        values[i] = value - preValue
+        preValue = value
+    commonValue = Counter(values).most_common()[0][0]
+    data += commonValue.to_bytes(4, 'little', signed=True) + data
+    data += bytes((len(values) * 2 + 7) // 8)
+    for v in range(len(values)):
+        value = values[v]
+        i = v + 16
+        if value != commonValue:
+            if value.bit_length() <= 8:
+                data[i//4] |= 1 << ((i%4)*2)
+                data += value.to_bytes(1, 'little', signed=True)
+            elif value.bit_length() <= 16:
+                data[i//4] |= 2 << ((i%4)*2)
+                data += value.to_bytes(2, 'little', signed=True)
+            else:
+                data[i//4] |= 3 << ((i%4)*2)
+                data += value.to_bytes(4, 'little', signed=True)
+    return data
+
+
+def usdInt32Decompress(data, numInts):
+    numCodes = (numInts * 2 + 7) // 8
+    commonValue = int.from_bytes(data[:4], 'little', signed=True)
+    data = data[4:]
+    codes = memoryview(data)[:numCodes]
+    vints = memoryview(data)[numCodes:]
+    preValue = 0
+    values = []
+    cp = 0
+    vp = 0
+    while cp < numInts:
+        code = (codes[cp//4] >> (cp%4)*2) & 0x3
+        if code == 0:
+            preValue += commonValue
+        elif code == 1:
+            preValue += int.from_bytes(vints[vp:vp+1], 'little', signed=True)
+            vp += 1
+        elif code == 2:
+            preValue += int.from_bytes(vints[vp:vp+2], 'little', signed=True)
+            vp += 2
+        else:
+            preValue += int.from_bytes(vints[vp:vp+4], 'little', signed=True)
+            vp += 4
+        values.append(preValue)
+        cp += 1
+    return values

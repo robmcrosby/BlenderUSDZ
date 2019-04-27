@@ -16,7 +16,7 @@ import io_scene_usdz.compression_utils
 importlib.reload(io_scene_usdz.compression_utils)
 
 
-from io_scene_usdz.compression_utils import lz4Decompress
+from io_scene_usdz.compression_utils import lz4Decompress, lz4Compress, usdInt32Decompress, usdInt32Compress
 
 
 exportsDir = bpy.path.abspath("//") + 'exports/'
@@ -33,7 +33,17 @@ def readInt(file, size, byteorder='little'):
 def readStr(file, size, encoding='utf-8'):
     data = file.read(size)
     return data[:data.find(0)].decode(encoding=encoding)
-    
+
+def readStrings(data, count):
+    strings = []
+    while count > 0:
+        p = data.find(0)
+        if p < 0:
+            break
+        strings.append(data[:p].decode("utf-8"))
+        data = data[p+1:]
+        count -= 1
+    return strings
 
 with open(filepath, 'rb') as file:
     file.seek(16)
@@ -47,7 +57,7 @@ with open(filepath, 'rb') as file:
         offset = readInt(file, 8)
         size = readInt(file, 8)
         toc[key] = (offset, size)
-    print(toc)
+    #print(toc)
     
     offset, size = toc['TOKENS']
     file.seek(offset)
@@ -62,14 +72,49 @@ with open(filepath, 'rb') as file:
     data = file.read(compressedSize)
     data = lz4Decompress(data)
     
+    tokens = readStrings(data, numTokens)
+    #print(tokens)
+    
+    offset, size = toc['STRINGS']
+    file.seek(offset)
+    data = file.read(size)
+    #print('STRINGS')
+    #print(data)
+    
+    offset, size = toc['FIELDS']
+    file.seek(offset)
+    
+    #data = file.read(size)
+    numFields = readInt(file, 8)
+    compressedSize = readInt(file, 8)
+    print('Number of Fields %d' % numFields)
+    print('comrpessed size %d' % compressedSize)
+    data = file.read(compressedSize)
+    print(data)
+    data = lz4Decompress(data)
+    fields = usdInt32Decompress(data, numFields)
+    #print('FIELDS')
+    #print(fields)
+    data = usdInt32Compress(fields)
+    data = lz4Compress(data)
     print(data)
     
     
+    offset, size = toc['FIELDSETS']
+    file.seek(offset)
+    data = file.read(size)
+    #print('FIELDSETS')
+    #print(data)
+    
+    offset, size = toc['PATHS']
+    file.seek(offset)
+    data = file.read(size)
+    #print('PATHS')
+    #print(data)
+    
+    offset, size = toc['SPECS']
+    file.seek(offset)
+    data = file.read(size)
+    #print('SPECS')
+    #print(data)
 
-
-"""
-
-buffer = b'\x0C\x00\x00\x00\x00\x00\x00\x00\x00\xA0\x75\x70\x41\x78\x69\x73\x00\x59\x00\x00'
-buffer = lz4Decompress(buffer)
-print(buffer)
-"""

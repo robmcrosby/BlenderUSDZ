@@ -104,6 +104,10 @@ class FileData:
             item.getTokens(tokens)
         return tokens
 
+    def getStrings(self):
+        strings = []
+        return strings
+
     def printUsda(self):
         src = '#usda 1.0\n'
 
@@ -149,7 +153,10 @@ class FileData:
 
     def writeStringsSection(self, file, toc):
         start = file.tell()
-        file.write(bytes(8))
+        strings = self.getStrings()
+        file.write(len(strings).to_bytes(64, 'little'))
+        for index in strings:
+            file.write(index.to_bytes(32, 'little'))
         size = file.tell() - start
         toc.append((b'STRINGS', start, size))
 
