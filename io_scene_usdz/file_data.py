@@ -50,14 +50,14 @@ class FileItem:
         if item != None:
             self.items.append(item)
 
-    def getTokens(self, tokens):
+    def getTokens(self, map):
+        #tokens = self.type.replace('"', '').split()
+        tokens = self.type.split()
+        for token in tokens:
+            map.add(token)
         if 'def' in self.type:
-            tokens.add('def')
-            tokens.add(self.type[4:])
             for item in self.items:
-                item.getTokens(tokens)
-        else:
-            tokens.add(self.type)
+                item.getTokens(map)
 
     def printUsda(self, indent):
         src = ''
