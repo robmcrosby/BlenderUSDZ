@@ -1,6 +1,7 @@
 import os
 
-from io_scene_usdz.compression_utils import *
+#from io_scene_usdz.compression_utils import *
+from io_scene_usdz.crate_file import *
 tab = '   '
 
 def print_data(data):
@@ -110,12 +111,10 @@ class FileData:
 
     def printUsda(self):
         src = '#usda 1.0\n'
-
         # Print the Properties
         if len(self.properties) > 0:
             src += print_properties(self.properties, '')
         src += '\n'
-
         # Print the Items
         for item in self.items:
             src += item.printUsda('')
@@ -128,84 +127,10 @@ class FileData:
         f.write(src)
         f.close()
 
-    def writeBootStrap(self, file, toc = 0):
-        file.seek(0)
-        file.write(b'PXR-USDC')
-        # Version
-        file.write(b'\x00\x06\x00\x00\x00\x00\x00\x00')
-        # Table of Contents Offset
-        file.write(toc.to_bytes(8, byteorder='little'))
-        file.write(bytes(64))
-
-    def writeTokensSection(self, file, toc):
-        start = file.tell()
-        tokens = self.getTokens()
-        buffer = b''
-        for token in tokens:
-            buffer += token.encode() + b'\0'
-        compressed = lz4Compress(buffer)
-        file.write(len(tokens).to_bytes(8, byteorder='little'))
-        file.write(len(buffer).to_bytes(8, byteorder='little'))
-        file.write(len(compressed).to_bytes(8, byteorder='little'))
-        file.write(compressed)
-        size = file.tell() - start
-        toc.append((b'TOKENS', start, size))
-
-    def writeStringsSection(self, file, toc):
-        start = file.tell()
-        strings = self.getStrings()
-        file.write(len(strings).to_bytes(64, 'little'))
-        for index in strings:
-            file.write(index.to_bytes(32, 'little'))
-        size = file.tell() - start
-        toc.append((b'STRINGS', start, size))
-
-    def writeFieldsSection(self, file, toc):
-        start = file.tell()
-        file.write(bytes(41))
-        size = file.tell() - start
-        toc.append((b'FIELDS', start, size))
-
-    def writeFieldSetsSection(self, file, toc):
-        start = file.tell()
-        file.write(bytes(24))
-        size = file.tell() - start
-        toc.append((b'FIELDSETS', start, size))
-
-    def writePathsSection(self, file, toc):
-        start = file.tell()
-        file.write(bytes(61))
-        size = file.tell() - start
-        toc.append((b'PATHS', start, size))
-
-    def writeSpecsSection(self, file, toc):
-        start = file.tell()
-        file.write(bytes(53))
-        size = file.tell() - start
-        toc.append((b'SPECS', start, size))
-
-    def writeTableOfContents(self, file, toc):
-        tocStart = file.tell()
-        file.write(len(toc).to_bytes(8, byteorder='little'))
-        for name, start, size in toc:
-            file.write(name)
-            file.write(bytes(16-len(name)))
-            file.write(start.to_bytes(8, byteorder='little'))
-            file.write(size.to_bytes(8, byteorder='little'))
-        self.writeBootStrap(file, tocStart)
-
     def writeUsdc(self, filePath):
-        toc = []
         file = open(filePath, 'wb')
-        # Write Boot Strap to reserve space
-        self.writeBootStrap(file)
-        # Write the Sections
-        self.writeTokensSection(file, toc)
-        self.writeStringsSection(file, toc)
-        self.writeFieldsSection(file, toc)
-        self.writeFieldSetsSection(file, toc)
-        self.writePathsSection(file, toc)
-        self.writeSpecsSection(file, toc)
-        # Write the Table of Contents and Boot Strap
-        self.writeTableOfContents(file, toc)
+        crate = CrateFile(file)
+        crate.writeBootStrap()
+        crate.writeSections()
+        crate.writeTableOfContents()
         file.close()

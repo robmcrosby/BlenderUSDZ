@@ -8,6 +8,41 @@ MIN_MATCH = 4
 MFLIMIT = 12
 
 
+def decodeStrings(data, count, encoding='utf-8'):
+    strings = []
+    while count > 0:
+        p = data.find(0)
+        if p < 0:
+            break
+        strings.append(data[:p].decode(encoding))
+        data = data[p+1:]
+        count -= 1
+    return strings
+
+def encodeStrings(strings, encoding='utf-8'):
+    data = bytearray()
+    for str in strings:
+        data += str.encode(encoding) + b'\x00'
+    return data
+
+
+def decodeInts(data, count, size, byteorder='little', signed=False):
+    ints = []
+    for i in range(count):
+        if i * size > len(data):
+            print('Over Run Data')
+            break
+        value = int.from_bytes(data[i*size:i*size + size], byteorder, signed=signed)
+        ints.append(value)
+    return ints
+
+def encodeInts(ints, size, byteorder='little', signed=False):
+    data = bytearray()
+    for i in ints:
+        data += i.to_bytes(size, byteorder, signed=True)
+    return data
+
+
 class PositionTable:
     TABLE_SIZE = 4096
 
@@ -149,6 +184,8 @@ def lz4CompressDefault(src):
 def lz4Compress(src):
     dst = bytearray()
     inputSize = len(src)
+    if inputSize == 0:
+        return dst
     if inputSize > 127 * MAX_BLOCK_INPUT_SIZE:
         print('Buffer Too Large for LZ4 Compression')
     elif inputSize <= MAX_BLOCK_INPUT_SIZE:
@@ -236,6 +273,8 @@ def lz4Decompress(src):
 
 def usdInt32Compress(values):
     data = bytearray()
+    if len(values) == 0:
+        return data
     preValue = 0
     for i in range(len(values)):
         value = values[i]
