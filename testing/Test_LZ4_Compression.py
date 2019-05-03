@@ -3,6 +3,8 @@ import os
 import sys
 import importlib
 
+from struct import *
+
 scriptPath = bpy.path.abspath("//") + '//..'
 if not scriptPath in sys.path:
     sys.path.append(scriptPath)
@@ -22,8 +24,8 @@ from io_scene_usdz.compression_utils import lz4Decompress, lz4Compress, usdInt32
 exportsDir = bpy.path.abspath("//") + 'exports/'
 #filepath = exportsDir + 'test.usdc'
 #filepath = exportsDir + 'testMat.usdc'
-#filepath = exportsDir + 'testCopy.usdc'
-filepath = exportsDir + 'testEmpty.usdc'
+filepath = exportsDir + 'testCopy.usdc'
+#filepath = exportsDir + 'testEmpty.usdc'
 
 print(filepath)
 
@@ -75,40 +77,74 @@ def getSpecType(type):
 
 
 ValueTypes = {
-    0 :'Bool',
-    1 :'UChar',
-    2 :'Int',
-    3 :'UInt',
-    4 :'Int64',
-    5 :'UInt64',
-    6 :'Half',
-    7 :'Float',
-    8 :'Double',
-    9 :'String',
-    10:'Token',
-    11:'AssetPath',
-    12:'Matrix2d',
-    13:'Matrix3d',
-    14:'Matrix4d',
-    15:'Quatd',
-    16:'Quatf',
-    17:'Quath',
-    18:'Vec2d',
-    19:'Vec2f',
-    20:'Vec2h',
-    21:'Vec2i',
-    22:'Vec3d',
-    23:'Vec3f',
-    24:'Vec3h',
-    25:'Vec3i',
-    26:'Vec4d',
-    27:'Vec4f',
-    28:'Vec4h',
-    29:'Vec4i'
+    0 :'Invalid',
+    1 :'Bool',
+    2 :'UChar',
+    3 :'Int',
+    4 :'UInt',
+    5 :'Int64',
+    6 :'UInt64',
+    7 :'Half',
+    8 :'Float',
+    9 :'Double',
+    10:'String',
+    11:'Token',
+    12:'AssetPath',
+    13:'Matrix2d',
+    14:'Matrix3d',
+    15:'Matrix4d',
+    16:'Quatd',
+    17:'Quatf',
+    18:'Quath',
+    19:'Vec2d',
+    20:'Vec2f',
+    21:'Vec2h',
+    22:'Vec2i',
+    23:'Vec3d',
+    24:'Vec3f',
+    25:'Vec3h',
+    26:'Vec3i',
+    27:'Vec4d',
+    28:'Vec4f',
+    29:'Vec4h',
+    30:'Vec4i',
+    31:'Dictionary',
+    32:'TokenListOp',
+    33:'StringListOp',
+    34:'PathListOp',
+    35:'ReferenceListOp',
+    36:'IntListOp',
+    37:'Int64ListOp',
+    38:'UIntListOp',
+    39:'UInt64ListOp',
+    40:'PathVector',
+    41:'TokenVector',
+    42:'Specifier',
+    43:'Permission',
+    44:'Variability',
+    45:'VariantSelectionMap',
+    46:'TimeSamples',
+    47:'Payload',
+    48:'DoubleVector',
+    49:'LayerOffsetVector',
+    50:'StringVector',
+    51:'ValueBlock',
+    52:'Value',
+    53:'UnregisteredValue',
+    54:'UnregisteredValueListOp',
+    55:'PayloadListOp'
 }
 def getValueType(type):
     return ValueTypes.get(type, 'Unknown:%d' % type)
 
+
+SpecifierTypes = {
+    0:'Def',
+    1:'Over',
+    2:'Class'
+}
+def getSpecifierType(type):
+    return SpecifierTypes.get(type, 'Unknown:%d' % type)
 
 
 def getFieldSet(tokens, fields, fieldSets, index):
@@ -134,9 +170,6 @@ def decodeRep(data):
     rep['inline'] = (data & INLINE_BIT) != 0
     rep['compressed'] = (data & COMPRESSED_BIT) != 0
     rep['payload'] = data & PAYLOAD_MASK
-    #rep['array'] = ((data >> 63) & 1) == 1
-    #rep['inline'] = ((data >> 62) & 1) == 1
-    #rep['compressed'] = ((data >> 61) & 1) == 1
     return rep
 
 def decodeReps(data, numReps):
@@ -145,6 +178,69 @@ def decodeReps(data, numReps):
     for value in values:
         reps.append(decodeRep(value))
     return reps
+
+def getRepValue(rep, file, tokens):
+    if rep['type'] == 'Token':
+        if rep['inline']:
+            return tokens[rep['payload']]
+        elif rep['array']:
+            file.seek(rep['payload'])
+            num = readInt(file, 4)
+            values = []
+            while num > 0:
+                values.append(tokens[readInt(file, 4)])
+                num -= 1
+            return values
+    elif rep['type'] == 'TokenVector':
+        file.seek(rep['payload'])
+        num = readInt(file, 8)
+        values = []
+        while num > 0:
+            values.append(tokens[readInt(file, 4)])
+            num -= 1
+        return values
+    elif rep['type'] == 'Specifier':
+        return getSpecifierType(rep['payload'])
+    elif rep['type'] == 'Int':
+        if not rep['inline'] and rep['array']:
+            file.seek(rep['payload'])
+            num = readInt(file, 4)
+            values = []
+            while num > 0:
+                values.append(readInt(file, 4, signed=True))
+                num -= 1
+            return values
+    elif rep['type'] == 'Vec2f':
+        if not rep['inline'] and rep['array']:
+            file.seek(rep['payload'])
+            num = readInt(file, 4)
+            values = []
+            while num > 0:
+                values.append(unpack('<ff', file.read(8)))
+                num -= 1
+            return values
+    elif rep['type'] == 'Vec3f':
+        if not rep['inline'] and rep['array']:
+            file.seek(rep['payload'])
+            num = readInt(file, 4)
+            values = []
+            while num > 0:
+                values.append(unpack('<fff', file.read(12)))
+                num -= 1
+            return values
+    elif rep['type'] == 'Bool' or rep['type'] == 'Variability':
+        if rep['inline'] and not rep['array']:
+            return rep['payload'] != 0
+    elif rep['type'] == 'Matrix4d':
+        if not rep['inline'] and not rep['array']:
+            file.seek(rep['payload'])
+            num = 4
+            values = []
+            while num > 0:
+                values.append(unpack('<dddd', file.read(32)))
+                num -= 1
+            return values
+    return None
 
 
 with open(filepath, 'rb') as file:
@@ -194,11 +290,23 @@ with open(filepath, 'rb') as file:
     data = lz4Decompress(data)
     reps = decodeReps(data, numFields) #decodeInts(data, numFields, 8)
     print('\nFIELDS (', offset, ':', offset+size, ')')
-    print('fields:', fields)
+    
+    for i in range(len(fields)):
+        field = tokens[fields[i]]
+        rep = reps[i]
+        value = getRepValue(rep, file, tokens)
+        if value != None:
+            print(i, '\t', field, '\t= (', rep['type'], ') ',value)
+        else:
+            print(i, '\t', field,'\t= ',rep)
+    
+    #print('fields:', fields)
     #for rep in reps:
     #    print(rep)
-    print('reps:', reps)
-    
+    #    value = getRepValue(rep, file, tokens)
+    #    if value != None:
+    #        print('   ', value)
+    #print('reps:', reps)
     
     offset, size = toc['FIELDSETS']
     file.seek(offset)
@@ -208,7 +316,16 @@ with open(filepath, 'rb') as file:
     data = lz4Decompress(data)
     fieldSets = usdInt32Decompress(data, numFieldSets)
     print('\nFIELDSETS (', offset, ':', offset+size, ')')
-    print(fieldSets)
+    i = 0
+    while i < len(fieldSets):
+        index = i
+        set = []
+        while i < len(fieldSets) and fieldSets[i] >= 0:
+            set.append(fieldSets[i])
+            i += 1
+        print(index, ':', set)
+        i += 1
+    #print(fieldSets)
     
     offset, size = toc['PATHS']
     file.seek(offset)
@@ -248,11 +365,11 @@ with open(filepath, 'rb') as file:
     
     #data = file.read(size)
     print('\nPATHS (', offset, ':', offset+size, ')')
-    #for path in paths:
-    #    print(path)
-    print('pathIndices:', pathIndices)
-    print('elementTokenIndices:', elementTokenIndices)
-    print('jumps:', jumps)
+    for path in paths:
+        print(path['index'], ':', path['element'], 'prim:', path['prim'], 'jump:', path['jump'], path['type'])
+    #print('pathIndices:', pathIndices)
+    #print('elementTokenIndices:', elementTokenIndices)
+    #print('jumps:', jumps)
     #print(data)
     
     offset, size = toc['SPECS']
@@ -278,16 +395,16 @@ with open(filepath, 'rb') as file:
     for i in range(numSpecs):
         spec = {}
         spec['path'] = pathIndices[i]
-        spec['fset'] = getFieldSet(tokens, fields, fieldSets, fsetIndices[i])
+        #spec['fset'] = getFieldSet(tokens, fields, fieldSets, fsetIndices[i])
+        spec['fset'] = fsetIndices[i]
         spec['type'] = getSpecType(specTypes[i])
         #spec['value'] = 
         specs.append(spec)
     
     print('\nSPECS (', offset, ':', offset+size, ')')
-    #for spec in specs:
-    #    print(spec)
-    print('pathIndices:', pathIndices)
-    print('fsetIndices:', fsetIndices)
-    print('specTypes:', specTypes)
+    for spec in specs:
+        print(spec['path'], ':', spec['type'], spec['fset'])
+    #print('pathIndices:', pathIndices)
+    #print('fsetIndices:', fsetIndices)
+    #print('specTypes:', specTypes)
     #print(data)
-

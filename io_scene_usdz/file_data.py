@@ -131,6 +131,14 @@ class FileData:
         file = open(filePath, 'wb')
         crate = CrateFile(file)
         crate.writeBootStrap()
+
+        fset = []
+        fset.append(crate.addTokenField('upAxis', 'Y'))
+        fset = crate.addFieldSet(fset)
+
+        path = crate.addPath('', -2)
+        crate.addSpec(path, fset, SpecType.PseudoRoot)
+
         crate.writeSections()
         crate.writeTableOfContents()
         file.close()
