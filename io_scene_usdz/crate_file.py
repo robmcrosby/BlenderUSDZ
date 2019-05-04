@@ -13,6 +13,12 @@ def writeInt32Compressed(file, data):
     file.write(buffer)
 
 
+class SpecifierType(Enum):
+    Def = 0
+    Over = 1
+    Class = 2
+
+
 class SpecType(Enum):
     Attribute   = 1
     Connection  = 2
@@ -26,38 +32,39 @@ class SpecType(Enum):
     Variant     = 10
     VariantSet  = 11
 
+
 class ValueType(Enum):
     Invalid = 0
-    Bool = 1
-    UChar = 2
-    Int = 3
-    UInt = 4
-    Int64 = 5
-    UInt64 = 6
-    Half = 7
-    Float = 8
-    Double = 9
-    String = 10
-    Token = 11
+    bool = 1
+    uchar = 2
+    int = 3
+    uint = 4
+    int64 = 5
+    uint64 = 6
+    half = 7
+    float = 8
+    double = 9
+    string = 10
+    token = 11
     AssetPath = 12
-    Matrix2d = 13
-    Matrix3d = 14
-    Matrix4d = 15
-    Quatd = 16
-    Quatf = 17
-    Quath = 18
-    Vec2d = 19
-    Vec2f = 20
-    Vec2h = 21
-    Vec2i = 22
-    Vec3d = 23
-    Vec3f = 24
-    Vec3h = 25
-    Vec3i = 26
-    Vec4d = 27
-    Vec4f = 28
-    Vec4h = 29
-    Vec4i = 30
+    matrix2d = 13
+    matrix3d = 14
+    matrix4d = 15
+    quatd = 16
+    quatf = 17
+    quath = 18
+    vec2d = 19
+    vec2f = 20
+    vec2h = 21
+    vec2i = 22
+    vec3d = 23
+    vec3f = 24
+    vec3h = 25
+    vec3i = 26
+    vec4d = 27
+    vec4f = 28
+    vec4h = 29
+    vec4i = 30
     Dictionary = 31
     TokenListOp = 32
     StringListOp = 33
@@ -85,6 +92,48 @@ class ValueType(Enum):
     PayloadListOp = 55
 
 
+def getTupleValueType(value):
+    l = len(value)
+    if l > 0:
+        t = type(value[0])
+        if t == int:
+            if l == 2:
+                return ValueType.vec2i
+            if l == 3:
+                return ValueType.vec3i
+            if l == 4:
+                return ValueType.vec4i
+        elif t == float:
+            if l == 2:
+                return ValueType.vec2f
+            if l == 3:
+                return ValueType.vec3f
+            if l == 4:
+                return ValueType.vec4f
+    return ValueType.Invalid
+
+def getValueType(value):
+    t = type(value)
+    if t == bool:
+        return ValueType.bool
+    if t == int:
+        return ValueType.int
+    if t == float:
+        return ValueType.float
+    if t == str:
+        return ValueType.token
+    if t == tuple:
+        return getTupleValueType(value)
+    if t == list and len(value) > 0:
+        if type(value[0]) == str:
+            return ValueType.TokenVector
+        return getValueType(value[0])
+    if t == SpecifierType:
+        return ValueType.Specifier
+    return ValueType.Invalid
+
+
+
 class CrateFile:
     def __init__(self, file):
         self.file = file
@@ -110,7 +159,7 @@ class CrateFile:
         self.fsets.append(-1)
         return index
 
-    def addField(self, field, vType, array, inline, compressed, payload = 0):
+    def addFieldItem(self, field, vType, array, inline, compressed, payload = 0):
         repIndex = len(self.reps)
         self.fields.append(field)
         rep = (vType.value << 48) | (payload & PAYLOAD_MASK)
@@ -123,19 +172,44 @@ class CrateFile:
         self.reps.append(rep)
         return repIndex
 
-    def addPath(self, token, jump):
+    def addFieldToken(self, field, token):
+        field = self.getTokenIndex(field)
+        token = self.getTokenIndex(token)
+        return self.addFieldItem(field, ValueType.token, False, True, False, token)
+
+    def addFieldTokenVector(self, field, tokens):
+        field = self.getTokenIndex(field)
+        ref = self.file.tell()
+        self.file.write(len(tokens).to_bytes(8, byteorder='little'))
+        for token in tokens:
+            self.file.write(self.getTokenIndex(token).to_bytes(4, byteorder='little'))
+        return self.addFieldItem(field, ValueType.TokenVector, False, False, False, ref)
+
+    def addFieldSpecifier(self, field, spec):
+        field = self.getTokenIndex(field)
+        return self.addFieldItem(field, ValueType.Specifier, False, True, False, spec.value)
+
+    def addField(self, field, value, type = ValueType.UnregisteredValue):
+        if type == ValueType.UnregisteredValue:
+            type = getValueType(value)
+        if type == ValueType.token:
+            return self.addFieldToken(field, value)
+        if type == ValueType.TokenVector:
+            return self.addFieldTokenVector(field, value)
+        if type == ValueType.Specifier:
+            return self.addFieldSpecifier(field, value)
+        return self.addFieldItem(field, type, False, True, False, value)
+
+    def addPath(self, token, jump, prim):
         path = len(self.paths)
+        if prim:
+            path *= -1
         token = self.getTokenIndex(token)
         self.paths.append((path, token, jump))
         return path
 
     def addSpec(self, path, fset, sType):
         self.specs.append((path, fset, sType.value))
-
-    def addTokenField(self, field, token):
-        field = self.getTokenIndex(field)
-        token = self.getTokenIndex(token)
-        return self.addField(field, ValueType.Token, False, True, False, token)
 
     def writeBootStrap(self, tocOffset = 0):
         self.file.seek(0)

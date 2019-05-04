@@ -83,6 +83,40 @@ class FileItem:
                 src += '\n'
         return src
 
+    def writeUsdc(self, crate):
+        type = self.type
+        spec = SpecType.Attribute
+        if 'def' in type:
+            type = type[4:]
+            spec = SpecType.Prim
+        # Add the fields
+        fset = []
+        print('Items',  self.items)
+        fset.append(crate.addField('typeName', type))
+        if spec == SpecType.Prim:
+            fset.append(crate.addField('specifier', SpecifierType.Def))
+            properties = []
+            children = []
+            for item in self.items:
+                if len(item.items) > 0:
+                    children.append(item.name)
+                else:
+                    properties.append(item.name)
+            if len(properties) > 0:
+                fset.append(crate.addField('properties', properties))
+            if len(children) > 0:
+                fset.append(crate.addField('primChildren', children))
+        fset = crate.addFieldSet(fset)
+
+        jump = -1 if len(self.items) > 0 else -2
+        path = crate.addPath(self.name, jump, False)
+        crate.addSpec(path, fset, spec)
+
+        # Add the Children
+        if spec == SpecType.Prim:
+            for item in self.items:
+                item.writeUsdc(crate)
+
 class FileData:
     def __init__(self):
         self.properties = {}
@@ -131,14 +165,25 @@ class FileData:
         file = open(filePath, 'wb')
         crate = CrateFile(file)
         crate.writeBootStrap()
-
+        # Add the fields
         fset = []
-        fset.append(crate.addTokenField('upAxis', 'Y'))
+        for name, value in self.properties.items():
+            if type(value) == str:
+                value = value.replace('"', '')
+            fset.append(crate.addField(name, value))
+        names = []
+        for item in self.items:
+            names.append(item.name)
+        fset.append(crate.addField('primChildren', names))
         fset = crate.addFieldSet(fset)
-
-        path = crate.addPath('', -2)
+        # Add path and spec
+        jump = -1 if len(self.items) > 0 else -2
+        path = crate.addPath('', jump, False)
         crate.addSpec(path, fset, SpecType.PseudoRoot)
-
+        # Write items
+        for item in self.items:
+            item.writeUsdc(crate)
+        # Finish Writing the usdc file
         crate.writeSections()
         crate.writeTableOfContents()
         file.close()
