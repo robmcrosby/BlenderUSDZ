@@ -188,7 +188,7 @@ class CrateFile:
 
     def addFieldToken(self, field, token):
         field = self.getTokenIndex(field)
-        token = self.getTokenIndex(token)
+        token = self.getTokenIndex(token.replace('"', ''))
         return self.addFieldItem(field, ValueType.token, False, True, False, token)
 
     def addFieldTokenVector(self, field, tokens):
@@ -196,6 +196,7 @@ class CrateFile:
         ref = self.file.tell()
         self.file.write(len(tokens).to_bytes(8, byteorder='little'))
         for token in tokens:
+            token = token.replace('"', '')
             self.file.write(self.getTokenIndex(token).to_bytes(4, byteorder='little'))
         return self.addFieldItem(field, ValueType.TokenVector, False, False, False, ref)
 
@@ -250,6 +251,16 @@ class CrateFile:
             self.file.write(struct.pack(packStr, *row))
         return self.addFieldItem(field, vType, False, False, False, ref)
 
+    def addFieldBool(self, field, data):
+        field = self.getTokenIndex(field)
+        data = 1 if data else 0
+        return self.addFieldItem(field, ValueType.bool, False, True, False, data)
+
+    def addFieldVariability(self, field, data):
+        field = self.getTokenIndex(field)
+        data = 1 if data else 0
+        return self.addFieldItem(field, ValueType.Variability, False, True, False, data)
+
     def addField(self, field, value, type = ValueType.UnregisteredValue):
         if type == ValueType.UnregisteredValue:
             type = getValueType(value)
@@ -267,6 +278,10 @@ class CrateFile:
             return self.addFieldVector(field, value, type)
         if type.name[:6] == 'matrix':
             return self.addFieldMatrix(field, value, type)
+        if type == ValueType.bool:
+            return self.addFieldBool(field, value)
+        if type == ValueType.Variability:
+            return self.addFieldVariability(field, value)
         print('type: ', type.name, value)
         return self.addFieldItem(field, type, False, True, False, value)
 

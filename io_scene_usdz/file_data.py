@@ -109,7 +109,15 @@ class FileItem:
 
     def writeUsdcAtt(self, crate):
         fset = []
-        fset.append(crate.addField('typeName', self.type))
+        types = self.type.split()
+        fset.append(crate.addField('typeName', types[-1]))
+        for v in types[:-1]:
+            if v == 'uniform':
+                fset.append(crate.addField('variability', True, ValueType.Variability))
+            elif v == 'custom':
+                fset.append(crate.addField('custom', True))
+        for field, value in self.properties.items():
+            fset.append(crate.addField(field, value))
         fset.append(crate.addField('default', self.data))
         fset = crate.addFieldSet(fset)
         jump = 0
