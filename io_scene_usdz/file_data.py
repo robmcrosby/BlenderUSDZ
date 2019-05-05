@@ -97,10 +97,10 @@ class FileItem:
         jump = -2
         if len(attributes) > 0:
             jump = len(attributes) + 1
-            fset.append(crate.addField('properties', [a.name for a in attributes]))
+            fset.append(crate.addFieldTokenVector('properties', [a.name for a in attributes]))
         if len(children) > 0:
             jump = -1
-            fset.append(crate.addField('primChildren', [c.name for c in children]))
+            fset.append(crate.addFieldTokenVector('primChildren', [c.name for c in children]))
         fset = crate.addFieldSet(fset)
         path = crate.addPath(self.name, jump, False)
         crate.addSpec(path, fset, SpecType.Prim)
@@ -192,7 +192,7 @@ class FileData:
             names = []
             for item in self.items:
                 names.append(item.name)
-            fset.append(crate.addField('primChildren', names))
+            fset.append(crate.addFieldTokenVector('primChildren', names))
         fset = crate.addFieldSet(fset)
         # Add path and spec
         jump = -1 if len(self.items) > 0 else -2

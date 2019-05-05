@@ -139,7 +139,7 @@ def getValueType(value):
         return getTupleValueType(value)
     if t == list and len(value) > 0:
         if type(value[0]) == str:
-            return ValueType.TokenVector
+            return ValueType.token
         return getValueType(value[0])
     if t == SpecifierType:
         return ValueType.Specifier
@@ -190,9 +190,16 @@ class CrateFile:
         self.reps.append(rep)
         return repIndex
 
-    def addFieldToken(self, field, token):
+    def addFieldToken(self, field, data):
         field = self.getTokenIndex(field)
-        token = self.getTokenIndex(token.replace('"', ''))
+        if type(data) == list:
+            ref = self.file.tell()
+            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            for token in data:
+                token = self.getTokenIndex(token.replace('"', ''))
+                self.file.write(token.to_bytes(4, byteorder='little'))
+            return self.addFieldItem(field, ValueType.token, True, False, False, ref)
+        token = self.getTokenIndex(data.replace('"', ''))
         return self.addFieldItem(field, ValueType.token, False, True, False, token)
 
     def addFieldTokenVector(self, field, tokens):
