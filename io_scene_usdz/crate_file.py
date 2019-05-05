@@ -13,6 +13,10 @@ def writeInt32Compressed(file, data):
     file.write(len(buffer).to_bytes(8, byteorder='little'))
     file.write(buffer)
 
+def writeToAlign(file, size):
+    bufBytes = file.tell() % size
+    if bufBytes > 0:
+        file.write(bytes(bufBytes))
 
 class SpecifierType(Enum):
     Def = 0
@@ -198,6 +202,7 @@ class CrateFile:
         for token in tokens:
             token = token.replace('"', '')
             self.file.write(self.getTokenIndex(token).to_bytes(4, byteorder='little'))
+        #writeToAlign(self.file, 8)
         return self.addFieldItem(field, ValueType.TokenVector, False, False, False, ref)
 
     def addFieldSpecifier(self, field, spec):
@@ -209,8 +214,17 @@ class CrateFile:
         if type(data) == list:
             ref = self.file.tell()
             self.file.write(len(data).to_bytes(4, byteorder='little'))
+            if len(data) > 16:
+                # Compress the data
+                writeInt32Compressed(self.file, data)
+                #buffer = lz4Compress(encodeInts(data, 4, signed=True))
+                #self.file.write(len(buffer).to_bytes(8, byteorder='little'))
+                #self.file.write(buffer)
+                #writeToAlign(self.file)
+                return self.addFieldItem(field, ValueType.int, True, False, True, ref)
             for i in data:
                 self.file.write(i.to_bytes(4, byteorder='little', signed=True))
+            #writeToAlign(self.file)
             return self.addFieldItem(field, ValueType.int, True, False, False, ref)
         return self.addFieldItem(field, ValueType.int, False, True, False, data)
 
@@ -221,6 +235,7 @@ class CrateFile:
             self.file.write(len(data).to_bytes(4, byteorder='little'))
             for f in data:
                 self.file.write(struct.pack('<f', f))
+            #writeToAlign(self.file)
             return self.addFieldItem(field, ValueType.float, True, False, False, ref)
         data = int.from_bytes(struct.pack('<f', data), 'little')
         return self.addFieldItem(field, ValueType.float, False, True, False, data)
@@ -233,8 +248,10 @@ class CrateFile:
             self.file.write(len(data).to_bytes(4, byteorder='little'))
             for v in data:
                 self.file.write(struct.pack(packStr, *v))
+            #writeToAlign(self.file)
             return self.addFieldItem(field, vType, True, False, False, ref)
         self.file.write(struct.pack(packStr, *data))
+        #writeToAlign(self.file)
         return self.addFieldItem(field, vType, False, False, False, ref)
 
     def addFieldMatrix(self, field, data, vType):
@@ -246,9 +263,11 @@ class CrateFile:
             for matrix in data:
                 for row in matrix:
                     self.file.write(struct.pack(packStr, *row))
+            #writeToAlign(self.file)
             return self.addFieldItem(field, vType, True, False, False, ref)
         for row in data:
             self.file.write(struct.pack(packStr, *row))
+        #writeToAlign(self.file)
         return self.addFieldItem(field, vType, False, False, False, ref)
 
     def addFieldBool(self, field, data):

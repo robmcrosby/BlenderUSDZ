@@ -94,20 +94,23 @@ class FileItem:
                 children.append(item)
             else:
                 attributes.append(item)
+        jump = -2
         if len(attributes) > 0:
+            jump = len(attributes) + 1
             fset.append(crate.addField('properties', [a.name for a in attributes]))
         if len(children) > 0:
+            jump = -1
             fset.append(crate.addField('primChildren', [c.name for c in children]))
         fset = crate.addFieldSet(fset)
-        jump = -1
         path = crate.addPath(self.name, jump, False)
         crate.addSpec(path, fset, SpecType.Prim)
         for child in children:
             child.writeUsdc(crate)
         for att in attributes:
-            att.writeUsdc(crate)
+            jump -2 if att == attributes[-1] else 0
+            att.writeUsdc(crate, jump)
 
-    def writeUsdcAtt(self, crate):
+    def writeUsdcAtt(self, crate, jump):
         fset = []
         types = self.type.split()
         fset.append(crate.addField('typeName', types[-1]))
@@ -120,51 +123,16 @@ class FileItem:
             fset.append(crate.addField(field, value))
         fset.append(crate.addField('default', self.data))
         fset = crate.addFieldSet(fset)
-        jump = 0
         path = crate.addPath(self.name, jump, True)
         crate.addSpec(path, fset, SpecType.Attribute)
 
 
-    def writeUsdc(self, crate):
+    def writeUsdc(self, crate, jump = 0):
         if self.type[:4] == 'def ':
             self.writeUsdcPrim(crate)
         else:
-            self.writeUsdcAtt(crate)
+            self.writeUsdcAtt(crate, jump)
 
-        """
-        type = self.type
-        spec = SpecType.Attribute
-        if 'def' in type:
-            type = type[4:]
-            spec = SpecType.Prim
-        # Add the fields
-        fset = []
-        print('Items',  self.items)
-        fset.append(crate.addField('typeName', type))
-        if spec == SpecType.Prim:
-            fset.append(crate.addField('specifier', SpecifierType.Def))
-            properties = []
-            children = []
-            for item in self.items:
-                if len(item.items) > 0:
-                    children.append(item.name)
-                else:
-                    properties.append(item.name)
-            if len(properties) > 0:
-                fset.append(crate.addField('properties', properties))
-            if len(children) > 0:
-                fset.append(crate.addField('primChildren', children))
-        fset = crate.addFieldSet(fset)
-
-        jump = -1 if len(self.items) > 0 else -2
-        path = crate.addPath(self.name, jump, False)
-        crate.addSpec(path, fset, spec)
-
-        # Add the Children
-        if spec == SpecType.Prim:
-            for item in self.items:
-                item.writeUsdc(crate)
-        """
 
 class FileData:
     def __init__(self):
