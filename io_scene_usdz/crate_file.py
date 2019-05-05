@@ -202,7 +202,7 @@ class CrateFile:
         for token in tokens:
             token = token.replace('"', '')
             self.file.write(self.getTokenIndex(token).to_bytes(4, byteorder='little'))
-        #writeToAlign(self.file, 8)
+        self.file.write(bytes(4))
         return self.addFieldItem(field, ValueType.TokenVector, False, False, False, ref)
 
     def addFieldSpecifier(self, field, spec):
@@ -306,9 +306,9 @@ class CrateFile:
 
     def addPath(self, token, jump, prim):
         path = len(self.paths)
-        if prim:
-            path *= -1
         token = self.getTokenIndex(token)
+        if prim:
+            token *= -1
         self.paths.append((path, token, jump))
         return path
 

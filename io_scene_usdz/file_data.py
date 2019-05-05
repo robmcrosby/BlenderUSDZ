@@ -107,7 +107,7 @@ class FileItem:
         for child in children:
             child.writeUsdc(crate)
         for att in attributes:
-            jump -2 if att == attributes[-1] else 0
+            jump = -2 if att == attributes[-1] else 0
             att.writeUsdc(crate, jump)
 
     def writeUsdcAtt(self, crate, jump):
@@ -200,6 +200,7 @@ class FileData:
         crate.addSpec(path, fset, SpecType.PseudoRoot)
         # Write items
         for item in self.items:
+            jump = -2 if item == self.items[-1] else 0
             item.writeUsdc(crate)
         # Finish Writing the usdc file
         crate.writeSections()
