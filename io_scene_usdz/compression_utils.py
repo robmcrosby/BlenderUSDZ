@@ -39,7 +39,7 @@ def decodeInts(data, count, size, byteorder='little', signed=False):
 def encodeInts(ints, size, byteorder='little', signed=False):
     data = bytearray()
     for i in ints:
-        data += i.to_bytes(size, byteorder, signed=True)
+        data += i.to_bytes(size, byteorder, signed=signed)
     return data
 
 
@@ -163,7 +163,6 @@ def lz4CompressDefault(src):
         curValue = readLeUint32(src, srcPtr)
         matchPos = findMatch(posTable, curValue, src, srcPtr)
         if matchPos is not None:
-            print('FOUND MATCH')
             length = countMatch(src, matchPos, srcPtr, MAX_INDEX)
             if length < MIN_MATCH:
                 break

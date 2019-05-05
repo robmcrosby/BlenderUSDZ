@@ -1,4 +1,5 @@
 import os
+import struct
 from enum import Enum
 from io_scene_usdz.compression_utils import *
 
@@ -110,6 +111,14 @@ def getTupleValueType(value):
                 return ValueType.vec3f
             if l == 4:
                 return ValueType.vec4f
+        elif t == tuple and len(value[0]) > 0 and type(value[0][0]) == float:
+            l = len(value[0])
+            if l == 2:
+                return ValueType.matrix2d
+            if l == 3:
+                return ValueType.matrix3d
+            if l == 4:
+                return ValueType.matrix4d
     return ValueType.Invalid
 
 def getValueType(value):
@@ -143,6 +152,7 @@ class CrateFile:
         self.strings = []
         self.fields = []
         self.reps = []
+        self.repsMap = {}
         self.fsets = []
         self.paths = []
         self.specs = []
@@ -161,14 +171,18 @@ class CrateFile:
 
     def addFieldItem(self, field, vType, array, inline, compressed, payload = 0):
         repIndex = len(self.reps)
-        self.fields.append(field)
         rep = (vType.value << 48) | (payload & PAYLOAD_MASK)
         if array:
             rep |= ARRAY_BIT
-        if inline:
-            rep |= INLINE_BIT
         if compressed:
             rep |= COMPRESSED_BIT
+        if inline:
+            rep |= INLINE_BIT
+            key = (field, rep)
+            if key in self.repsMap:
+                return self.repsMap[key]
+            self.repsMap[key] = repIndex
+        self.fields.append(field)
         self.reps.append(rep)
         return repIndex
 
@@ -189,6 +203,106 @@ class CrateFile:
         field = self.getTokenIndex(field)
         return self.addFieldItem(field, ValueType.Specifier, False, True, False, spec.value)
 
+    def addFieldInt(self, field, data):
+        field = self.getTokenIndex(field)
+        if type(data) == list:
+            ref = self.file.tell()
+            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            for i in data:
+                self.file.write(i.to_bytes(4, byteorder='little', signed=True))
+            return self.addFieldItem(field, ValueType.int, True, False, False, ref)
+        return self.addFieldItem(field, ValueType.int, False, True, False, data)
+
+    def addFieldVec2i(self, field, data):
+        field = self.getTokenIndex(field)
+        ref = self.file.tell()
+        if type(data) == list:
+            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            for i in data:
+                self.file.write(struct.pack('<2i', i[0], i[1]))
+            return self.addFieldItem(field, ValueType.vec2i, True, False, False, ref)
+        self.file.write(struct.pack('<2i', data[0], data[1]))
+        return self.addFieldItem(field, ValueType.vec2i, False, False, False, ref)
+
+    def addFieldVec3i(self, field, data):
+        field = self.getTokenIndex(field)
+        ref = self.file.tell()
+        if type(data) == list:
+            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            for i in data:
+                self.file.write(struct.pack('<3i', i[0], i[1], i[2]))
+            return self.addFieldItem(field, ValueType.vec3i, True, False, False, ref)
+        self.file.write(struct.pack('<3i', data[0], data[1], data[2]))
+        return self.addFieldItem(field, ValueType.vec3i, False, False, False, ref)
+
+    def addFieldVec4i(self, field, data):
+        field = self.getTokenIndex(field)
+        ref = self.file.tell()
+        if type(data) == list:
+            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            for i in data:
+                self.file.write(struct.pack('<4i', i[0], i[1], i[2], i[3]))
+            return self.addFieldItem(field, ValueType.vec4i, True, False, False, ref)
+        self.file.write(struct.pack('<4i', data[0], data[1], data[2], data[3]))
+        return self.addFieldItem(field, ValueType.vec4i, False, False, False, ref)
+
+    def addFieldFloat(self, field, data):
+        field = self.getTokenIndex(field)
+        if type(data) == list:
+            ref = self.file.tell()
+            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            for f in data:
+                self.file.write(struct.pack('<f', f))
+            return self.addFieldItem(field, ValueType.float, True, False, False, ref)
+        data = int.from_bytes(struct.pack('<f', data), 'little')
+        return self.addFieldItem(field, ValueType.float, False, True, False, data)
+
+    def addFieldVec2f(self, field, data):
+        field = self.getTokenIndex(field)
+        ref = self.file.tell()
+        if type(data) == list:
+            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            for f in data:
+                self.file.write(struct.pack('<2f', f[0], f[1]))
+            return self.addFieldItem(field, ValueType.vec2f, True, False, False, ref)
+        self.file.write(struct.pack('<2f', data[0], data[1]))
+        return self.addFieldItem(field, ValueType.vec2f, False, False, False, ref)
+
+    def addFieldVec3f(self, field, data):
+        field = self.getTokenIndex(field)
+        ref = self.file.tell()
+        if type(data) == list:
+            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            for f in data:
+                self.file.write(struct.pack('<3f', f[0], f[1], f[2]))
+            return self.addFieldItem(field, ValueType.vec3f, True, False, False, ref)
+        self.file.write(struct.pack('<3f', data[0], data[1], data[2]))
+        return self.addFieldItem(field, ValueType.vec3f, False, False, False, ref)
+
+    def addFieldVec4f(self, field, data):
+        field = self.getTokenIndex(field)
+        ref = self.file.tell()
+        if type(data) == list:
+            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            for f in data:
+                self.file.write(struct.pack('<4f', f[0], f[1], f[2], f[3]))
+            return self.addFieldItem(field, ValueType.vec3f, True, False, False, ref)
+        self.file.write(struct.pack('<4f', data[0], data[1], data[2], data[3]))
+        return self.addFieldItem(field, ValueType.vec3f, False, False, False, ref)
+
+    def addFieldMatrix4d(self, field, data):
+        field = self.getTokenIndex(field)
+        ref = self.file.tell()
+        if type(data) == list:
+            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            for m in data:
+                for r in m:
+                    self.file.write(struct.pack('<4d', r[0], r[1], r[2], r[3]))
+            return self.addFieldItem(field, ValueType.matrix4d, True, False, False, ref)
+        for r in data:
+            self.file.write(struct.pack('<4d', r[0], r[1], r[2], r[3]))
+        return self.addFieldItem(field, ValueType.matrix4d, False, False, False, ref)
+
     def addField(self, field, value, type = ValueType.UnregisteredValue):
         if type == ValueType.UnregisteredValue:
             type = getValueType(value)
@@ -198,6 +312,25 @@ class CrateFile:
             return self.addFieldTokenVector(field, value)
         if type == ValueType.Specifier:
             return self.addFieldSpecifier(field, value)
+        if type == ValueType.int:
+            return self.addFieldInt(field, value)
+        if type == ValueType.vec2i:
+            return self.addFieldVec2i(field, value)
+        if type == ValueType.vec3i:
+            return self.addFieldVec3i(field, value)
+        if type == ValueType.vec4i:
+            return self.addFieldVec4i(field, value)
+        if type == ValueType.float:
+            return self.addFieldFloat(field, value)
+        if type == ValueType.vec2f:
+            return self.addFieldVec2f(field, value)
+        if type == ValueType.vec3f:
+            return self.addFieldVec3f(field, value)
+        if type == ValueType.vec4f:
+            return self.addFieldVec4f(field, value)
+        if type == ValueType.matrix4d:
+            return self.addFieldMatrix4d(field, value)
+        print('type: ', type.name, value)
         return self.addFieldItem(field, type, False, True, False, value)
 
     def addPath(self, token, jump, prim):
