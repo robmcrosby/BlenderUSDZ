@@ -311,16 +311,15 @@ class CrateFile:
         print('type: ', type.name, value)
         return self.addFieldItem(field, type, False, True, False, value)
 
-    def addPath(self, token, jump, prim):
-        path = len(self.paths)
-        token = self.getTokenIndex(token)
+    def addPath(self, path, token, jump, prim):
         if prim:
             token *= -1
         self.paths.append((path, token, jump))
-        return path
 
-    def addSpec(self, path, fset, sType):
+    def addSpec(self, fset, sType):
+        path = len(self.specs)
         self.specs.append((path, fset, sType.value))
+        return path
 
     def writeBootStrap(self, tocOffset = 0):
         self.file.seek(0)

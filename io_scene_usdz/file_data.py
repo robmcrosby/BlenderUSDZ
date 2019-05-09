@@ -1,4 +1,5 @@
 import os
+import itertools
 
 #from io_scene_usdz.compression_utils import *
 from io_scene_usdz.crate_file import *
@@ -30,6 +31,9 @@ def print_time_samples(samples, indent = ''):
         src += indent+tab + print_data(frame) + ': ' + print_data(data) + ',\n'
     return src + indent + '}\n'
 
+def interleave_lists(lists):
+    return [x for x in itertools.chain(*itertools.zip_longest(*lists)) if x is not None]
+
 
 class FileItem:
     def __init__(self, type, name = '', data = None):
@@ -38,6 +42,9 @@ class FileItem:
         self.data = data
         self.properties = {}
         self.items = []
+        self.pathIndex = -1
+        self.pathJump = -2
+        self.nameToken = -1
 
     def addItem(self, type, name = '', data = None):
         item = FileItem(type, name, data)
@@ -50,15 +57,6 @@ class FileItem:
     def append(self, item):
         if item != None:
             self.items.append(item)
-
-    def getTokens(self, map):
-        #tokens = self.type.replace('"', '').split()
-        tokens = self.type.split()
-        for token in tokens:
-            map.add(token)
-        if 'def' in self.type:
-            for item in self.items:
-                item.getTokens(map)
 
     def printUsda(self, indent):
         src = ''
@@ -83,55 +81,87 @@ class FileItem:
                 src += '\n'
         return src
 
-    def writeUsdcPrim(self, crate):
-        fset = []
-        fset.append(crate.addField('typeName', self.type[4:]))
-        fset.append(crate.addField('specifier', SpecifierType.Def))
-        children = []
-        attributes = []
-        for item in self.items:
-            if len(item.items) > 0:
-                children.append(item)
-            else:
-                attributes.append(item)
-        jump = -2
-        if len(attributes) > 0:
-            jump = len(attributes) + 1
-            fset.append(crate.addFieldTokenVector('properties', [a.name for a in attributes]))
-        if len(children) > 0:
-            jump = -1
-            fset.append(crate.addFieldTokenVector('primChildren', [c.name for c in children]))
-        fset = crate.addFieldSet(fset)
-        path = crate.addPath(self.name, jump, False)
-        crate.addSpec(path, fset, SpecType.Prim)
-        for child in children:
-            child.writeUsdc(crate)
-        for att in attributes:
-            jump = -2 if att == attributes[-1] else 0
-            att.writeUsdc(crate, jump)
+    def isAttribute(self):
+        return self.type[:4] != 'def '
 
-    def writeUsdcAtt(self, crate, jump):
+    def getType(self):
+        return self.type.split()[-1]
+
+    def getQualifiers(self):
+        return self.type.split()[:-1]
+
+    def getItems(self, excluded = []):
+        return list(filter(lambda item: not item.getType() in excluded, self.items))
+
+    def getChildren(self, excluded = []):
+        return list(filter(lambda item: not item.isAttribute() and not item.getType() in excluded, self.items))
+
+    def getAttributes(self, excluded = []):
+        return list(filter(lambda item: item.isAttribute() and not item.getType() in excluded, self.items))
+
+    def countItems(self, excluded = []):
+        items = self.getItems(excluded)
+        count = len(items)
+        for item in items:
+            count += item.countItems(excluded)
+        return count
+
+    def getItemsOfType(self, type):
+        children = self.getChildren()
+        items = list(filter(lambda c: c.getType() == type, children))
+        for child in children:
+            items += child.getItemsOfType(type)
+        return items
+
+    def writeSpecsAtt(self, crate):
         fset = []
-        types = self.type.split()
-        fset.append(crate.addField('typeName', types[-1]))
-        for v in types[:-1]:
-            if v == 'uniform':
+        fset.append(crate.addField('typeName', self.getType()))
+        for q in self.getQualifiers():
+            if q == 'uniform':
                 fset.append(crate.addField('variability', True, ValueType.Variability))
-            elif v == 'custom':
+            elif q == 'custom':
                 fset.append(crate.addField('custom', True))
         for field, value in self.properties.items():
             fset.append(crate.addField(field, value))
-        fset.append(crate.addField('default', self.data))
+        if self.data != None:
+            fset.append(crate.addField('default', self.data))
         fset = crate.addFieldSet(fset)
-        path = crate.addPath(self.name, jump, True)
-        crate.addSpec(path, fset, SpecType.Attribute)
+        self.nameToken = crate.getTokenIndex(self.name)
+        self.pathIndex = crate.addSpec(fset, SpecType.Attribute)
 
+    def writeSpecsPrim(self, crate):
+        fset = []
+        fset.append(crate.addField('typeName', self.getType()))
+        fset.append(crate.addField('specifier', SpecifierType.Def))
+        children = self.getChildren()
+        attributes = self.getAttributes()
+        if len(attributes) > 0:
+            fset.append(crate.addFieldTokenVector('properties', [a.name for a in attributes]))
+        if len(children) > 0:
+            fset.append(crate.addFieldTokenVector('primChildren', [c.name for c in children]))
+        fset = crate.addFieldSet(fset)
+        self.nameToken = crate.getTokenIndex(self.name)
+        self.pathIndex = crate.addSpec(fset, SpecType.Attribute)
 
-    def writeUsdc(self, crate, jump = 0):
-        if self.type[:4] == 'def ':
-            self.writeUsdcPrim(crate)
+    def writeSpecs(self, crate):
+        if self.isAttribute():
+            self.writeSpecsAtt(crate)
         else:
-            self.writeUsdcAtt(crate, jump)
+            self.writeSpecsPrim(crate)
+
+    def writePath(self, crate):
+        crate.addPath(self.pathIndex, self.nameToken, self.pathJump, self.isAttribute())
+
+    def writeSubPaths(self, crate, excluded = []):
+        children = self.getChildren(excluded)
+        attributes = self.getAttributes(excluded)
+        for child in children:
+            child.pathJump = child.countItems(excluded) + 1
+            child.writePath(crate)
+            child.writeSubPaths(crate)
+        for attribute in attributes:
+            attribute.pathJump = -2 if attribute == attributes[-1] else 0
+            attribute.writePath(crate)
 
 
 class FileData:
@@ -148,17 +178,18 @@ class FileData:
         if item != None:
             self.items.append(item)
 
-    def getTokens(self):
-        tokens = set()
-        for token in self.properties.keys():
-            tokens.add(token)
-        for item in self.items:
-            item.getTokens(tokens)
-        return tokens
+    def getChildren(self):
+        return list(filter(lambda item: not item.isAttribute(), self.items))
 
-    def getStrings(self):
-        strings = []
-        return strings
+    def getAttributes(self):
+        return list(filter(lambda item: item.isAttribute(), self.items))
+
+    def getItemsOfType(self, type):
+        children = self.getChildren()
+        items = list(filter(lambda c: c.getType() == type, children))
+        for child in children:
+            items += child.getItemsOfType(type)
+        return items
 
     def printUsda(self):
         src = '#usda 1.0\n'
@@ -188,20 +219,51 @@ class FileData:
             if type(value) == str:
                 value = value.replace('"', '')
             fset.append(crate.addField(name, value))
-        if len(self.items) > 0:
-            names = []
-            for item in self.items:
-                names.append(item.name)
-            fset.append(crate.addFieldTokenVector('primChildren', names))
+        children = self.getChildren()
+        if len(children) > 0:
+            fset.append(crate.addFieldTokenVector('primChildren', [c.name for c in children]))
         fset = crate.addFieldSet(fset)
-        # Add path and spec
+        # Add the root spec
+        path = crate.addSpec(fset, SpecType.PseudoRoot)
+        # Write Xform Specs
+        xforms = self.getItemsOfType('Xform')
+        for xform in xforms:
+            xform.writeSpecs(crate)
+        # Write Mesh Specs
+        meshes = self.getItemsOfType('Mesh')
+        for mesh in reversed(meshes):
+            mesh.writeSpecs(crate)
+        # Write Mesh Attribute Specs
+        atts = interleave_lists([m.getAttributes() for m in reversed(meshes)])
+        for att in atts:
+            att.writeSpecs(crate)
+        # Write Xform Attribute Specs
+        atts = interleave_lists([x.getAttributes() for x in reversed(xforms)])
+        for att in atts:
+            att.writeSpecs(crate)
+        # Add Root Attribute specs
+        for att in self.getAttributes():
+            att.writeSpecs()
+
+        # Add the first path
         jump = -1 if len(self.items) > 0 else -2
-        path = crate.addPath('', jump, False)
-        crate.addSpec(path, fset, SpecType.PseudoRoot)
+        token = crate.getTokenIndex('')
+        crate.addPath(path, token, jump, False)
+        count = 0
+        for xform in reversed(xforms):
+            count += xform.countItems(['Xform']) + 1
+            xform.pathJump = -1 if xform == xforms[0] else count
+        for xform in xforms:
+            xform.writePath(crate)
+        for xform in reversed(xforms):
+            xform.writeSubPaths(crate, ['Xform'])
+
+        """
         # Write items
         for item in self.items:
             jump = -2 if item == self.items[-1] else 0
             item.writeUsdc(crate)
+        """
         # Finish Writing the usdc file
         crate.writeSections()
         crate.writeTableOfContents()
