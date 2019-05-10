@@ -34,7 +34,6 @@ def print_time_samples(samples, indent = ''):
 def interleave_lists(lists):
     return [x for x in itertools.chain(*itertools.zip_longest(*lists)) if x is not None]
 
-
 class FileItem:
     def __init__(self, type, name = '', data = None):
         self.type = type
@@ -169,9 +168,9 @@ class FileItem:
         children = self.getChildren()
         attributes = self.getAttributes()
         if len(attributes) > 0:
-            fset.append(crate.addFieldTokenVector('properties', [a.name for a in attributes]))
+            fset.append(crate.addFieldTokenVector('properties', [a.getName() for a in attributes]))
         if len(children) > 0:
-            fset.append(crate.addFieldTokenVector('primChildren', [c.name for c in children]))
+            fset.append(crate.addFieldTokenVector('primChildren', [c.getName() for c in children]))
         fset = crate.addFieldSet(fset)
         self.nameToken = crate.getTokenIndex(self.getName())
         self.pathIndex = crate.addSpec(fset, SpecType.Prim)
@@ -299,6 +298,7 @@ class FileData:
         meshAtts = interleave_lists([m.getAttributes() for m in reversed(meshes)])
         for att in meshAtts:
             att.writeSpecs(crate)
+
         # Write Xform Attribute Specs
         atts = interleave_lists([x.getAttributes() for x in reversed(xforms)])
         for att in atts:
