@@ -286,10 +286,10 @@ def usdInt32Compress(values):
         value = values[v]
         i = v + 16
         if value != commonValue:
-            if value.bit_length() <= 8:
+            if value.bit_length() < 8:
                 data[i//4] |= 1 << ((i%4)*2)
                 data += value.to_bytes(1, 'little', signed=True)
-            elif value.bit_length() <= 16:
+            elif value.bit_length() < 16:
                 data[i//4] |= 2 << ((i%4)*2)
                 data += value.to_bytes(2, 'little', signed=True)
             else:
