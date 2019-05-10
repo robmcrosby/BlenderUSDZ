@@ -67,18 +67,18 @@ class Material:
         ior = get_ior_value(self.shaderNode)
         useSpecular = 0 if metallic > 0.0 else 1
         self.inputs = {
-            'diffuseColor':ShaderInput('color3f', 'diffuseColor', diffuse),
-            'specularColor':ShaderInput('color3f', 'specularColor', specular),
-            'emissiveColor':ShaderInput('color3f', 'emissiveColor', emissive),
             'clearcoat':ShaderInput('float', 'clearcoat', clearcoat),
             'clearcoatRoughness':ShaderInput('float', 'clearcoatRoughness', clearcoatRoughness),
+            'diffuseColor':ShaderInput('color3f', 'diffuseColor', diffuse),
             'displacement':ShaderInput('float', 'displacement', 0),
+            'emissiveColor':ShaderInput('color3f', 'emissiveColor', emissive),
             'ior':ShaderInput('float', 'ior', ior),
             'metallic':ShaderInput('float', 'metallic', metallic),
             'normal':ShaderInput('normal3f', 'normal', (0.0, 0.0, 1.0)),
             'occlusion':ShaderInput('float', 'occlusion', 0.0),
-            'roughness':ShaderInput('float', 'roughness', roughness),
             'opacity':ShaderInput('float', 'opacity', opacity),
+            'roughness':ShaderInput('float', 'roughness', roughness),
+            'specularColor':ShaderInput('color3f', 'specularColor', specular),
             'useSpecularWorkflow':ShaderInput('int', 'useSpecularWorkflow', useSpecular),
         }
 
@@ -436,9 +436,9 @@ class Object:
         for layer in mesh.uv_layers:
             indices, uvs = export_mesh_uvs(mesh, layer, material)
             name = layer.name.replace('.', '_')
-            items.append(FileItem('int[]', 'primvars:'+name+':indices', indices))
             items.append(FileItem('texCoord2f[]', 'primvars:'+name, uvs))
             items[-1].properties['interpolation'] = '"faceVarying"'
+            items.append(FileItem('int[]', 'primvars:'+name+':indices', indices))
         return items
 
     def exportJointItems(self, material):
@@ -473,18 +473,20 @@ class Object:
 
         indices, points = export_mesh_vertices(mesh, material)
         item.addItem('int[]', 'faceVertexIndices', indices)
-        item.addItem('point3f[]', 'points', points)
 
         if material >= 0:
             path = self.materials[material].getPath()
             item.addItem('rel', 'material:binding', '<'+path+'>')
 
-        indices, normals = export_mesh_normals(mesh, material)
-        item.addItem('int[]', 'primvars:normals:indices', indices)
-        item.addItem('normal3f[]', 'primvars:normals', normals)
-        item.items[-1].properties['interpolation'] = '"faceVarying"'
+        item.addItem('point3f[]', 'points', points)
 
         item.items += self.exportMeshUvItems(material)
+
+        indices, normals = export_mesh_normals(mesh, material)
+        item.addItem('normal3f[]', 'primvars:normals', normals)
+        item.items[-1].properties['interpolation'] = '"faceVarying"'
+        item.addItem('int[]', 'primvars:normals:indices', indices)
+
         item.items += self.exportJointItems(material)
         item.addItem('uniform token', 'subdivisionScheme', '"none"')
         return item

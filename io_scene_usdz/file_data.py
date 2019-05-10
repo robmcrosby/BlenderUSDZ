@@ -45,6 +45,7 @@ class FileItem:
         self.pathIndex = -1
         self.pathJump = -2
         self.nameToken = -1
+        self.pathStr = ''
 
     def addItem(self, type, name = '', data = None):
         item = FileItem(type, name, data)
@@ -57,6 +58,11 @@ class FileItem:
     def append(self, item):
         if item != None:
             self.items.append(item)
+
+    def updatePathStrings(self, parentStr):
+        self.pathStr = parentStr + '/' + self.name
+        for item in self.items:
+            item.updatePathStrings(self.pathStr)
 
     def printUsda(self, indent):
         src = ''
@@ -84,8 +90,16 @@ class FileItem:
     def isAttribute(self):
         return self.type[:4] != 'def '
 
+    def isPath(self):
+        return type(self.data) == str and self.data.startswith('<') and self.data.endswith('>')
+
     def getType(self):
         return self.type.split()[-1]
+
+    def getName(self):
+        if self.name[-8:] == '.connect':
+            return self.name[:-8]
+        return self.name
 
     def getQualifiers(self):
         return self.type.split()[:-1]
@@ -126,8 +140,27 @@ class FileItem:
         if self.data != None:
             fset.append(crate.addField('default', self.data))
         fset = crate.addFieldSet(fset)
-        self.nameToken = crate.getTokenIndex(self.name)
+        self.nameToken = crate.getTokenIndex(self.getName())
         self.pathIndex = crate.addSpec(fset, SpecType.Attribute)
+        crate.pathMap[self.pathStr] = self.pathIndex
+
+    def writeSpecsPath(self, crate):
+        pathStr = self.data[1:-1].replace('.', '/')
+        #pathIndex = 0
+        #if pathStr in crate.pathMap:
+        pathIndex = crate.pathMap[pathStr]
+        type = self.getType()
+        listOpField = 'targetPaths' if type == 'rel' else 'connectionPaths'
+        vectorField = 'targetChildren' if type == 'rel' else 'connectionChildren'
+        specType = SpecType.Relationship if type == 'rel' else SpecType.Attribute
+        fset = []
+        fset.append(crate.addField('variability', True, ValueType.Variability))
+        fset.append(crate.addFieldPathListOp(listOpField, pathIndex))
+        fset.append(crate.addFieldPathVector(vectorField, pathIndex))
+        fset = crate.addFieldSet(fset)
+        self.nameToken = crate.getTokenIndex(self.getName())
+        self.pathIndex = crate.addSpec(fset, specType)
+        crate.pathMap[self.pathStr] = self.pathIndex
 
     def writeSpecsPrim(self, crate):
         fset = []
@@ -140,12 +173,16 @@ class FileItem:
         if len(children) > 0:
             fset.append(crate.addFieldTokenVector('primChildren', [c.name for c in children]))
         fset = crate.addFieldSet(fset)
-        self.nameToken = crate.getTokenIndex(self.name)
-        self.pathIndex = crate.addSpec(fset, SpecType.Attribute)
+        self.nameToken = crate.getTokenIndex(self.getName())
+        self.pathIndex = crate.addSpec(fset, SpecType.Prim)
+        crate.pathMap[self.pathStr] = self.pathIndex
 
     def writeSpecs(self, crate):
         if self.isAttribute():
-            self.writeSpecsAtt(crate)
+            if self.isPath():
+                self.writeSpecsPath(crate)
+            else:
+                self.writeSpecsAtt(crate)
         else:
             self.writeSpecsPrim(crate)
 
@@ -171,12 +208,18 @@ class FileData:
 
     def addItem(self, type, name = '', data = None):
         item = FileItem(type, name, data)
+        item.pathStr = '/' + name
         self.items.append(item)
         return item
 
     def append(self, item):
         if item != None:
+            item.pathStr = '/' + item.name
             self.items.append(item)
+
+    def updatePathStrings(self):
+        for item in self.items:
+            item.updatePathStrings('')
 
     def getChildren(self):
         return list(filter(lambda item: not item.isAttribute(), self.items))
@@ -213,6 +256,8 @@ class FileData:
         file = open(filePath, 'wb')
         crate = CrateFile(file)
         crate.writeBootStrap()
+        # Update Path Strings for the items
+        self.updatePathStrings()
         # Add the fields
         fset = []
         for name, value in self.properties.items():
@@ -229,13 +274,30 @@ class FileData:
         xforms = self.getItemsOfType('Xform')
         for xform in xforms:
             xform.writeSpecs(crate)
+        # Write Materal Specs
+        attLists = []
+        materials = self.getItemsOfType('Material')
+        for material in materials:
+            attList = []
+            material.writeSpecs(crate)
+            for child in material.getChildren():
+                child.writeSpecs(crate)
+                attList += child.getAttributes()
+            attLists.append(attList + material.getAttributes())
+        materialAtts = interleave_lists(attLists)
+
         # Write Mesh Specs
         meshes = self.getItemsOfType('Mesh')
         for mesh in reversed(meshes):
             mesh.writeSpecs(crate)
+
+        # Write Material Attribute Specs
+        for att in materialAtts:
+            att.writeSpecs(crate)
+
         # Write Mesh Attribute Specs
-        atts = interleave_lists([m.getAttributes() for m in reversed(meshes)])
-        for att in atts:
+        meshAtts = interleave_lists([m.getAttributes() for m in reversed(meshes)])
+        for att in meshAtts:
             att.writeSpecs(crate)
         # Write Xform Attribute Specs
         atts = interleave_lists([x.getAttributes() for x in reversed(xforms)])
@@ -243,7 +305,7 @@ class FileData:
             att.writeSpecs(crate)
         # Add Root Attribute specs
         for att in self.getAttributes():
-            att.writeSpecs()
+            att.writeSpecs(crate)
 
         # Add the first path
         jump = -1 if len(self.items) > 0 else -2
@@ -256,7 +318,12 @@ class FileData:
         for xform in xforms:
             xform.writePath(crate)
         for xform in reversed(xforms):
-            xform.writeSubPaths(crate, ['Xform'])
+            materials = xform.getItemsOfType('Material')
+            for material in materials:
+                material.pathJump = material.countItems() + 1
+                material.writePath(crate)
+                material.writeSubPaths(crate)
+            xform.writeSubPaths(crate, ['Xform', 'Material'])
 
         """
         # Write items

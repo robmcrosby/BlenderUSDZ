@@ -145,6 +145,23 @@ def getValueType(value):
         return ValueType.Specifier
     return ValueType.Invalid
 
+def isWholeHalfs(vector):
+    for f in vector:
+        if not f.is_integer():
+            return False
+        i = int(f)
+        if i.bit_length() > 16:
+            return False
+    return True
+
+def isWholeBytes(vector):
+    for f in vector:
+        if not f.is_integer():
+            return False
+        i = int(f)
+        if i.bit_length() > 8:
+            return False
+    return True
 
 
 class CrateFile:
@@ -158,6 +175,7 @@ class CrateFile:
         self.reps = []
         self.repsMap = {}
         self.fsets = []
+        self.pathMap = {}
         self.paths = []
         self.specs = []
 
@@ -212,6 +230,23 @@ class CrateFile:
         self.file.write(bytes(4))
         return self.addFieldItem(field, ValueType.TokenVector, False, False, False, ref)
 
+    def addFieldPathListOp(self, field, pathIndex):
+        field = self.getTokenIndex(field)
+        ref = self.file.tell()
+        op = 259
+        self.file.write(op.to_bytes(8, byteorder='little'))
+        self.file.write(bytes(1))
+        self.file.write(pathIndex.to_bytes(4, byteorder='little'))
+        return self.addFieldItem(field, ValueType.PathListOp, False, False, False, ref)
+
+    def addFieldPathVector(self, field, pathIndex):
+        field = self.getTokenIndex(field)
+        ref = self.file.tell()
+        count = 1
+        self.file.write(count.to_bytes(8, byteorder='little'))
+        self.file.write(pathIndex.to_bytes(4, byteorder='little'))
+        return self.addFieldItem(field, ValueType.PathVector, False, False, False, ref)
+
     def addFieldSpecifier(self, field, spec):
         field = self.getTokenIndex(field)
         return self.addFieldItem(field, ValueType.Specifier, False, True, False, spec.value)
@@ -257,9 +292,17 @@ class CrateFile:
                 self.file.write(struct.pack(packStr, *v))
             #writeToAlign(self.file)
             return self.addFieldItem(field, vType, True, False, False, ref)
-        self.file.write(struct.pack(packStr, *data))
-        #writeToAlign(self.file)
-        return self.addFieldItem(field, vType, False, False, False, ref)
+        if isWholeBytes(data):
+            nBytes = 2 * len(data)
+            data = [int(f) for f in data]
+            packStr = packStr.replace('f', 'b')
+            data = struct.pack(packStr, *data)
+            data = int.from_bytes(data, 'little')
+            return self.addFieldItem(field, vType, False, True, False, data)
+        else:
+            self.file.write(struct.pack(packStr, *data))
+            #writeToAlign(self.file)
+            return self.addFieldItem(field, vType, False, False, False, ref)
 
     def addFieldMatrix(self, field, data, vType):
         field = self.getTokenIndex(field)
