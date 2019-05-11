@@ -27,7 +27,7 @@ class ShaderInput:
         if self.image != None and self.uvMap != None:
             v = self.value
             default = (v, v, v, 1.0) if self.type == 'float' else v+(1.0,)
-            path = '</Materials/'+material+'/primvar_'+self.uvMap+'.outputs:result>'
+            path = '<'+material.getPath()+'/primvar_'+self.uvMap+'.outputs:result>'
             item = FileItem('def Shader', self.name+'_map')
             item.addItem('uniform token', 'info:id', '"UsdUVTexture"')
             item.addItem('float4', 'inputs:default', default)
@@ -217,7 +217,7 @@ class Material:
     def exportInputItems(self):
         items = []
         for input in self.inputs.values():
-            item = input.exportShaderItem(self.name)
+            item = input.exportShaderItem(self)
             if item != None:
                 items.append(item)
         return items
