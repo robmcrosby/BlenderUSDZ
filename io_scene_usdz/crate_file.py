@@ -8,9 +8,12 @@ INLINE_BIT = (1 << 62)
 COMPRESSED_BIT = (1 << 61)
 PAYLOAD_MASK = (1 << 48) - 1
 
+def writeInt(file, value, size, byteorder='little', signed=False):
+    file.write(value.to_bytes(size, byteorder=byteorder, signed=signed))
+
 def writeInt32Compressed(file, data):
     buffer = lz4Compress(usdInt32Compress(data))
-    file.write(len(buffer).to_bytes(8, byteorder='little'))
+    writeInt(file, len(buffer), 8)
     file.write(buffer)
 
 def writeToAlign(file, size):
@@ -218,10 +221,10 @@ class CrateFile:
         field = self.getTokenIndex(field)
         if type(data) == list:
             ref = self.file.tell()
-            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            writeInt(self.file, len(data), 4)
             for token in data:
                 token = self.getTokenIndex(token.replace('"', ''))
-                self.file.write(token.to_bytes(4, byteorder='little'))
+                writeInt(self.file, token, 4)
             return self.addFieldItem(field, ValueType.token, True, False, False, ref)
         token = self.getTokenIndex(data.replace('"', ''))
         return self.addFieldItem(field, ValueType.token, False, True, False, token)
@@ -229,10 +232,10 @@ class CrateFile:
     def addFieldTokenVector(self, field, tokens):
         field = self.getTokenIndex(field)
         ref = self.file.tell()
-        self.file.write(len(tokens).to_bytes(8, byteorder='little'))
+        writeInt(self.file, len(tokens), 8)
         for token in tokens:
             token = token.replace('"', '')
-            self.file.write(self.getTokenIndex(token).to_bytes(4, byteorder='little'))
+            writeInt(self.file, self.getTokenIndex(token), 4)
         self.file.write(bytes(4))
         return self.addFieldItem(field, ValueType.TokenVector, False, False, False, ref)
 
@@ -240,17 +243,16 @@ class CrateFile:
         field = self.getTokenIndex(field)
         ref = self.file.tell()
         op = 259
-        self.file.write(op.to_bytes(8, byteorder='little'))
+        writeInt(self.file, op, 8)
         self.file.write(bytes(1))
-        self.file.write(pathIndex.to_bytes(4, byteorder='little'))
+        writeInt(self.file, pathIndex, 4)
         return self.addFieldItem(field, ValueType.PathListOp, False, False, False, ref)
 
     def addFieldPathVector(self, field, pathIndex):
         field = self.getTokenIndex(field)
         ref = self.file.tell()
-        count = 1
-        self.file.write(count.to_bytes(8, byteorder='little'))
-        self.file.write(pathIndex.to_bytes(4, byteorder='little'))
+        writeInt(self.file, 1, 8)
+        writeInt(self.file, pathIndex, 4)
         return self.addFieldItem(field, ValueType.PathVector, False, False, False, ref)
 
     def addFieldSpecifier(self, field, spec):
@@ -261,14 +263,13 @@ class CrateFile:
         field = self.getTokenIndex(field)
         if type(data) == list:
             ref = self.file.tell()
-            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            writeInt(self.file, len(data), 4)
             if len(data) > 16:
                 # Compress the data
                 writeInt32Compressed(self.file, data)
                 return self.addFieldItem(field, ValueType.int, True, False, True, ref)
             for i in data:
-                self.file.write(i.to_bytes(4, byteorder='little', signed=True))
-            #writeToAlign(self.file)
+                writeInt(self.file, i, 4, signed=True)
             return self.addFieldItem(field, ValueType.int, True, False, False, ref)
         return self.addFieldItem(field, ValueType.int, False, True, False, data)
 
@@ -276,10 +277,9 @@ class CrateFile:
         field = self.getTokenIndex(field)
         if type(data) == list:
             ref = self.file.tell()
-            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            writeInt(self.file, len(data), 4)
             for f in data:
                 self.file.write(struct.pack('<f', f))
-            #writeToAlign(self.file)
             return self.addFieldItem(field, ValueType.float, True, False, False, ref)
         data = int.from_bytes(struct.pack('<f', data), 'little')
         return self.addFieldItem(field, ValueType.float, False, True, False, data)
@@ -288,10 +288,9 @@ class CrateFile:
         field = self.getTokenIndex(field)
         if type(data) == list:
             ref = self.file.tell()
-            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            writeInt(self.file, len(data), 4)
             for d in data:
                 self.file.write(struct.pack('<d', d))
-            #writeToAlign(self.file)
             return self.addFieldItem(field, ValueType.double, True, False, False, ref)
         data = int.from_bytes(struct.pack('<f', data), 'little')
         return self.addFieldItem(field, ValueType.double, False, True, False, data)
@@ -301,10 +300,9 @@ class CrateFile:
         ref = self.file.tell()
         packStr = '<'+vType.name[-2:]
         if type(data) == list:
-            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            writeInt(self.file, len(data), 4)
             for v in data:
                 self.file.write(struct.pack(packStr, *v))
-            #writeToAlign(self.file)
             return self.addFieldItem(field, vType, True, False, False, ref)
         if isWholeBytes(data):
             nBytes = 2 * len(data)
@@ -315,7 +313,6 @@ class CrateFile:
             return self.addFieldItem(field, vType, False, True, False, data)
         else:
             self.file.write(struct.pack(packStr, *data))
-            #writeToAlign(self.file)
             return self.addFieldItem(field, vType, False, False, False, ref)
 
     def addFieldMatrix(self, field, data, vType):
@@ -323,15 +320,13 @@ class CrateFile:
         ref = self.file.tell()
         packStr = '<'+vType.name[-2:]
         if type(data) == list:
-            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            writeInt(self.file, len(data), 4)
             for matrix in data:
                 for row in matrix:
                     self.file.write(struct.pack(packStr, *row))
-            #writeToAlign(self.file)
             return self.addFieldItem(field, vType, True, False, False, ref)
         for row in data:
             self.file.write(struct.pack(packStr, *row))
-        #writeToAlign(self.file)
         return self.addFieldItem(field, vType, False, False, False, ref)
 
     def addFieldBool(self, field, data):
@@ -362,21 +357,17 @@ class CrateFile:
                 refMap[value] = ref
                 refs.append(ref)
         reference = self.file.tell()
-        self.file.write(size.to_bytes(8, byteorder='little'))
-        self.file.write(count.to_bytes(8, byteorder='little'))
+        writeInt(self.file, size, 8)
+        writeInt(self.file, count, 8)
         for frame in frames:
             self.file.write(struct.pack('<d', frame))
-        ref = reference + 8
-        self.file.write(ref.to_bytes(4, byteorder='little'))
-        bType = ValueType.DoubleVector.value << 16
-        self.file.write(bType.to_bytes(4, byteorder='little'))
-        size = 8
-        self.file.write(size.to_bytes(8, byteorder='little'))
-        self.file.write(count.to_bytes(8, byteorder='little'))
-        bType = vType.value << 16
+        writeInt(self.file, reference + 8, 6)
+        writeInt(self.file, ValueType.DoubleVector.value, 2)
+        writeInt(self.file, 8, 8)
+        writeInt(self.file, count, 8)
         for ref in refs:
-            self.file.write(ref.to_bytes(4, byteorder='little'))
-            self.file.write(bType.to_bytes(4, byteorder='little'))
+            writeInt(self.file, ref, 6)
+            writeInt(self.file, vType.value, 2)
         return self.addFieldItem(field, ValueType.TimeSamples, False, False, False, reference)
 
     def addField(self, field, value, type = ValueType.UnregisteredValue):
@@ -419,19 +410,19 @@ class CrateFile:
         # Version
         self.file.write(b'\x00\x06\x00\x00\x00\x00\x00\x00')
         # Table of Contents Offset
-        print('tocOffset: ', tocOffset)
-        self.file.write(tocOffset.to_bytes(8, byteorder='little'))
+        #print('tocOffset: ', tocOffset)
+        writeInt(self.file, tocOffset, 8)
         self.file.write(bytes(64))
 
     def writeTokensSection(self):
         start = self.file.tell()
-        self.file.write(len(self.tokens).to_bytes(8, byteorder='little'))
+        writeInt(self.file, len(self.tokens), 8)
         buffer = bytearray()
         for token in self.tokens:
             buffer += token.encode() + b'\0'
-        self.file.write(len(buffer).to_bytes(8, byteorder='little'))
+        writeInt(self.file, len(buffer), 8)
         buffer = lz4Compress(buffer)
-        self.file.write(len(buffer).to_bytes(8, byteorder='little'))
+        writeInt(self.file, len(buffer), 8)
         self.file.write(buffer)
         size = self.file.tell() - start
         self.toc.append((b'TOKENS', start, size))
@@ -439,24 +430,23 @@ class CrateFile:
     def writeStringsSection(self):
         start = self.file.tell()
         self.file.write(bytes(8))
-        #self.file.write(len(self.strings).to_bytes(8, 'little'))
-        #writeInt32Compressed(self.file, self.strings)
+        # This section is empty for now
         size = self.file.tell() - start
         self.toc.append((b'STRINGS', start, size))
 
     def writeFieldsSection(self):
         start = self.file.tell()
-        self.file.write(len(self.fields).to_bytes(8, byteorder='little'))
+        writeInt(self.file, len(self.fields), 8)
         writeInt32Compressed(self.file, self.fields)
         buffer = lz4Compress(encodeInts(self.reps, 8))
-        self.file.write(len(buffer).to_bytes(8, byteorder='little'))
+        writeInt(self.file, len(buffer), 8)
         self.file.write(buffer)
         size = self.file.tell() - start
         self.toc.append((b'FIELDS', start, size))
 
     def writeFieldSetsSection(self):
         start = self.file.tell()
-        self.file.write(len(self.fsets).to_bytes(8, byteorder='little'))
+        writeInt(self.file, len(self.fsets), 8)
         writeInt32Compressed(self.file, self.fsets)
         size = self.file.tell() - start
         self.toc.append((b'FIELDSETS', start, size))
@@ -470,8 +460,8 @@ class CrateFile:
             paths.append(path)
             tokens.append(token)
             jumps.append(jump)
-        self.file.write(len(self.paths).to_bytes(8, byteorder='little'))
-        self.file.write(len(self.paths).to_bytes(8, byteorder='little'))
+        writeInt(self.file, len(self.paths), 8)
+        writeInt(self.file, len(self.paths), 8)
         writeInt32Compressed(self.file, paths)
         writeInt32Compressed(self.file, tokens)
         writeInt32Compressed(self.file, jumps)
@@ -487,7 +477,7 @@ class CrateFile:
             paths.append(path)
             fsets.append(fset)
             types.append(type)
-        self.file.write(len(self.specs).to_bytes(8, byteorder='little'))
+        writeInt(self.file, len(self.specs), 8)
         writeInt32Compressed(self.file, paths)
         writeInt32Compressed(self.file, fsets)
         writeInt32Compressed(self.file, types)
@@ -505,10 +495,10 @@ class CrateFile:
     def writeTableOfContents(self):
         tocStart = self.file.tell()
         print('tocStart: ', tocStart)
-        self.file.write(len(self.toc).to_bytes(8, byteorder='little'))
+        writeInt(self.file, len(self.toc), 8)
         for name, start, size in self.toc:
             self.file.write(name)
             self.file.write(bytes(16-len(name)))
-            self.file.write(start.to_bytes(8, byteorder='little'))
-            self.file.write(size.to_bytes(8, byteorder='little'))
+            writeInt(self.file, start, 8)
+            writeInt(self.file, size, 8)
         self.writeBootStrap(tocStart)
