@@ -145,6 +145,12 @@ def getValueType(value):
         return ValueType.Specifier
     return ValueType.Invalid
 
+def writeValue(file, value, vType):
+    if vType == ValueType.matrix4d:
+        packStr = '<'+vType.name[-2:]
+        for row in value:
+            file.write(struct.pack(packStr, *row))
+
 def isWholeHalfs(vector):
     for f in vector:
         if not f.is_integer():
@@ -259,10 +265,6 @@ class CrateFile:
             if len(data) > 16:
                 # Compress the data
                 writeInt32Compressed(self.file, data)
-                #buffer = lz4Compress(encodeInts(data, 4, signed=True))
-                #self.file.write(len(buffer).to_bytes(8, byteorder='little'))
-                #self.file.write(buffer)
-                #writeToAlign(self.file)
                 return self.addFieldItem(field, ValueType.int, True, False, True, ref)
             for i in data:
                 self.file.write(i.to_bytes(4, byteorder='little', signed=True))
@@ -281,6 +283,18 @@ class CrateFile:
             return self.addFieldItem(field, ValueType.float, True, False, False, ref)
         data = int.from_bytes(struct.pack('<f', data), 'little')
         return self.addFieldItem(field, ValueType.float, False, True, False, data)
+
+    def addFieldDouble(self, field, data):
+        field = self.getTokenIndex(field)
+        if type(data) == list:
+            ref = self.file.tell()
+            self.file.write(len(data).to_bytes(4, byteorder='little'))
+            for d in data:
+                self.file.write(struct.pack('<d', d))
+            #writeToAlign(self.file)
+            return self.addFieldItem(field, ValueType.double, True, False, False, ref)
+        data = int.from_bytes(struct.pack('<f', data), 'little')
+        return self.addFieldItem(field, ValueType.double, False, True, False, data)
 
     def addFieldVector(self, field, data, vType):
         field = self.getTokenIndex(field)
@@ -329,6 +343,41 @@ class CrateFile:
         field = self.getTokenIndex(field)
         data = 1 if data else 0
         return self.addFieldItem(field, ValueType.Variability, False, True, False, data)
+
+    def addFieldTimeSamples(self, field, data):
+        field = self.getTokenIndex(field)
+        vType = getValueType(data[0][1])
+        count = len(data)
+        size = 8*(count+2)
+        frames = []
+        refs = []
+        refMap = {}
+        for frame, value in data:
+            frames.append(float(frame))
+            if value in refMap:
+                refs.append(refMap[value])
+            else:
+                ref = self.file.tell()
+                writeValue(self.file, value, vType)
+                refMap[value] = ref
+                refs.append(ref)
+        reference = self.file.tell()
+        self.file.write(size.to_bytes(8, byteorder='little'))
+        self.file.write(count.to_bytes(8, byteorder='little'))
+        for frame in frames:
+            self.file.write(struct.pack('<d', frame))
+        ref = reference + 8
+        self.file.write(ref.to_bytes(4, byteorder='little'))
+        bType = ValueType.DoubleVector.value << 16
+        self.file.write(bType.to_bytes(4, byteorder='little'))
+        size = 8
+        self.file.write(size.to_bytes(8, byteorder='little'))
+        self.file.write(count.to_bytes(8, byteorder='little'))
+        bType = vType.value << 16
+        for ref in refs:
+            self.file.write(ref.to_bytes(4, byteorder='little'))
+            self.file.write(bType.to_bytes(4, byteorder='little'))
+        return self.addFieldItem(field, ValueType.TimeSamples, False, False, False, reference)
 
     def addField(self, field, value, type = ValueType.UnregisteredValue):
         if type == ValueType.UnregisteredValue:

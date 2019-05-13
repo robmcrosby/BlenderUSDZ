@@ -60,8 +60,9 @@ class FileItem:
 
     def updatePathStrings(self, parentStr):
         self.pathStr = parentStr + '/' + self.name
-        for item in self.items:
-            item.updatePathStrings(self.pathStr)
+        if not self.hasTimeSamples():
+            for item in self.items:
+                item.updatePathStrings(self.pathStr)
 
     def printUsda(self, indent):
         src = ''
@@ -92,24 +93,35 @@ class FileItem:
     def isPath(self):
         return type(self.data) == str and self.data.startswith('<') and self.data.endswith('>')
 
+    def hasTimeSamples(self):
+        return len(self.items) > 0 and type(self.items[0]) == tuple
+
     def getType(self):
         return self.type.split()[-1]
 
     def getName(self):
         if self.name[-8:] == '.connect':
             return self.name[:-8]
+        if self.name[-12:] == '.timeSamples':
+            return self.name[:-12]
         return self.name
 
     def getQualifiers(self):
         return self.type.split()[:-1]
 
     def getItems(self, excluded = []):
+        if self.hasTimeSamples():
+            return []
         return list(filter(lambda item: not item.getType() in excluded, self.items))
 
     def getChildren(self, excluded = []):
+        if self.hasTimeSamples():
+            return []
         return list(filter(lambda item: not item.isAttribute() and not item.getType() in excluded, self.items))
 
     def getAttributes(self, excluded = []):
+        if self.hasTimeSamples():
+            return []
         return list(filter(lambda item: item.isAttribute() and not item.getType() in excluded, self.items))
 
     def countItems(self, excluded = []):
@@ -138,6 +150,8 @@ class FileItem:
             fset.append(crate.addField(field, value))
         if self.data != None:
             fset.append(crate.addField('default', self.data))
+        if self.hasTimeSamples():
+            fset.append(crate.addFieldTimeSamples('timeSamples', self.items))
         fset = crate.addFieldSet(fset)
         self.nameToken = crate.getTokenIndex(self.getName())
         self.pathIndex = crate.addSpec(fset, SpecType.Attribute)
@@ -262,7 +276,11 @@ class FileData:
         for name, value in self.properties.items():
             if type(value) == str:
                 value = value.replace('"', '')
-            fset.append(crate.addField(name, value))
+            if name == 'startTimeCode' or name == 'endTimeCode' or name == 'timeCodesPerSecond':
+                value = float(value)
+                fset.append(crate.addFieldDouble(name, value))
+            else:
+                fset.append(crate.addField(name, value))
         children = self.getChildren()
         if len(children) > 0:
             fset.append(crate.addFieldTokenVector('primChildren', [c.name for c in children]))

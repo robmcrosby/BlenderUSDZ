@@ -23,8 +23,12 @@ from io_scene_usdz.compression_utils import lz4Decompress, lz4Compress, usdInt32
 
 exportsDir = bpy.path.abspath("//") + 'exports/'
 #filepath = exportsDir + 'test.usdc'
+#filepath = exportsDir + 'testThree.usdc'
 #filepath = exportsDir + 'testMat.usdc'
-filepath = exportsDir + 'testCopy.usdc'
+#filepath = exportsDir + 'testTex.usdc'
+filepath = exportsDir + 'testScale.usdc'
+#filepath = exportsDir + 'testCube.usdc'
+#filepath = exportsDir + 'testPlane.usdc'
 #filepath = exportsDir + 'testEmpty.usdc'
 
 print(filepath)
@@ -57,7 +61,15 @@ def decodeInts(data, count, size, byteorder='little', signed=False):
         value = int.from_bytes(data[i*size:i*size + size], byteorder, signed=signed)
         ints.append(value)
     return ints
-    
+
+def decodeDoubles(data, count):
+    values = []
+    for i in range(count):
+        if i * 8 > len(data):
+            print('Over Run Data')
+            break
+        values.append(unpack('<d', data[i*8:i*8+8])[0])
+    return values
 
 SpecTypes = {
     1 :'Attribute',
@@ -206,10 +218,20 @@ def getRepValue(rep, file, tokens):
             file.seek(rep['payload'])
             num = readInt(file, 4)
             values = []
-            while num > 0:
-                values.append(readInt(file, 4, signed=True))
-                num -= 1
+            if rep['compressed']:
+                size = readInt(file, 8)
+                buffer = lz4Decompress(file.read(size))
+                values = usdInt32Decompress(buffer, num)
+            else:
+                while num > 0:
+                    values.append(readInt(file, 4, signed=True))
+                    num -= 1
             return values
+        else:
+            return rep['payload']
+    elif rep['type'] == 'Float':
+        if rep['inline'] and not rep['array']:
+            return  unpack('<f', pack('<i', rep['payload']))[0]
     elif rep['type'] == 'Vec2f':
         if not rep['inline'] and rep['array']:
             file.seek(rep['payload'])
@@ -228,6 +250,12 @@ def getRepValue(rep, file, tokens):
                 values.append(unpack('<fff', file.read(12)))
                 num -= 1
             return values
+        elif not rep['inline'] and not rep['array']:
+            file.seek(rep['payload'])
+            return unpack('<fff', file.read(12))
+        elif rep['inline'] and not rep['array']:
+            #return rep['payload'].to_bytes(12, 'little')
+            return unpack('<bbb', rep['payload'].to_bytes(3, 'little'))
     elif rep['type'] == 'Bool' or rep['type'] == 'Variability':
         if rep['inline'] and not rep['array']:
             return rep['payload'] != 0
@@ -240,6 +268,50 @@ def getRepValue(rep, file, tokens):
                 values.append(unpack('<dddd', file.read(32)))
                 num -= 1
             return values
+    elif rep['type'] == 'PathVector':
+        if not rep['inline']:
+            file.seek(rep['payload'])
+            return (readInt(file, 8), readInt(file, 4))
+            #return (readInt(file, 8), file.read(4))
+            #num = readInt(file, 8)
+            #return readInt(file, 4)
+    elif rep['type'] == 'PathListOp':
+        if not rep['inline']:
+            file.seek(rep['payload'])
+            return (readInt(file, 8), file.read(1), readInt(file, 4))
+            #return (readInt(file, 8), readInt(file, 5))
+            #return (readInt(file, 8), file.read(5))
+            #return file.read(13)
+            #return readInt(file, 8)
+    elif rep['type'] == 'TimeSamples':
+        file.seek(rep['payload'])
+        size = readInt(file, 8) - 16
+        count = readInt(file, 8)
+        data = file.read(size)
+        frames = decodeDoubles(data, count)
+        print('first', readInt(file, 4))
+        print('second', (readInt(file, 4)>>16))
+        print('Count:', count)
+        print('Data:', unpack('<d',data[-8:]))
+        size = readInt(file, 8)
+        count = readInt(file, 8)
+        reps = []
+        for i in range(count):
+            reps.append((i, readInt(file, 4), file.read(4)))
+        return reps
+        #return frames
+        #file.seek(rep['payload']-(128*(count)))
+        #print(file.read(128))
+        #timeSamples = []
+        #for frame in frames:
+        #    num = 4
+        #    values = []
+        #    while num > 0:
+        #        values.append(unpack('<dddd', file.read(32)))
+        #        num -= 1
+        #    timeSamples.append((frame, tuple(values)))
+        #return timeSamples
+        #return data #decodeInts(data, count*2, 4)
     return None
 
 
@@ -294,9 +366,10 @@ with open(filepath, 'rb') as file:
     for i in range(len(fields)):
         field = tokens[fields[i]]
         rep = reps[i]
+        #print(i, '\t', field,'\t= ',rep)
         value = getRepValue(rep, file, tokens)
         if value != None:
-            print(i, '\t', field, '\t= (', rep['type'], ') ',value)
+            print(i, '\t', field, '\t= (', rep['type'], ') ',value, rep['payload'])
         else:
             print(i, '\t', field,'\t= ',rep)
     
