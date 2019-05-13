@@ -285,20 +285,20 @@ def getRepValue(rep, file, tokens):
             #return readInt(file, 8)
     elif rep['type'] == 'TimeSamples':
         file.seek(rep['payload'])
-        size = readInt(file, 8) - 16
-        count = readInt(file, 8)
-        data = file.read(size)
-        frames = decodeDoubles(data, count)
-        print('first', readInt(file, 4))
-        print('second', (readInt(file, 4)>>16))
-        print('Count:', count)
-        print('Data:', unpack('<d',data[-8:]))
-        size = readInt(file, 8)
-        count = readInt(file, 8)
-        reps = []
-        for i in range(count):
-            reps.append((i, readInt(file, 4), file.read(4)))
-        return reps
+        #size = readInt(file, 8) - 16
+        #count = readInt(file, 8)
+        #data = file.read(size)
+        #frames = decodeDoubles(data, count)
+        #print('first', readInt(file, 4))
+        #print('second', (readInt(file, 4)>>16))
+        #print('Count:', count)
+        #print('Data:', unpack('<d',data[-8:]))
+        #size = readInt(file, 8)
+        #count = readInt(file, 8)
+        #reps = []
+        #for i in range(count):
+        #    reps.append((i, readInt(file, 4), file.read(4)))
+        #return reps
         #return frames
         #file.seek(rep['payload']-(128*(count)))
         #print(file.read(128))

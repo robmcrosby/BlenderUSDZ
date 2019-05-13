@@ -11,6 +11,14 @@ PAYLOAD_MASK = (1 << 48) - 1
 def writeInt(file, value, size, byteorder='little', signed=False):
     file.write(value.to_bytes(size, byteorder=byteorder, signed=signed))
 
+def writeFloat(file, value, byteorder='little'):
+    packStr = '<f' if byteorder.lower() == 'little' else '>f'
+    file.write(struct.pack(packStr, value))
+
+def writeDouble(file, value, byteorder='little'):
+    packStr = '<d' if byteorder.lower() == 'little' else '>d'
+    file.write(struct.pack(packStr, value))
+
 def writeInt32Compressed(file, data):
     buffer = lz4Compress(usdInt32Compress(data))
     writeInt(file, len(buffer), 8)
@@ -279,7 +287,7 @@ class CrateFile:
             ref = self.file.tell()
             writeInt(self.file, len(data), 4)
             for f in data:
-                self.file.write(struct.pack('<f', f))
+                writeFloat(self.file, f)
             return self.addFieldItem(field, ValueType.float, True, False, False, ref)
         data = int.from_bytes(struct.pack('<f', data), 'little')
         return self.addFieldItem(field, ValueType.float, False, True, False, data)
@@ -290,7 +298,7 @@ class CrateFile:
             ref = self.file.tell()
             writeInt(self.file, len(data), 4)
             for d in data:
-                self.file.write(struct.pack('<d', d))
+                writeDouble(self.file, d)
             return self.addFieldItem(field, ValueType.double, True, False, False, ref)
         data = int.from_bytes(struct.pack('<f', data), 'little')
         return self.addFieldItem(field, ValueType.double, False, True, False, data)
@@ -360,7 +368,7 @@ class CrateFile:
         writeInt(self.file, size, 8)
         writeInt(self.file, count, 8)
         for frame in frames:
-            self.file.write(struct.pack('<d', frame))
+            writeDouble(self.file, frame)
         writeInt(self.file, reference + 8, 6)
         writeInt(self.file, ValueType.DoubleVector.value, 2)
         writeInt(self.file, 8, 8)
