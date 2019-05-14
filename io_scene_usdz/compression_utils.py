@@ -271,6 +271,7 @@ def lz4Decompress(src):
 
 
 def usdInt32Compress(values):
+    values = values.copy()
     data = bytearray()
     if len(values) == 0:
         return data

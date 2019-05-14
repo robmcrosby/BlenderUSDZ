@@ -307,18 +307,18 @@ class CrateFile:
     def addFieldInt(self, field, data):
         field = self.getTokenIndex(field)
         if type(data) == list:
+            compress = len(data) > 16
             ref = self.getDataRefrence(data, ValueType.int)
             if ref < 0:
                 ref = self.file.tell()
                 self.addWritenData(data, ValueType.int, ref)
                 writeInt(self.file, len(data), 4)
-                if len(data) > 16:
-                    # Compress the data
+                if compress:
                     writeInt32Compressed(self.file, data)
-                    return self.addFieldItem(field, ValueType.int, True, False, True, ref)
-                for i in data:
-                    writeInt(self.file, i, 4, signed=True)
-            return self.addFieldItem(field, ValueType.int, True, False, False, ref)
+                else:
+                    for i in data:
+                        writeInt(self.file, i, 4, signed=True)
+            return self.addFieldItem(field, ValueType.int, True, False, compress, ref)
         return self.addFieldItem(field, ValueType.int, False, True, False, data)
 
     def addFieldFloat(self, field, data):
