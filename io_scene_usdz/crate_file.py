@@ -180,6 +180,20 @@ def isWholeBytes(vector):
             return False
     return True
 
+def compare(lhs, rhs):
+    lhType = type(lhs)
+    rhType = type(rhs)
+    if lhType != rhType:
+        return False
+    if lhType == list or lhType == tuple:
+        if len(lhs) != len(rhs):
+            return False
+        for i in range(len(lhs)):
+            if not compare(lhs[i], rhs[i]):
+                return False
+            return True
+    return lhs == rhs
+
 
 class CrateFile:
     def __init__(self, file):
@@ -195,6 +209,18 @@ class CrateFile:
         self.pathMap = {}
         self.paths = []
         self.specs = []
+        self.writenData = []
+
+    def addWritenData(self, data, vType, ref):
+        self.writenData.append(((data, vType), ref))
+
+    def getDataRefrence(self, data, vType):
+        for d, ref in self.writenData:
+            #if d[1] == vType and compare(d[0], data):
+            if (data, vType) == d:
+                return ref
+        #print((data, vType))
+        return -1
 
     def getTokenIndex(self, token):
         if not token in self.tokenMap:
@@ -217,10 +243,10 @@ class CrateFile:
             rep |= COMPRESSED_BIT
         if inline:
             rep |= INLINE_BIT
-            key = (field, rep)
-            if key in self.repsMap:
-                return self.repsMap[key]
-            self.repsMap[key] = repIndex
+        key = (field, rep)
+        if key in self.repsMap:
+            return self.repsMap[key]
+        self.repsMap[key] = repIndex
         self.fields.append(field)
         self.reps.append(rep)
         return repIndex
@@ -228,23 +254,34 @@ class CrateFile:
     def addFieldToken(self, field, data):
         field = self.getTokenIndex(field)
         if type(data) == list:
-            ref = self.file.tell()
-            writeInt(self.file, len(data), 4)
+            tokens = []
             for token in data:
-                token = self.getTokenIndex(token.replace('"', ''))
-                writeInt(self.file, token, 4)
+                tokens.append(self.getTokenIndex(token.replace('"', '')))
+            ref = self.getDataRefrence(tokens, ValueType.token)
+            if ref < 0:
+                ref = self.file.tell()
+                self.addWritenData(tokens, ValueType.token, ref)
+                writeInt(self.file, len(tokens), 4)
+                for token in tokens:
+                    writeInt(self.file, token, 4)
             return self.addFieldItem(field, ValueType.token, True, False, False, ref)
         token = self.getTokenIndex(data.replace('"', ''))
         return self.addFieldItem(field, ValueType.token, False, True, False, token)
 
     def addFieldTokenVector(self, field, tokens):
         field = self.getTokenIndex(field)
-        ref = self.file.tell()
-        writeInt(self.file, len(tokens), 8)
+        data = []
         for token in tokens:
             token = token.replace('"', '')
-            writeInt(self.file, self.getTokenIndex(token), 4)
-        self.file.write(bytes(4))
+            data.append(self.getTokenIndex(token))
+        ref = self.getDataRefrence(data, ValueType.TokenVector)
+        if ref < 0:
+            ref = self.file.tell()
+            self.addWritenData(data, ValueType.TokenVector, ref)
+            writeInt(self.file, len(data), 8)
+            for token in data:
+                writeInt(self.file, token, 4)
+            self.file.write(bytes(4))
         return self.addFieldItem(field, ValueType.TokenVector, False, False, False, ref)
 
     def addFieldPathListOp(self, field, pathIndex):
@@ -270,24 +307,30 @@ class CrateFile:
     def addFieldInt(self, field, data):
         field = self.getTokenIndex(field)
         if type(data) == list:
-            ref = self.file.tell()
-            writeInt(self.file, len(data), 4)
-            if len(data) > 16:
-                # Compress the data
-                writeInt32Compressed(self.file, data)
-                return self.addFieldItem(field, ValueType.int, True, False, True, ref)
-            for i in data:
-                writeInt(self.file, i, 4, signed=True)
+            ref = self.getDataRefrence(data, ValueType.int)
+            if ref < 0:
+                ref = self.file.tell()
+                self.addWritenData(data, ValueType.int, ref)
+                writeInt(self.file, len(data), 4)
+                if len(data) > 16:
+                    # Compress the data
+                    writeInt32Compressed(self.file, data)
+                    return self.addFieldItem(field, ValueType.int, True, False, True, ref)
+                for i in data:
+                    writeInt(self.file, i, 4, signed=True)
             return self.addFieldItem(field, ValueType.int, True, False, False, ref)
         return self.addFieldItem(field, ValueType.int, False, True, False, data)
 
     def addFieldFloat(self, field, data):
         field = self.getTokenIndex(field)
         if type(data) == list:
-            ref = self.file.tell()
-            writeInt(self.file, len(data), 4)
-            for f in data:
-                writeFloat(self.file, f)
+            ref = self.getDataRefrence(data, ValueType.float)
+            if ref < 0:
+                ref = self.file.tell()
+                self.addWritenData(data, ValueType.float, ref)
+                writeInt(self.file, len(data), 4)
+                for f in data:
+                    writeFloat(self.file, f)
             return self.addFieldItem(field, ValueType.float, True, False, False, ref)
         data = int.from_bytes(struct.pack('<f', data), 'little')
         return self.addFieldItem(field, ValueType.float, False, True, False, data)
@@ -295,22 +338,28 @@ class CrateFile:
     def addFieldDouble(self, field, data):
         field = self.getTokenIndex(field)
         if type(data) == list:
-            ref = self.file.tell()
-            writeInt(self.file, len(data), 4)
-            for d in data:
-                writeDouble(self.file, d)
+            ref = self.getDataRefrence(data, ValueType.double)
+            if ref < 0:
+                ref = self.file.tell()
+                self.addWritenData(data, ValueType.double, ref)
+                writeInt(self.file, len(data), 4)
+                for d in data:
+                    writeDouble(self.file, d)
             return self.addFieldItem(field, ValueType.double, True, False, False, ref)
         data = int.from_bytes(struct.pack('<f', data), 'little')
         return self.addFieldItem(field, ValueType.double, False, True, False, data)
 
     def addFieldVector(self, field, data, vType):
         field = self.getTokenIndex(field)
-        ref = self.file.tell()
         packStr = '<'+vType.name[-2:]
         if type(data) == list:
-            writeInt(self.file, len(data), 4)
-            for v in data:
-                self.file.write(struct.pack(packStr, *v))
+            ref = self.getDataRefrence(data, vType)
+            if ref < 0:
+                ref = self.file.tell()
+                self.addWritenData(data, vType, ref)
+                writeInt(self.file, len(data), 4)
+                for v in data:
+                    self.file.write(struct.pack(packStr, *v))
             return self.addFieldItem(field, vType, True, False, False, ref)
         if isWholeBytes(data):
             nBytes = 2 * len(data)
@@ -320,21 +369,30 @@ class CrateFile:
             data = int.from_bytes(data, 'little')
             return self.addFieldItem(field, vType, False, True, False, data)
         else:
-            self.file.write(struct.pack(packStr, *data))
+            ref = self.getDataRefrence(data, vType)
+            if ref < 0:
+                ref = self.file.tell()
+                self.addWritenData(data, vType, ref)
+                self.file.write(struct.pack(packStr, *data))
             return self.addFieldItem(field, vType, False, False, False, ref)
 
     def addFieldMatrix(self, field, data, vType):
         field = self.getTokenIndex(field)
-        ref = self.file.tell()
-        packStr = '<'+vType.name[-2:]
-        if type(data) == list:
-            writeInt(self.file, len(data), 4)
-            for matrix in data:
-                for row in matrix:
+        ref = self.getDataRefrence(data, vType)
+        if ref < 0:
+            ref = self.file.tell()
+            self.addWritenData(data, vType, ref)
+            packStr = '<'+vType.name[-2:]
+            if type(data) == list:
+                writeInt(self.file, len(data), 4)
+                for matrix in data:
+                    for row in matrix:
+                        self.file.write(struct.pack(packStr, *row))
+            else:
+                for row in data:
                     self.file.write(struct.pack(packStr, *row))
+        if type(data) == list:
             return self.addFieldItem(field, vType, True, False, False, ref)
-        for row in data:
-            self.file.write(struct.pack(packStr, *row))
         return self.addFieldItem(field, vType, False, False, False, ref)
 
     def addFieldBool(self, field, data):
