@@ -29,6 +29,11 @@ def writeToAlign(file, size):
     if bufBytes > 0:
         file.write(bytes(bufBytes))
 
+def dataKey(data):
+    if type(data) == list:
+        return tuple(data)
+    return data
+
 class SpecifierType(Enum):
     Def = 0
     Over = 1
@@ -430,7 +435,7 @@ class CrateFile:
         count = len(data)
         size = 8*(count+2)
         elem = 0
-        if type(data[0]) == list and len(data[0]) > 1:
+        if type(data[0][1]) == list and len(data[0][1]) > 1:
             elem = 128
         frames = []
         refs = []
@@ -463,6 +468,7 @@ class CrateFile:
         writeInt(self.file, 8, 8)
         writeInt(self.file, count, 8)
         for ref in refs:
+            print((ref, vType.value, elem))
             writeInt(self.file, ref, 6)
             writeInt(self.file, vType.value, 1)
             writeInt(self.file, elem, 1)
