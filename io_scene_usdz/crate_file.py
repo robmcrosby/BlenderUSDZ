@@ -232,18 +232,25 @@ class CrateFile:
         self.pathMap = {}
         self.paths = []
         self.specs = []
-        self.writenData = []
+        self.writenData = {}
         self.framesRef = -1
 
     def addWritenData(self, data, vType, ref):
-        self.writenData.append(((data, vType), ref))
+        key = (dataKey(data), vType)
+        self.writenData[key] = ref
+        #self.writenData.append(((data, vType), ref))
 
     def getDataRefrence(self, data, vType):
+        key = (dataKey(data), vType)
+        if key in self.writenData:
+            return self.writenData[key]
+        """
         for d, ref in self.writenData:
             #if d[1] == vType and compare(d[0], data):
             if (data, vType) == d:
                 return ref
         #print((data, vType))
+        """
         return -1
 
     def getTokenIndex(self, token):
@@ -442,13 +449,13 @@ class CrateFile:
         refMap = {}
         for frame, value in data:
             frames.append(float(frame))
-            if type(value) != list and value in refMap:
-                refs.append(refMap[value])
+            key = dataKey(value)
+            if key in refMap:
+                refs.append(refMap[key])
             else:
                 ref = self.file.tell()
                 writeValue(self.file, value, vType)
-                if type(value) != list:
-                    refMap[value] = ref
+                refMap[key] = ref
                 refs.append(ref)
         reference = self.file.tell()
         if self.framesRef > 0:
