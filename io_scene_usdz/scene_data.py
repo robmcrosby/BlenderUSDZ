@@ -521,7 +521,8 @@ class Object:
 
     def exportArmatureAnimationItems(self, armature):
         rotationItem = FileItem('quatf[]', 'rotations.timeSamples')
-        scaleItem = FileItem('half3[]', 'scales.timeSamples')
+        #scaleItem = FileItem('half3[]', 'scales.timeSamples')
+        scaleItem = FileItem('float3[]', 'scales.timeSamples')
         translationItem = FileItem('float3[]', 'translations.timeSamples')
         start = self.scene.startFrame
         end = self.scene.endFrame

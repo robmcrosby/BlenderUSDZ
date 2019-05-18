@@ -156,11 +156,29 @@ def getValueType(value):
         return ValueType.Specifier
     return ValueType.Invalid
 
+def getValueTypeStr(typeStr):
+    typeStr = typeStr.replace('[]', '')
+    if typeStr == 'float3':
+        return ValueType.vec3f
+    return ValueType[typeStr]
+
 def writeValue(file, value, vType):
-    if vType == ValueType.matrix4d:
+    if type(value) == list:
+        writeInt(file, len(value), 4)
+        for v in value:
+            writeValue(file, v, vType)
+    elif vType.name[:6] == 'matrix':
         packStr = '<'+vType.name[-2:]
         for row in value:
             file.write(struct.pack(packStr, *row))
+    elif vType.name[:3] == 'vec':
+        packStr = '<'+vType.name[-2:]
+        file.write(struct.pack(packStr, *value))
+    elif vType.name == 'quatf':
+        packStr = '<ffff'
+        value = (value[1], value[2], value[3], value[0])
+        file.write(struct.pack(packStr, *value))
+
 
 def isWholeHalfs(vector):
     for f in vector:
@@ -210,6 +228,7 @@ class CrateFile:
         self.paths = []
         self.specs = []
         self.writenData = []
+        self.framesRef = -1
 
     def addWritenData(self, data, vType, ref):
         self.writenData.append(((data, vType), ref))
@@ -405,35 +424,48 @@ class CrateFile:
         data = 1 if data else 0
         return self.addFieldItem(field, ValueType.Variability, False, True, False, data)
 
-    def addFieldTimeSamples(self, field, data):
+    def addFieldTimeSamples(self, field, data, vType):
         field = self.getTokenIndex(field)
-        vType = getValueType(data[0][1])
+        vType = getValueTypeStr(vType)
         count = len(data)
         size = 8*(count+2)
+        elem = 0
+        if type(data[0]) == list and len(data[0]) > 1:
+            elem = 128
         frames = []
         refs = []
         refMap = {}
         for frame, value in data:
             frames.append(float(frame))
-            if value in refMap:
+            if type(value) != list and value in refMap:
                 refs.append(refMap[value])
             else:
                 ref = self.file.tell()
                 writeValue(self.file, value, vType)
-                refMap[value] = ref
+                if type(value) != list:
+                    refMap[value] = ref
                 refs.append(ref)
         reference = self.file.tell()
-        writeInt(self.file, size, 8)
-        writeInt(self.file, count, 8)
-        for frame in frames:
-            writeDouble(self.file, frame)
-        writeInt(self.file, reference + 8, 6)
-        writeInt(self.file, ValueType.DoubleVector.value, 2)
+        if self.framesRef > 0:
+            writeInt(self.file, 8, 8)
+            writeInt(self.file, self.framesRef + 8, 6)
+            writeInt(self.file, ValueType.DoubleVector.value, 1)
+            writeInt(self.file, 0, 1)
+        else:
+            self.framesRef = reference
+            writeInt(self.file, size, 8)
+            writeInt(self.file, count, 8)
+            for frame in frames:
+                writeDouble(self.file, frame)
+            writeInt(self.file, reference + 8, 6)
+            writeInt(self.file, ValueType.DoubleVector.value, 1)
+            writeInt(self.file, 0, 1)
         writeInt(self.file, 8, 8)
         writeInt(self.file, count, 8)
         for ref in refs:
             writeInt(self.file, ref, 6)
-            writeInt(self.file, vType.value, 2)
+            writeInt(self.file, vType.value, 1)
+            writeInt(self.file, elem, 1)
         return self.addFieldItem(field, ValueType.TimeSamples, False, False, False, reference)
 
     def addField(self, field, value, type = ValueType.UnregisteredValue):

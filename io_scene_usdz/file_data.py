@@ -151,7 +151,7 @@ class FileItem:
         if self.data != None:
             fset.append(crate.addField('default', self.data))
         if self.hasTimeSamples():
-            fset.append(crate.addFieldTimeSamples('timeSamples', self.items))
+            fset.append(crate.addFieldTimeSamples('timeSamples', self.items, self.type))
         fset = crate.addFieldSet(fset)
         self.nameToken = crate.getTokenIndex(self.getName())
         self.pathIndex = crate.addSpec(fset, SpecType.Attribute)
@@ -289,8 +289,10 @@ class FileData:
         path = crate.addSpec(fset, SpecType.PseudoRoot)
         # Write Xform Specs
         xforms = self.getItemsOfType('Xform')
+        xforms += self.getItemsOfType('SkelRoot')
         for xform in xforms:
             xform.writeSpecs(crate)
+
         # Write Materal Specs
         attLists = []
         materials = self.getItemsOfType('Material')
@@ -303,10 +305,34 @@ class FileData:
             attLists.append(attList + material.getAttributes())
         materialAtts = interleave_lists(attLists)
 
+        # Write Skeleton Animation Specs
+        attLists = []
+        animations = self.getItemsOfType('SkelAnimation')
+        for animation in animations:
+            animation.writeSpecs(crate)
+            attLists.append(animation.getAttributes())
+        animationAtts = interleave_lists(attLists)
+
+        # Write Skeleton Specs
+        attLists = []
+        skeletons = self.getItemsOfType('Skeleton')
+        for skeleton in skeletons:
+            skeleton.writeSpecs(crate)
+            attLists.append(skeleton.getAttributes())
+        skeletonAtts = interleave_lists(attLists)
+
         # Write Mesh Specs
         meshes = self.getItemsOfType('Mesh')
         for mesh in reversed(meshes):
             mesh.writeSpecs(crate)
+
+        # Write Animation Attributes
+        for att in animationAtts:
+            att.writeSpecs(crate)
+
+        # Write Skelton Attributes
+        for att in skeletonAtts:
+            att.writeSpecs(crate)
 
         # Write Material Attribute Specs
         for att in materialAtts:
@@ -336,12 +362,22 @@ class FileData:
         for xform in xforms:
             xform.writePath(crate)
         for xform in reversed(xforms):
+            animations = xform.getItemsOfType('SkelAnimation')
+            for animation in animations:
+                animation.pathJump = animation.countItems() + 1
+                animation.writePath(crate)
+                animation.writeSubPaths(crate)
+            skeletons = xform.getItemsOfType('Skeleton')
+            for skeleton in skeletons:
+                skeleton.pathJump = skeleton.countItems() + 1
+                skeleton.writePath(crate)
+                skeleton.writeSubPaths(crate)
             materials = xform.getItemsOfType('Material')
             for material in materials:
                 material.pathJump = material.countItems() + 1
                 material.writePath(crate)
                 material.writeSubPaths(crate)
-            xform.writeSubPaths(crate, ['Xform', 'Material'])
+            xform.writeSubPaths(crate, ['Xform', 'Material', 'SkelAnimation', 'Skeleton'])
 
         """
         # Write items
