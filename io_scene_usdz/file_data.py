@@ -45,6 +45,7 @@ class FileItem:
         self.pathJump = -2
         self.nameToken = -1
         self.pathStr = ''
+        self.pathItems = []
 
     def addItem(self, type, name = '', data = None):
         item = FileItem(type, name, data)
@@ -58,11 +59,12 @@ class FileItem:
         if item != None:
             self.items.append(item)
 
-    def updatePathStrings(self, parentStr):
+    def updatePathStrings(self, parentStr, pathMap):
         self.pathStr = parentStr + '/' + self.name
+        pathMap[self.pathStr] = self
         if not self.hasTimeSamples():
             for item in self.items:
-                item.updatePathStrings(self.pathStr)
+                item.updatePathStrings(self.pathStr, pathMap)
 
     def printUsda(self, indent):
         src = ''
@@ -155,13 +157,14 @@ class FileItem:
         fset = crate.addFieldSet(fset)
         self.nameToken = crate.getTokenIndex(self.getName())
         self.pathIndex = crate.addSpec(fset, SpecType.Attribute)
-        crate.pathMap[self.pathStr] = self.pathIndex
 
-    def writeSpecsPath(self, crate):
+    def writeSpecsPath(self, crate, pathMap):
         pathStr = self.data[1:-1].replace('.', '/')
-        #pathIndex = 0
-        #if pathStr in crate.pathMap:
-        pathIndex = crate.pathMap[pathStr]
+        pathItem = pathMap[pathStr]
+        pathIndex = pathItem.pathIndex
+        if pathIndex < 0:
+            pathItem.writeSpecs(crate, pathMap)
+            pathIndex = pathItem.pathIndex
         type = self.getType()
         listOpField = 'targetPaths' if type == 'rel' else 'connectionPaths'
         vectorField = 'targetChildren' if type == 'rel' else 'connectionChildren'
@@ -173,7 +176,6 @@ class FileItem:
         fset = crate.addFieldSet(fset)
         self.nameToken = crate.getTokenIndex(self.getName())
         self.pathIndex = crate.addSpec(fset, specType)
-        crate.pathMap[self.pathStr] = self.pathIndex
 
     def writeSpecsPrim(self, crate):
         fset = []
@@ -188,12 +190,11 @@ class FileItem:
         fset = crate.addFieldSet(fset)
         self.nameToken = crate.getTokenIndex(self.getName())
         self.pathIndex = crate.addSpec(fset, SpecType.Prim)
-        crate.pathMap[self.pathStr] = self.pathIndex
 
-    def writeSpecs(self, crate):
+    def writeSpecs(self, crate, pathMap):
         if self.isAttribute():
             if self.isPath():
-                self.writeSpecsPath(crate)
+                self.writeSpecsPath(crate, pathMap)
             else:
                 self.writeSpecsAtt(crate)
         else:
@@ -219,6 +220,7 @@ class FileData:
     def __init__(self):
         self.properties = {}
         self.items = []
+        self.pathMap = {}
 
     def addItem(self, type, name = '', data = None):
         item = FileItem(type, name, data)
@@ -232,8 +234,9 @@ class FileData:
             self.items.append(item)
 
     def updatePathStrings(self):
+        self.pathMap = {}
         for item in self.items:
-            item.updatePathStrings('')
+            item.updatePathStrings('', self.pathMap)
 
     def getChildren(self):
         return list(filter(lambda item: not item.isAttribute(), self.items))
@@ -292,16 +295,16 @@ class FileData:
         xforms = self.getItemsOfType('Xform')
         xforms += self.getItemsOfType('SkelRoot')
         for xform in xforms:
-            xform.writeSpecs(crate)
+            xform.writeSpecs(crate, self.pathMap)
 
         # Write Materal Specs
         attLists = []
         materials = self.getItemsOfType('Material')
         for material in materials:
             attList = []
-            material.writeSpecs(crate)
+            material.writeSpecs(crate, self.pathMap)
             for child in material.getChildren():
-                child.writeSpecs(crate)
+                child.writeSpecs(crate, self.pathMap)
                 attList += child.getAttributes()
             attLists.append(attList + material.getAttributes())
         materialAtts = interleave_lists(attLists)
@@ -310,7 +313,7 @@ class FileData:
         attLists = []
         animations = self.getItemsOfType('SkelAnimation')
         for animation in animations:
-            animation.writeSpecs(crate)
+            animation.writeSpecs(crate, self.pathMap)
             attLists.append(animation.getAttributes())
         animationAtts = interleave_lists(attLists)
 
@@ -318,39 +321,39 @@ class FileData:
         attLists = []
         skeletons = self.getItemsOfType('Skeleton')
         for skeleton in skeletons:
-            skeleton.writeSpecs(crate)
+            skeleton.writeSpecs(crate, self.pathMap)
             attLists.append(skeleton.getAttributes())
         skeletonAtts = interleave_lists(attLists)
 
         # Write Mesh Specs
         meshes = self.getItemsOfType('Mesh')
         for mesh in reversed(meshes):
-            mesh.writeSpecs(crate)
+            mesh.writeSpecs(crate, self.pathMap)
 
         # Write Animation Attributes
         for att in animationAtts:
-            att.writeSpecs(crate)
+            att.writeSpecs(crate, self.pathMap)
 
         # Write Skelton Attributes
         for att in skeletonAtts:
-            att.writeSpecs(crate)
+            att.writeSpecs(crate, self.pathMap)
 
         # Write Material Attribute Specs
         for att in materialAtts:
-            att.writeSpecs(crate)
+            att.writeSpecs(crate, self.pathMap)
 
         # Write Mesh Attribute Specs
         meshAtts = interleave_lists([m.getAttributes() for m in reversed(meshes)])
         for att in meshAtts:
-            att.writeSpecs(crate)
+            att.writeSpecs(crate, self.pathMap)
 
         # Write Xform Attribute Specs
         atts = interleave_lists([x.getAttributes() for x in reversed(xforms)])
         for att in atts:
-            att.writeSpecs(crate)
+            att.writeSpecs(crate, self.pathMap)
         # Add Root Attribute specs
         for att in self.getAttributes():
-            att.writeSpecs(crate)
+            att.writeSpecs(crate, self.pathMap)
 
         # Add the first path
         jump = -1 if len(self.items) > 0 else -2

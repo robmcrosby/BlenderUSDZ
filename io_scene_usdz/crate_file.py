@@ -229,7 +229,6 @@ class CrateFile:
         self.reps = []
         self.repsMap = {}
         self.fsets = []
-        self.pathMap = {}
         self.paths = []
         self.specs = []
         self.writenData = {}
@@ -238,19 +237,11 @@ class CrateFile:
     def addWritenData(self, data, vType, ref):
         key = (dataKey(data), vType)
         self.writenData[key] = ref
-        #self.writenData.append(((data, vType), ref))
 
     def getDataRefrence(self, data, vType):
         key = (dataKey(data), vType)
         if key in self.writenData:
             return self.writenData[key]
-        """
-        for d, ref in self.writenData:
-            #if d[1] == vType and compare(d[0], data):
-            if (data, vType) == d:
-                return ref
-        #print((data, vType))
-        """
         return -1
 
     def getTokenIndex(self, token):
