@@ -206,7 +206,8 @@ class FileItem:
         children = self.getChildren(excluded)
         attributes = self.getAttributes(excluded)
         for child in children:
-            child.pathJump = child.countItems(excluded) + 1
+            isLast = child == children[-1] and len(attributes) == 0
+            child.pathJump = -1 if isLast else child.countItems(excluded) + 1
             child.writePath(crate)
             child.writeSubPaths(crate)
         for attribute in attributes:
