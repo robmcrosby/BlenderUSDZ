@@ -192,13 +192,14 @@ class FileItem:
         self.pathIndex = crate.addSpec(fset, SpecType.Prim)
 
     def writeSpecs(self, crate, pathMap):
-        if self.isAttribute():
-            if self.isPath():
-                self.writeSpecsPath(crate, pathMap)
+        if self.pathIndex < 0:
+            if self.isAttribute():
+                if self.isPath():
+                    self.writeSpecsPath(crate, pathMap)
+                else:
+                    self.writeSpecsAtt(crate)
             else:
-                self.writeSpecsAtt(crate)
-        else:
-            self.writeSpecsPrim(crate)
+                self.writeSpecsPrim(crate)
 
     def writePath(self, crate):
         crate.addPath(self.pathIndex, self.nameToken, self.pathJump, self.isAttribute())
