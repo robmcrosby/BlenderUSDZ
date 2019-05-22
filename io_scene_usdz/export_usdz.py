@@ -22,6 +22,7 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
         tempPath = tempfile.mkdtemp()
         filePath = tempPath
         usdaFile = tempPath+'/'+fileName+'.usda'
+        usdcFile = tempPath+'/'+fileName+'.usdc'
 
     scene = Scene()
     scene.exportMaterials = materials
@@ -41,10 +42,14 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     data.writeUsda(usdaFile)
     data.writeUsdc(usdcFile)
 
+    zipUsdzFile(usdzFile, usdcFile)
+
+    """
     # Run the USDZ Converter Tool
     args = ['xcrun', 'usdz_converter', usdaFile, usdzFile]
     args += ['-v']
     subprocess.run(args)
+    """
 
     scene.cleanup()
     if tempPath != None:

@@ -1,5 +1,6 @@
 import os
 import itertools
+import binascii
 
 #from io_scene_usdz.compression_utils import *
 from io_scene_usdz.crate_file import *
@@ -33,6 +34,108 @@ def print_time_samples(samples, indent = ''):
 
 def interleave_lists(lists):
     return [x for x in itertools.chain(*itertools.zip_longest(*lists)) if x is not None]
+
+def zipUsdzFile(usdzPath, usdFile, resourceFiles = []):
+    usdFileName = os.path.basename(usdFile)
+    usdContents = open(usdFile, 'rb').read()
+    file = open(usdzPath, 'wb')
+    # Signature
+    file.write(b'\x50\x4b\x03\x04')
+    # Version for Extract
+    writeInt(file, 20, 2)
+    # Bits
+    writeInt(file, 0, 2)
+    # Compression Method
+    writeInt(file, 0, 2)
+    # TODO: Last Mod Time
+    file.write(b'\x0C\x80')
+    # TODO: Last Mod Date
+    file.write(b'\xB3\x4E')
+    # CRC32
+    crc = binascii.crc32(usdContents)
+    writeInt(file, crc, 4)
+    # Size Uncompressed
+    size = len(usdContents)
+    writeInt(file, size, 4)
+    # Size Compressed
+    writeInt(file, size, 4)
+    # Filename Length
+    length = len(usdFileName)
+    writeInt(file, length, 2)
+    # Extra Length
+    length = 34 - length
+    writeInt(file, length, 2)
+    # Filename
+    file.write(usdFileName.encode())
+    # Extra Header Id
+    writeInt(file, 1, 2)
+    # Extra Header Size
+    length -= 4
+    writeInt(file, length, 2)
+    # Write the extra bytes
+    file.write(bytes(length))
+    # Write the file contents
+    file.write(usdContents)
+
+    # Get Central Dir Offset
+    centralDirOffset = file.tell()
+    # Central Directory Signature
+    file.write(b'\x50\x4B\x01\x02')
+    # Version Made By
+    writeInt(file, 62, 2)
+    # Version For Extract
+    writeInt(file, 20, 2)
+    # Bits
+    writeInt(file, 0, 2)
+    # Compression Method
+    writeInt(file, 0, 2)
+    # TODO: Last Mod Time
+    file.write(b'\x0C\x80')
+    # TODO: Last Mod Data
+    file.write(b'\xB3\x4E')
+    # TODO: CRC32
+    writeInt(file, crc, 4)
+    # Compressed Size
+    writeInt(file, centralDirOffset, 4)
+    # Uncompressed Size
+    writeInt(file, centralDirOffset, 4)
+    # Filename Length
+    writeInt(file, len(usdFileName), 2)
+    # Extra Field Length
+    writeInt(file, 0, 2)
+    # Comment Length
+    writeInt(file, 0, 2)
+    # Disk Number Start
+    writeInt(file, 0, 2)
+    # Internal Attrs
+    writeInt(file, 0, 2)
+    # External Attrs
+    writeInt(file, 0, 4)
+    # Local Header Offset
+    writeInt(file, 0, 4)
+    # Add the file name again
+    file.write(usdFileName.encode())
+    # Get Central Dir Length
+    centralDirLength = file.tell() - centralDirOffset
+
+    # End Central Directory Signature
+    file.write(b'\x50\x4B\x05\x06')
+    # Disk Number
+    writeInt(file, 0, 2)
+    # Disk Number for Central Dir
+    writeInt(file, 0, 2)
+    # Num Central Dir Entries on Disk
+    writeInt(file, 1, 2)
+    # Num Central Dir Entries
+    writeInt(file, 1, 2)
+    # Central Dir Length
+    writeInt(file, centralDirLength, 4)
+    # Central Dir Offset
+    writeInt(file, centralDirOffset, 4)
+    # Comment Length
+    writeInt(file, 0, 2)
+
+    file.close()
 
 class FileItem:
     def __init__(self, type, name = '', data = None):
