@@ -42,7 +42,11 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     data.writeUsda(usdaFile)
     data.writeUsdc(usdcFile)
 
-    zipUsdzFile(usdzFile, usdcFile)
+    #zipUsdzFile(usdzFile, usdcFile)
+    file = open(usdzFile, 'wb')
+    usdz = UsdzFile(file)
+    usdz.addFile(usdcFile)
+    usdz.close()
 
     """
     # Run the USDZ Converter Tool
