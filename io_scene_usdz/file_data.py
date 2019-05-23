@@ -42,8 +42,8 @@ def readFileContents(filePath):
 
 
 class UsdzFile:
-    def __init__(self, file):
-        self.file = file
+    def __init__(self, filePath):
+        self.file = open(filePath, 'wb')
         self.entries = []
         self.cdOffset = 0
         self.cdLength = 0
