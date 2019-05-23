@@ -13,12 +13,16 @@ import io_scene_usdz
 
 importlib.reload(io_scene_usdz)
 
+import io_scene_usdz.compression_utils
+import io_scene_usdz.crate_file
 import io_scene_usdz.object_utils
 import io_scene_usdz.material_utils
 import io_scene_usdz.file_data
 import io_scene_usdz.scene_data
 import io_scene_usdz.export_usdz
 
+importlib.reload(io_scene_usdz.compression_utils)
+importlib.reload(io_scene_usdz.crate_file)
 importlib.reload(io_scene_usdz.object_utils)
 importlib.reload(io_scene_usdz.material_utils)
 importlib.reload(io_scene_usdz.file_data)
@@ -41,8 +45,9 @@ export_usdz(
     materials = True,
     keepUSDA = True,
     bakeTextures = True,
-    bakeAO = True,
+    bakeAO = False,
     samples = 64,
     scale = 4.0,
     animated = True,
+    useConverter = False,
     )

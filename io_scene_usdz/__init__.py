@@ -37,7 +37,11 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
             default="*.usdz;*.usda",
             options={'HIDDEN'},
             )
-
+    useConverter = BoolProperty(
+        name="Use Usdz Converter Tool",
+        description="Use Apple's Converter Tool to create the Usdz file",
+        default=False,
+        )
     materials = BoolProperty(
         name="Export Materials",
         description="Export Materials from Objects",
