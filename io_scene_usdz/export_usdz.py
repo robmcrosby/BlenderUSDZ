@@ -52,6 +52,8 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
         data.writeUsdc(usdcFile)
         usdz = UsdzFile(usdzFile)
         usdz.addFile(usdcFile)
+        for textureFile in scene.textureFilePaths:
+            usdz.addFile(textureFile)
         usdz.close()
 
     scene.cleanup()

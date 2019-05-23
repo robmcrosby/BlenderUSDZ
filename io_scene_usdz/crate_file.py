@@ -67,7 +67,7 @@ class ValueType(Enum):
     double = 9
     string = 10
     token = 11
-    AssetPath = 12
+    asset = 12
     matrix2d = 13
     matrix3d = 14
     matrix4d = 15
@@ -150,6 +150,8 @@ def getValueType(value):
     if t == float:
         return ValueType.float
     if t == str:
+        if len(value) > 0 and value[0] == '@':
+            return ValueType.asset
         return ValueType.token
     if t == tuple:
         return getTupleValueType(value)
@@ -289,6 +291,11 @@ class CrateFile:
             return self.addFieldItem(field, ValueType.token, True, False, False, ref)
         token = self.getTokenIndex(data.replace('"', ''))
         return self.addFieldItem(field, ValueType.token, False, True, False, token)
+
+    def addFieldAsset(self, field, data):
+        field = self.getTokenIndex(field)
+        token = self.getTokenIndex(data.replace('@', ''))
+        return self.addFieldItem(field, ValueType.asset, False, True, False, token)
 
     def addFieldTokenVector(self, field, tokens):
         field = self.getTokenIndex(field)
@@ -477,6 +484,8 @@ class CrateFile:
             type = getValueType(value)
         if type == ValueType.token:
             return self.addFieldToken(field, value)
+        if type == ValueType.asset:
+            return self.addFieldAsset(field, value)
         if type == ValueType.TokenVector:
             return self.addFieldTokenVector(field, value)
         if type == ValueType.Specifier:

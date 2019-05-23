@@ -42,12 +42,12 @@ if not os.path.exists(exportsDir):
 export_usdz(
     context = bpy.context, 
     filepath = exportsDir + 'test.usdz',
-    materials = False,
+    materials = True,
     keepUSDA = True,
-    bakeTextures = False,
+    bakeTextures = True,
     bakeAO = False,
     samples = 64,
     scale = 4.0,
     animated = True,
-    useConverter = True,
+    useConverter = False,
     )

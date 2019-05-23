@@ -364,6 +364,7 @@ class Object:
         self.setupBakeImage(file)
         bpy.ops.object.bake(type=type, use_clear=True)
         self.bakeImage.save()
+        self.scene.textureFilePaths.append(file)
         self.cleanupBakeImage()
 
     def bakeDiffuseTexture(self):
@@ -619,6 +620,7 @@ class Scene:
         self.exportPath = ''
         self.bakeAO = False
         self.bakeTextures = False
+        self.textureFilePaths = []
         self.bakeSamples = 8
         self.scale = 1.0
         self.animated = False
