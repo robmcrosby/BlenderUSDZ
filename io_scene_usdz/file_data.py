@@ -309,20 +309,26 @@ class FileItem:
             else:
                 self.writeSpecsPrim(crate)
 
-    def writePath(self, crate):
+    def addPath(self, crate):
         crate.addPath(self.pathIndex, self.nameToken, self.pathJump, self.isAttribute())
 
-    def writeSubPaths(self, crate, excluded = []):
-        children = self.getChildren(excluded)
-        attributes = self.getAttributes(excluded)
-        for child in children:
-            isLast = child == children[-1] and len(attributes) == 0
-            child.pathJump = -1 if isLast else child.countItems(excluded) + 1
-            child.writePath(crate)
-            child.writeSubPaths(crate)
-        for attribute in attributes:
-            attribute.pathJump = -2 if attribute == attributes[-1] else 0
-            attribute.writePath(crate)
+    def addPaths(self, crate):
+        children = self.getChildren()
+        attributes = self.getAttributes()
+        for item in children:
+            item.pathJump = -1 if item == children[-1] and len(attributes) == 0 else item.countItems() + 1
+            item.addPath(crate)
+            item.addPaths(crate)
+        for item in attributes:
+            item.pathJump = -2 if item == attributes[-1] else 0
+            item.addPath(crate)
+
+    def countItems(self):
+        count = len(self.items)
+        for item in self.getChildren():
+            count += item.countItems()
+        return count
+
 
 
 class FileData:
@@ -330,6 +336,7 @@ class FileData:
         self.properties = {}
         self.items = []
         self.pathMap = {}
+        self.path = 0
 
     def addItem(self, type, name = '', data = None):
         item = FileItem(type, name, data)
@@ -378,6 +385,21 @@ class FileData:
         f.write(src)
         f.close()
 
+    def addPaths(self, crate):
+        children = self.getChildren()
+        attributes = self.getAttributes()
+        # Add the first path
+        jump = -1 if len(self.items) > 0 else -2
+        token = crate.getTokenIndex('')
+        crate.addPath(self.path, token, jump, False)
+        for item in children:
+            item.pathJump = -1 if item == children[-1] and len(attributes) == 0 else item.countItems() + 1
+            item.addPath(crate)
+            item.addPaths(crate)
+        for item in attributes:
+            item.pathJump = -2 if item == attributes[-1] else 0
+            item.addPath(crate)
+
     def writeUsdc(self, filePath):
         file = open(filePath, 'wb')
         crate = CrateFile(file)
@@ -399,7 +421,7 @@ class FileData:
             fset.append(crate.addFieldTokenVector('primChildren', [c.name for c in children]))
         fset = crate.addFieldSet(fset)
         # Add the root spec
-        path = crate.addSpec(fset, SpecType.PseudoRoot)
+        self.path = crate.addSpec(fset, SpecType.PseudoRoot)
         # Write Xform Specs
         xforms = self.getItemsOfType('Xform')
         xforms += self.getItemsOfType('SkelRoot')
@@ -464,40 +486,9 @@ class FileData:
         for att in self.getAttributes():
             att.writeSpecs(crate, self.pathMap)
 
-        # Add the first path
-        jump = -1 if len(self.items) > 0 else -2
-        token = crate.getTokenIndex('')
-        crate.addPath(path, token, jump, False)
-        count = 0
-        for xform in reversed(xforms):
-            count += xform.countItems(['Xform']) + 1
-            xform.pathJump = -1 if xform == xforms[0] else count
-        for xform in xforms:
-            xform.writePath(crate)
-        for xform in reversed(xforms):
-            animations = xform.getItemsOfType('SkelAnimation')
-            for animation in animations:
-                animation.pathJump = animation.countItems() + 1
-                animation.writePath(crate)
-                animation.writeSubPaths(crate)
-            skeletons = xform.getItemsOfType('Skeleton')
-            for skeleton in skeletons:
-                skeleton.pathJump = skeleton.countItems() + 1
-                skeleton.writePath(crate)
-                skeleton.writeSubPaths(crate)
-            materials = xform.getItemsOfType('Material')
-            for material in materials:
-                material.pathJump = material.countItems() + 1
-                material.writePath(crate)
-                material.writeSubPaths(crate)
-            xform.writeSubPaths(crate, ['Xform', 'Material', 'SkelAnimation', 'Skeleton'])
+        # Add the Paths
+        self.addPaths(crate)
 
-        """
-        # Write items
-        for item in self.items:
-            jump = -2 if item == self.items[-1] else 0
-            item.writeUsdc(crate)
-        """
         # Finish Writing the usdc file
         crate.writeSections()
         crate.writeTableOfContents()
