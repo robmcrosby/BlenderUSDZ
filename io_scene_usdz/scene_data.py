@@ -522,7 +522,6 @@ class Object:
 
     def exportArmatureAnimationItems(self, armature):
         rotationItem = FileItem('quatf[]', 'rotations.timeSamples')
-        #scaleItem = FileItem('half3[]', 'scales.timeSamples')
         scaleItem = FileItem('float3[]', 'scales.timeSamples')
         translationItem = FileItem('float3[]', 'translations.timeSamples')
         start = self.scene.startFrame
@@ -531,7 +530,6 @@ class Object:
         armature.data.pose_position = 'POSE'
         for frame in range(start, end+1):
             self.scene.context.scene.frame_set(frame)
-            self.scene.context.scene.update()
             rotations = []
             scales = []
             locations = []
@@ -556,7 +554,6 @@ class Object:
             scaleItem.addTimeSample(frame, scales)
             translationItem.addTimeSample(frame, locations)
         self.scene.context.scene.frame_set(self.scene.curFrame)
-        self.scene.context.scene.update()
         bpy.ops.object.mode_set(mode='OBJECT')
         return [rotationItem, scaleItem, translationItem]
 
