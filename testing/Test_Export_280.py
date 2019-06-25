@@ -46,8 +46,9 @@ export_usdz(
     keepUSDA = True,
     bakeTextures = True,
     bakeAO = False,
+    bakeSize = 512,
     samples = 64,
     scale = 4.0,
-    animated = True,
+    animated = False,
     useConverter = False,
     )

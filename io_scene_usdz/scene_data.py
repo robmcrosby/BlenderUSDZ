@@ -35,7 +35,10 @@ class ShaderInput:
             item.addItem('float2', 'inputs:st.connect', path)
             item.addItem('token', 'inputs:wrapS', '"repeat"')
             item.addItem('token', 'inputs:wrapT', '"repeat"')
-            item.addItem('float3', 'outputs:rgb')
+            if self.type == 'float':
+                item.addItem('float3', 'outputs:r')
+            else:
+                item.addItem('float3', 'outputs:rgb')
             return item
         return None
 
@@ -257,8 +260,8 @@ class Object:
         self.armatueCopy = None
         self.materials = []
         self.bakeUVMap = ''
-        self.bakeWidth = 1024
-        self.bakeHeight = 1024
+        self.bakeWidth = scene.bakeSize
+        self.bakeHeight = scene.bakeSize
         self.bakeImage = None
         self.hidden = object.hide_render
 
@@ -619,6 +622,7 @@ class Scene:
         self.bakeTextures = False
         self.textureFilePaths = []
         self.bakeSamples = 8
+        self.bakeSize = 1024
         self.scale = 1.0
         self.animated = False
         self.startFrame = 0

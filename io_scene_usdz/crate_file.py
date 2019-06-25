@@ -473,7 +473,7 @@ class CrateFile:
         writeInt(self.file, 8, 8)
         writeInt(self.file, count, 8)
         for ref in refs:
-            print((ref, vType.value, elem))
+            #print((ref, vType.value, elem))
             writeInt(self.file, ref, 6)
             writeInt(self.file, vType.value, 1)
             writeInt(self.file, elem, 1)
@@ -502,7 +502,7 @@ class CrateFile:
             return self.addFieldBool(field, value)
         if type == ValueType.Variability:
             return self.addFieldVariability(field, value)
-        print('type: ', type.name, value)
+        #print('type: ', type.name, value)
         return self.addFieldItem(field, type, False, True, False, value)
 
     def addPath(self, path, token, jump, prim):
@@ -605,7 +605,7 @@ class CrateFile:
 
     def writeTableOfContents(self):
         tocStart = self.file.tell()
-        print('tocStart: ', tocStart)
+        #print('tocStart: ', tocStart)
         writeInt(self.file, len(self.toc), 8)
         for name, start, size in self.toc:
             self.file.write(name)
