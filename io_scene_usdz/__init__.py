@@ -74,6 +74,13 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
         max=1000,
         default= 64,
         )
+    bakeSize = IntProperty(
+        name="Bake Image Size",
+        description="Default Size of any Baked Images",
+        min=16,
+        max=4096,
+        default= 1024,
+        )
     scale = FloatProperty(
         name="Scale",
         min=0.01,
