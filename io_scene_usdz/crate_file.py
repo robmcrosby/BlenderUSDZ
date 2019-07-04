@@ -29,6 +29,10 @@ def writeToAlign(file, size):
     if bufBytes > 0:
         file.write(bytes(bufBytes))
 
+def readInt(file, size, byteorder='little', signed=False):
+    buffer = file.read(size)
+    return int.from_bytes(buffer, byteorder=byteorder, signed=signed)
+
 def dataKey(data):
     if type(data) == list:
         return tuple(data)
@@ -536,14 +540,14 @@ class CrateFile:
         writeInt(self.file, len(buffer), 8)
         self.file.write(buffer)
         size = self.file.tell() - start
-        self.toc.append((b'TOKENS', start, size))
+        self.toc.append(('TOKENS', start, size))
 
     def writeStringsSection(self):
         start = self.file.tell()
         self.file.write(bytes(8))
         # This section is empty for now
         size = self.file.tell() - start
-        self.toc.append((b'STRINGS', start, size))
+        self.toc.append(('STRINGS', start, size))
 
     def writeFieldsSection(self):
         start = self.file.tell()
@@ -553,14 +557,14 @@ class CrateFile:
         writeInt(self.file, len(buffer), 8)
         self.file.write(buffer)
         size = self.file.tell() - start
-        self.toc.append((b'FIELDS', start, size))
+        self.toc.append(('FIELDS', start, size))
 
     def writeFieldSetsSection(self):
         start = self.file.tell()
         writeInt(self.file, len(self.fsets), 8)
         writeInt32Compressed(self.file, self.fsets)
         size = self.file.tell() - start
-        self.toc.append((b'FIELDSETS', start, size))
+        self.toc.append(('FIELDSETS', start, size))
 
     def writePathsSection(self):
         start = self.file.tell()
@@ -577,7 +581,7 @@ class CrateFile:
         writeInt32Compressed(self.file, tokens)
         writeInt32Compressed(self.file, jumps)
         size = self.file.tell() - start
-        self.toc.append((b'PATHS', start, size))
+        self.toc.append(('PATHS', start, size))
 
     def writeSpecsSection(self):
         start = self.file.tell()
@@ -593,7 +597,7 @@ class CrateFile:
         writeInt32Compressed(self.file, fsets)
         writeInt32Compressed(self.file, types)
         size = self.file.tell() - start
-        self.toc.append((b'SPECS', start, size))
+        self.toc.append(('SPECS', start, size))
 
     def writeSections(self):
         self.writeTokensSection()
@@ -608,8 +612,39 @@ class CrateFile:
         #print('tocStart: ', tocStart)
         writeInt(self.file, len(self.toc), 8)
         for name, start, size in self.toc:
-            self.file.write(name)
+            self.file.write(name.encode('utf-8'))
             self.file.write(bytes(16-len(name)))
             writeInt(self.file, start, 8)
             writeInt(self.file, size, 8)
         self.writeBootStrap(tocStart)
+
+    def getTableItem(self, sectionName):
+        for name, start, size in self.toc:
+            if sectionName == name:
+                return (start, size)
+        return (0, 0)
+
+    def seekTableOfContents(self):
+        self.file.seek(16)
+        tocStart = readInt(self.file, 8)
+        self.file.seek(tocStart)
+
+    def readTableOfContents(self):
+        self.toc = []
+        self.seekTableOfContents()
+        numItems = readInt(self.file, 8)
+        for i in range(0, numItems):
+            name = self.file.read(16).decode('utf-8').rstrip('\0')
+            start = readInt(self.file, 8)
+            size = readInt(self.file, 8)
+            self.toc.append((name, start, size))
+
+    def readTokensSection(self):
+        start, size = self.getTableItem('TOKENS')
+        if start > 0 and size > 0:
+            self.file.seek(start+8)
+            compressedSize = readInt(self.file, 8)
+            buffer = bytearray(self.file.read(compressedSize))
+            buffer += bytes(1024)
+            buffer = lz4Decompress(buffer)
+            print(buffer)

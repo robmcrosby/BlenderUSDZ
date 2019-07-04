@@ -22,7 +22,6 @@ def import_usdz(context, filepath = ''):
     fileName, fileType = fileName.split('.')
 
     if fileType == 'usdz':
-        print('filepath', filepath)
         with zipfile.ZipFile(filepath, 'r') as zf:
             # Create a temp directory to extract to
             tempPath = tempfile.mkdtemp()
@@ -32,7 +31,9 @@ def import_usdz(context, filepath = ''):
             # Find the usdc file
             usdcFile = find_usdz(tempPath)
             if usdcFile != '':
-                print('usdc file:', usdcFile)
+                data = FileData()
+                data.readUsdc(usdcFile)
+                #print('usdc file:', usdcFile)
             else:
                 print('No usdc file found')
 

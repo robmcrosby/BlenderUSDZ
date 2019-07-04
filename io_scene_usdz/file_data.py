@@ -493,3 +493,10 @@ class FileData:
         crate.writeSections()
         crate.writeTableOfContents()
         file.close()
+
+    def readUsdc(self, filePath):
+        file = open(filePath, 'rb')
+        crate = CrateFile(file)
+        crate.readTableOfContents()
+        crate.readTokensSection()
+        file.close()

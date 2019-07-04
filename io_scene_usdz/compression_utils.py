@@ -246,7 +246,8 @@ def lz4DecompressChunk(src):
         matchLen += MIN_MATCH
         # Copy Match
         matchPtr = len(dst) - offset
-        while matchLen > 0:
+        while matchLen > 0 and matchPtr > 0 and len(dst) > matchPtr + matchLen:
+            print('len', len(dst), 'matchPtr', matchPtr, 'matchLen', matchLen)
             dst.append(dst[matchPtr])
             matchPtr += 1
             matchLen -= 1
