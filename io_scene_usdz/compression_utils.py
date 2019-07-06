@@ -232,7 +232,7 @@ def lz4DecompressChunk(src):
         if srcPtr >= srcLen:
             break
         # Get match offset
-        offset = int.from_bytes(src[srcPtr:srcPtr + 2], 'little')
+        offset = int.from_bytes(src[srcPtr:srcPtr + 2], 'little', signed=True)
         srcPtr += 2
         # Get match length
         matchLen = token[0] & 0x0F
@@ -246,8 +246,8 @@ def lz4DecompressChunk(src):
         matchLen += MIN_MATCH
         # Copy Match
         matchPtr = len(dst) - offset
-        while matchLen > 0 and matchPtr > 0 and len(dst) > matchPtr + matchLen:
-            print('len', len(dst), 'matchPtr', matchPtr, 'matchLen', matchLen)
+        while matchLen > 0 and matchPtr + matchLen > 0 and len(dst) > matchPtr + matchLen:
+            #print('len', len(dst), 'matchPtr', matchPtr, 'matchLen', matchLen)
             dst.append(dst[matchPtr])
             matchPtr += 1
             matchLen -= 1
@@ -257,17 +257,22 @@ def lz4DecompressChunk(src):
 def lz4Decompress(src):
     dst = bytearray()
     if len(src) > 0:
-        chunks = src[0]
-        if chunks == 0:
+        if src[0] == 0:
             dst = lz4DecompressChunk(memoryview(src)[1:])
         else:
-            srcPtr = 1
-            while chunks > 0:
-                chunkSize = int.from_bytes(src[srcPtr:srcPtr + 4], 'little')
-                srcPtr += 4
-                dst += lz4DecompressChunk(memoryview(src)[srcPtr:srcPtr + chunkSize])
+            chunkSize = int.from_bytes(src[:4], 'little') - 1
+            print('chunkSize', chunkSize)
+            srcPtr = 9
+            while chunkSize > 0:
+                dst += lz4DecompressChunk(memoryview(src)[srcPtr:srcPtr+chunkSize])
                 srcPtr += chunkSize
-                chunks -= 1
+                if srcPtr + 8 < len(src):
+                    srcPtr += 1
+                    chunkSize = int.from_bytes(src[srcPtr:srcPtr + 4], 'little')
+                    print('chunkSize', chunkSize)
+                    srcPtr += 8
+                else:
+                    chunkSize = 0
     return dst
 
 
