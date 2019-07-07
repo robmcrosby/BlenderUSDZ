@@ -33,6 +33,12 @@ def readInt(file, size, byteorder='little', signed=False):
     buffer = file.read(size)
     return int.from_bytes(buffer, byteorder=byteorder, signed=signed)
 
+def readInt32Compressed(file, numInts):
+    size = readInt(file, 8)
+    buffer = lz4Decompress(file.read(size))
+    return usdInt32Decompress(buffer, numInts)
+
+
 def dataKey(data):
     if type(data) == list:
         return tuple(data)
@@ -645,6 +651,29 @@ class CrateFile:
             self.file.seek(start+8)
             compressedSize = readInt(self.file, 8)
             buffer = bytearray(self.file.read(compressedSize))
-            buffer += bytes(1024)
             buffer = lz4Decompress(buffer)
-            print(buffer)
+            self.tokens = buffer.decode('utf-8').split('\0')
+            self.tokenMap = {}
+            index = 0
+            for token in self.tokens:
+                self.tokenMap[token] = index
+                index += 1
+
+    def readFieldsSection(self):
+        start, size = self.getTableItem('FIELDS')
+        if start > 0 and size > 0:
+            self.file.seek(start)
+            numFields = readInt(self.file, 8)
+            self.fields = readInt32Compressed(self.file, numFields)
+            size = readInt(self.file, 8)
+            buffer = lz4Decompress(self.file.read(size))
+            self.reps = decodeInts(buffer, numFields, 8)
+
+    def readFieldSetsSection(self):
+        start, size = self.getTableItem('FIELDSETS')
+        if start > 0 and size > 0:
+            self.file.seek(start)
+            numSets = readInt(self.file, 8)
+            self.fsets = readInt32Compressed(self.file, numSets)
+            #print('numSets', numSets)
+            #print(self.fsets)

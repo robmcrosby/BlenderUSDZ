@@ -499,4 +499,6 @@ class FileData:
         crate = CrateFile(file)
         crate.readTableOfContents()
         crate.readTokensSection()
+        crate.readFieldsSection()
+        crate.readFieldSetsSection()
         file.close()
