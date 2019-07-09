@@ -501,4 +501,6 @@ class FileData:
         crate.readTokensSection()
         crate.readFieldsSection()
         crate.readFieldSetsSection()
+        crate.readPathsSection()
+        crate.readSpecsSection()
         file.close()

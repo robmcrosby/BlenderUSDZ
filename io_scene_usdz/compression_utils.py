@@ -237,7 +237,7 @@ def lz4DecompressChunk(src):
         # Get match length
         matchLen = token[0] & 0x0F
         if matchLen == 15:
-            print('Extended Match')
+            #print('Extended Match')
             while src[srcPtr] == 255:
                 matchLen += 255
                 srcPtr += 1
@@ -261,7 +261,7 @@ def lz4Decompress(src):
             dst = lz4DecompressChunk(memoryview(src)[1:])
         else:
             chunkSize = int.from_bytes(src[:4], 'little') - 1
-            print('chunkSize', chunkSize)
+            #print('chunkSize', chunkSize)
             srcPtr = 9
             while chunkSize > 0:
                 dst += lz4DecompressChunk(memoryview(src)[srcPtr:srcPtr+chunkSize])
@@ -269,7 +269,7 @@ def lz4Decompress(src):
                 if srcPtr + 8 < len(src):
                     srcPtr += 1
                     chunkSize = int.from_bytes(src[srcPtr:srcPtr + 4], 'little')
-                    print('chunkSize', chunkSize)
+                    #print('chunkSize', chunkSize)
                     srcPtr += 8
                 else:
                     chunkSize = 0

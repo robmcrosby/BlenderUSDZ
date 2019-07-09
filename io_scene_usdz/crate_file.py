@@ -635,16 +635,6 @@ class CrateFile:
         tocStart = readInt(self.file, 8)
         self.file.seek(tocStart)
 
-    def readTableOfContents(self):
-        self.toc = []
-        self.seekTableOfContents()
-        numItems = readInt(self.file, 8)
-        for i in range(0, numItems):
-            name = self.file.read(16).decode('utf-8').rstrip('\0')
-            start = readInt(self.file, 8)
-            size = readInt(self.file, 8)
-            self.toc.append((name, start, size))
-
     def readTokensSection(self):
         start, size = self.getTableItem('TOKENS')
         if start > 0 and size > 0:
@@ -658,6 +648,12 @@ class CrateFile:
             for token in self.tokens:
                 self.tokenMap[token] = index
                 index += 1
+
+    def readStringsSection(self):
+        start, size = self.getTableItem('STRINGS')
+        if start > 0 and size > 0:
+            self.file.seek(start)
+            #print('Strings', self.file.read(size))
 
     def readFieldsSection(self):
         start, size = self.getTableItem('FIELDS')
@@ -677,3 +673,47 @@ class CrateFile:
             self.fsets = readInt32Compressed(self.file, numSets)
             #print('numSets', numSets)
             #print(self.fsets)
+
+    def readPathsSection(self):
+        start, size = self.getTableItem('PATHS')
+        if start > 0 and size > 0:
+            self.file.seek(start)
+            numPaths = readInt(self.file, 8)
+            numPaths = readInt(self.file, 8)
+            paths = readInt32Compressed(self.file, numPaths)
+            tokens = readInt32Compressed(self.file, numPaths)
+            jumps = readInt32Compressed(self.file, numPaths)
+            self.paths = []
+            for i in range(0, numPaths):
+                self.paths.append((paths[i], tokens[i], jumps[i]))
+            #print(self.paths)
+
+    def readSpecsSection(self):
+        start, size = self.getTableItem('SPECS')
+        if start > 0 and size > 0:
+            self.file.seek(start)
+            numSpecs = readInt(self.file, 8)
+            paths = readInt32Compressed(self.file, numSpecs)
+            fsets = readInt32Compressed(self.file, numSpecs)
+            types = readInt32Compressed(self.file, numSpecs)
+            self.specs = []
+            for i in range(0, numSpecs):
+                self.specs.append((paths[i], fsets[i], types[i]))
+            #print(self.specs)
+
+    def readTableOfContents(self):
+        self.toc = []
+        self.seekTableOfContents()
+        numItems = readInt(self.file, 8)
+        for i in range(0, numItems):
+            name = self.file.read(16).decode('utf-8').rstrip('\0')
+            start = readInt(self.file, 8)
+            size = readInt(self.file, 8)
+            self.toc.append((name, start, size))
+        # Read Each Section
+        self.readTokensSection()
+        self.readStringsSection()
+        self.readFieldsSection()
+        self.readFieldSetsSection()
+        self.readPathsSection()
+        self.readSpecsSection()
