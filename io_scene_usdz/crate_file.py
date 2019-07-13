@@ -643,6 +643,7 @@ class CrateFile:
             buffer = bytearray(self.file.read(compressedSize))
             buffer = lz4Decompress(buffer)
             self.tokens = buffer.decode('utf-8').split('\0')
+            #print(self.tokens)
             self.tokenMap = {}
             index = 0
             for token in self.tokens:
@@ -661,9 +662,11 @@ class CrateFile:
             self.file.seek(start)
             numFields = readInt(self.file, 8)
             self.fields = readInt32Compressed(self.file, numFields)
+            #print(self.fields)
             size = readInt(self.file, 8)
             buffer = lz4Decompress(self.file.read(size))
             self.reps = decodeInts(buffer, numFields, 8)
+            #print(self.reps)
 
     def readFieldSetsSection(self):
         start, size = self.getTableItem('FIELDSETS')
@@ -671,7 +674,6 @@ class CrateFile:
             self.file.seek(start)
             numSets = readInt(self.file, 8)
             self.fsets = readInt32Compressed(self.file, numSets)
-            #print('numSets', numSets)
             #print(self.fsets)
 
     def readPathsSection(self):
@@ -717,3 +719,17 @@ class CrateFile:
         self.readFieldSetsSection()
         self.readPathsSection()
         self.readSpecsSection()
+
+    def getFieldSet(self, index):
+        fset = []
+        while index < len(self.fsets) and self.fsets[index] >= 0:
+            i = self.fsets[index]
+            if i < len(self.fields):
+                fset.append(self.fields[i])
+            index += 1
+        return fset
+
+    def printContents(self):
+        for path, fset, type in self.specs:
+            fset = self.getFieldSet(fset)
+            print('path', path, 'fset', fset, 'type', type)

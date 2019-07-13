@@ -232,12 +232,11 @@ def lz4DecompressChunk(src):
         if srcPtr >= srcLen:
             break
         # Get match offset
-        offset = int.from_bytes(src[srcPtr:srcPtr + 2], 'little', signed=True)
+        offset = int.from_bytes(src[srcPtr:srcPtr + 2], 'little')
         srcPtr += 2
         # Get match length
         matchLen = token[0] & 0x0F
         if matchLen == 15:
-            #print('Extended Match')
             while src[srcPtr] == 255:
                 matchLen += 255
                 srcPtr += 1
@@ -245,12 +244,8 @@ def lz4DecompressChunk(src):
             srcPtr += 1
         matchLen += MIN_MATCH
         # Copy Match
-        matchPtr = len(dst) - offset
-        while matchLen > 0 and matchPtr + matchLen > 0 and len(dst) > matchPtr + matchLen:
-            #print('len', len(dst), 'matchPtr', matchPtr, 'matchLen', matchLen)
-            dst.append(dst[matchPtr])
-            matchPtr += 1
-            matchLen -= 1
+        for i in range(matchLen):
+            dst.append(dst[len(dst) - offset])
     return dst
 
 

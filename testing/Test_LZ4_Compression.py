@@ -23,10 +23,13 @@ from io_scene_usdz.compression_utils import lz4Decompress, lz4Compress, usdInt32
 
 exportsDir = bpy.path.abspath("//") + 'exports/'
 #filepath = exportsDir + 'test.usdc'
+filepath = exportsDir + 'teapot.usdc'
+#filepath = exportsDir + 'testMult.usdc'
 #filepath = exportsDir + 'testThree.usdc'
 #filepath = exportsDir + 'testMat.usdc'
 #filepath = exportsDir + 'testTex.usdc'
-filepath = exportsDir + 'testScale.usdc'
+#filepath = exportsDir + 'testScale.usdc'
+#filepath = exportsDir + 'testSkin.usdc'
 #filepath = exportsDir + 'testCube.usdc'
 #filepath = exportsDir + 'testPlane.usdc'
 #filepath = exportsDir + 'testEmpty.usdc'
@@ -285,20 +288,58 @@ def getRepValue(rep, file, tokens):
             #return readInt(file, 8)
     elif rep['type'] == 'TimeSamples':
         file.seek(rep['payload'])
-        #size = readInt(file, 8) - 16
-        #count = readInt(file, 8)
-        #data = file.read(size)
-        #frames = decodeDoubles(data, count)
-        #print('first', readInt(file, 4))
-        #print('second', (readInt(file, 4)>>16))
+        size = readInt(file, 8) - 16
+        if size < 0:
+            loc = readInt(file, 6)
+            vType = readInt(file, 2)
+            file.seek(loc-8)
+            size = readInt(file, 8) - 16
+            count = readInt(file, 8)
+            data = file.read(size)
+            frames = decodeDoubles(data, count)
+            file.seek(rep['payload']+16)
+            #print('Size:', size)
+            #print('Count:', count)
+        else:
+            count = readInt(file, 8)
+            data = file.read(size)
+            frames = decodeDoubles(data, count)
+            file.seek(file.tell()+8)
+            #print('Size:', size)
+            #print('Count:', count)
+            #print('Data:', unpack('<d',data[-8:]))
+        size = readInt(file, 8)
+        count = readInt(file, 8)
+        #print('Size:', size)
         #print('Count:', count)
-        #print('Data:', unpack('<d',data[-8:]))
-        #size = readInt(file, 8)
-        #count = readInt(file, 8)
-        #reps = []
-        #for i in range(count):
-        #    reps.append((i, readInt(file, 4), file.read(4)))
-        #return reps
+        reps = []
+        for i in range(count):
+            reps.append((i, readInt(file, 6), readInt(file, 1), readInt(file, 1)))
+        return reps
+        timeSamples = []
+        for i, loc, vType, array in reps:
+            vType = getValueType(vType)
+            if vType == 'Quatf':
+                file.seek(loc)
+                count = readInt(file, 4)
+                print(count)
+                values = []
+                while count > 0:
+                    values.append(unpack('<ffff', file.read(16)))
+                    count -= 1
+                #print(values)
+            elif vType == 'Vec3f':
+                file.seek(loc)
+                count = readInt(file, 4)
+                print(count)
+                values = []
+                while count > 0:
+                    values.append(unpack('<fff', file.read(12)))
+                    count -= 1
+                #print(values)
+            #print(vType)
+            
+        
         #return frames
         #file.seek(rep['payload']-(128*(count)))
         #print(file.read(128))
@@ -361,17 +402,23 @@ with open(filepath, 'rb') as file:
     data = file.read(compressedSize)
     data = lz4Decompress(data)
     reps = decodeReps(data, numFields) #decodeInts(data, numFields, 8)
-    print('\nFIELDS (', offset, ':', offset+size, ')')
+    
+    #print('fields size', len(fields), 'reps size', len(reps))
+    #print('reps', reps)
+    #print('\nFIELDS (', offset, ':', offset+size, ')')
     
     for i in range(len(fields)):
-        field = tokens[fields[i]]
-        rep = reps[i]
-        #print(i, '\t', field,'\t= ',rep)
-        value = getRepValue(rep, file, tokens)
-        if value != None:
-            print(i, '\t', field, '\t= (', rep['type'], ') ',value, rep['payload'])
-        else:
+        if fields[i] < len(tokens) and i < len(reps):
+            field = tokens[fields[i]]
+            #print(i, '\t', field)
+            rep = reps[i]
             print(i, '\t', field,'\t= ',rep)
+            """
+            value = getRepValue(rep, file, tokens)
+            if value != None:
+                print(i, '\t', field, '\t= (', rep['type'], ') ',value, rep['payload'])
+            else:
+                print(i, '\t', field,'\t= ',rep)
     
     #print('fields:', fields)
     #for rep in reps:
@@ -481,3 +528,4 @@ with open(filepath, 'rb') as file:
     #print('fsetIndices:', fsetIndices)
     #print('specTypes:', specTypes)
     #print(data)
+    """
