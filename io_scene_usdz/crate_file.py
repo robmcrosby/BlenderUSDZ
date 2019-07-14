@@ -229,6 +229,15 @@ def compare(lhs, rhs):
             return True
     return lhs == rhs
 
+def decodeRep(data):
+    rep = {}
+    rep['type'] = ValueType((data >> 48) & 0xFF)
+    rep['array'] = (data & ARRAY_BIT) != 0
+    rep['inline'] = (data & INLINE_BIT) != 0
+    rep['compressed'] = (data & COMPRESSED_BIT) != 0
+    rep['payload'] = data & PAYLOAD_MASK
+    return rep
+
 
 class CrateFile:
     def __init__(self, file):
@@ -729,7 +738,41 @@ class CrateFile:
             index += 1
         return fset
 
+    def getRepValue(self, rep):
+        rep = decodeRep(rep)
+        if rep['type'] == ValueType.token and rep['payload'] < len(self.tokens):
+            return self.tokens[rep['payload']]
+        elif rep['type'] == ValueType.TokenVector:
+            self.file.seek(rep['payload'])
+            numTokens = readInt(self.file, 8)
+            tokens = []
+            for i in range(numTokens):
+                token = readInt(self.file, 4)
+                if (token < len(self.tokens)):
+                    tokens.append(self.tokens[token])
+            return tokens
+        elif rep['type'] == ValueType.PathListOp:
+            self.file.seek(rep['payload'])
+            listOp = {}
+            listOp['op'] = readInt(self.file, 8)
+            self.file.seek(self.file.tell()+1)
+            listOp['path'] = readInt(self.file, 4)
+            return listOp
+        return rep
+
     def printContents(self):
-        for path, fset, type in self.specs:
+        print('reps', len(self.reps))
+        print(self.reps)
+        for path, token, jump in self.paths:
+            path, fset, type = self.specs[path]
             fset = self.getFieldSet(fset)
-            print('path', path, 'fset', fset, 'type', type)
+            type = SpecType(type)
+            token = self.tokens[token]
+            print(type.name, token, jump)
+            for field in fset:
+                if field < len(self.reps):
+                    name = self.tokens[self.fields[field]]
+                    value = self.getRepValue(self.reps[field])
+                    print('\t', name, value)
+                else:
+                    print('\tERROR', field)

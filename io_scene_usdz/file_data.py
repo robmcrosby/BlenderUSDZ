@@ -499,5 +499,5 @@ class FileData:
         crate = CrateFile(file)
         crate.readTableOfContents()
         #print('printContents')
-        #crate.printContents()
+        crate.printContents()
         file.close()
