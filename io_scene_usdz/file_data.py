@@ -494,10 +494,20 @@ class FileData:
         crate.writeTableOfContents()
         file.close()
 
+    def printData(self, data, tab = ''):
+        print(tab + '*'+data['name'] + '<'+data['type'].name+'>')
+        for name, value in data['fields'].items():
+            print(tab + '  -'+name + '<'+value['type'].name+'>')
+        for item in data['items']:
+            self.printData(item, tab+'  ')
+
     def readUsdc(self, filePath):
         file = open(filePath, 'rb')
         crate = CrateFile(file)
         crate.readTableOfContents()
         #print('printContents')
-        crate.printContents()
+        #crate.printContents()
+        data = crate.getData()
+        self.printData(data)
+        #print(data)
         file.close()

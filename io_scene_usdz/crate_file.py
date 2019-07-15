@@ -738,6 +738,40 @@ class CrateFile:
             index += 1
         return fset
 
+    def buildData(self, index):
+        path, token, jump = self.paths[index]
+        path, fset, type = self.specs[path]
+        fset = self.getFieldSet(fset)
+        type = SpecType(type)
+        token = self.tokens[token]
+        data = {}
+        data['name'] = token
+        data['type'] = type
+        data['jump'] = jump
+        data['items'] = []
+        data['fields'] = {}
+
+        for field in fset:
+            if field < len(self.reps):
+                name = self.tokens[self.fields[field]]
+                rep = decodeRep(self.reps[field])
+                data['fields'][name] = rep
+
+        if jump == 0 or jump == -2:
+            index += 1
+        else:
+            item, index = self.buildData(index + 1)
+            data['items'].append(item)
+            while index < len(self.paths) and item['jump'] != -2:
+                item, index = self.buildData(index)
+                data['items'].append(item)
+        return (data, index)
+
+
+    def getData(self):
+        data, index = self.buildData(0)
+        return data
+
     def getRepValue(self, rep):
         rep = decodeRep(rep)
         if rep['type'] == ValueType.token and rep['payload'] < len(self.tokens):
@@ -761,8 +795,6 @@ class CrateFile:
         return rep
 
     def printContents(self):
-        print('reps', len(self.reps))
-        print(self.reps)
         for path, token, jump in self.paths:
             path, fset, type = self.specs[path]
             fset = self.getFieldSet(fset)
