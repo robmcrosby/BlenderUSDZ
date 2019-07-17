@@ -497,7 +497,7 @@ class FileData:
     def printData(self, data, tab = ''):
         print(tab + '*'+data['name'] + '<'+data['type'].name+'>')
         for name, value in data['fields'].items():
-            print(tab + '  -'+name + '<'+value['type'].name+'>')
+            print(tab + '  -'+name, value)
         for item in data['items']:
             self.printData(item, tab+'  ')
 
@@ -507,6 +507,7 @@ class FileData:
         crate.readTableOfContents()
         #print('printContents')
         #crate.printContents()
+
         data = crate.getData()
         self.printData(data)
         #print(data)

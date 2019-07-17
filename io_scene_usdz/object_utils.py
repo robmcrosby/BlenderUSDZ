@@ -71,6 +71,11 @@ def apply_object_modifers(object):
         bpy.ops.object.make_single_user()
         bpy.ops.object.convert(target='MESH')
 
+def create_mesh_object(meshName, objName):
+    mesh = bpy.data.meshes.new(meshName)
+    obj = bpy.data.objects.new(objName, mesh)
+    return obj
+
 def delete_object(object):
     select_object(object)
     bpy.ops.object.delete()

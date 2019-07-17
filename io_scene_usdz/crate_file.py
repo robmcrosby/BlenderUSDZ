@@ -236,6 +236,7 @@ def decodeRep(data):
     rep['inline'] = (data & INLINE_BIT) != 0
     rep['compressed'] = (data & COMPRESSED_BIT) != 0
     rep['payload'] = data & PAYLOAD_MASK
+    rep['value'] = None
     return rep
 
 
@@ -732,9 +733,7 @@ class CrateFile:
     def getFieldSet(self, index):
         fset = []
         while index < len(self.fsets) and self.fsets[index] >= 0:
-            i = self.fsets[index]
-            if i < len(self.fields):
-                fset.append(self.fields[i])
+            fset.append(self.fsets[index])
             index += 1
         return fset
 
@@ -743,7 +742,7 @@ class CrateFile:
         path, fset, type = self.specs[path]
         fset = self.getFieldSet(fset)
         type = SpecType(type)
-        token = self.tokens[token]
+        token = self.tokens[abs(token)]
         data = {}
         data['name'] = token
         data['type'] = type
@@ -754,7 +753,7 @@ class CrateFile:
         for field in fset:
             if field < len(self.reps):
                 name = self.tokens[self.fields[field]]
-                rep = decodeRep(self.reps[field])
+                rep = self.getRepValue(self.reps[field])
                 data['fields'][name] = rep
 
         if jump == 0 or jump == -2:
@@ -774,8 +773,18 @@ class CrateFile:
 
     def getRepValue(self, rep):
         rep = decodeRep(rep)
-        if rep['type'] == ValueType.token and rep['payload'] < len(self.tokens):
-            return self.tokens[rep['payload']]
+        if rep['type'] == ValueType.token:
+            if not rep['inline']:
+                self.file.seek(rep['payload'])
+                numTokens = readInt(self.file, 4)
+                tokens = []
+                for i in range(numTokens):
+                    token = readInt(self.file, 4)
+                    if (token < len(self.tokens)):
+                        tokens.append(self.tokens[token])
+                return tokens
+            elif rep['payload'] < len(self.tokens):
+                return self.tokens[rep['payload']]
         elif rep['type'] == ValueType.TokenVector:
             self.file.seek(rep['payload'])
             numTokens = readInt(self.file, 8)
@@ -792,6 +801,8 @@ class CrateFile:
             self.file.seek(self.file.tell()+1)
             listOp['path'] = readInt(self.file, 4)
             return listOp
+        elif rep['type'] == ValueType.Variability or rep['type'] == ValueType.bool:
+            return rep['payload'] == 1
         return rep
 
     def printContents(self):
@@ -799,10 +810,10 @@ class CrateFile:
             path, fset, type = self.specs[path]
             fset = self.getFieldSet(fset)
             type = SpecType(type)
-            token = self.tokens[token]
+            token = self.tokens[abs(token)]
             print(type.name, token, jump)
             for field in fset:
-                if field < len(self.reps):
+                if field < len(self.fields):
                     name = self.tokens[self.fields[field]]
                     value = self.getRepValue(self.reps[field])
                     print('\t', name, value)
