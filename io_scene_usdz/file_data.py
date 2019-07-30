@@ -493,3 +493,51 @@ class FileData:
         crate.writeSections()
         crate.writeTableOfContents()
         file.close()
+
+    def printData(self, data, tab = ''):
+        print(tab + '*'+data['name'] + '<'+data['type'].name+'>')
+        for name, value in data['fields'].items():
+            print(tab + '  -'+name, value)
+        for item in data['items']:
+            self.printData(item, tab+'  ')
+
+    def buildItemFromCrate(self, crate, index):
+        path, token, jump = crate.paths[0]
+        path, fset, type = crate.specs[0]
+        fset = crate.getFieldSet(fset)
+
+
+    def buildFromCrate(self, crate):
+        path, token, jump = crate.paths[0]
+        path, fset, type = crate.specs[0]
+        fset = crate.getFieldSet(fset)
+
+        # Get the Properties
+        for field in fset:
+            if field < len(crate.reps):
+                name = crate.tokens[crate.fields[field]]
+                rep = crate.getRepValue(crate.reps[field])
+                self.properties[name] = rep
+
+        # Get the Items
+        if jump != 0 and jump != -2:
+            index = 1
+            while index < len(crate.paths):
+                item, index = self.buildItemFromCrate(crate, index)
+                self.items.append(item)
+
+
+    def readUsdc(self, filePath):
+        file = open(filePath, 'rb')
+        crate = CrateFile(file)
+        crate.readTableOfContents()
+        #print('printContents')
+        #crate.printContents()
+
+        self.buildFromCrate(crate)
+        print(self.printUsda())
+
+        #data = crate.getData()
+        #self.printData(data)
+        #print(data)
+        file.close()

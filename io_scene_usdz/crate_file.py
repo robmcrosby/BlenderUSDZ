@@ -29,6 +29,16 @@ def writeToAlign(file, size):
     if bufBytes > 0:
         file.write(bytes(bufBytes))
 
+def readInt(file, size, byteorder='little', signed=False):
+    buffer = file.read(size)
+    return int.from_bytes(buffer, byteorder=byteorder, signed=signed)
+
+def readInt32Compressed(file, numInts):
+    size = readInt(file, 8)
+    buffer = lz4Decompress(file.read(size))
+    return usdInt32Decompress(buffer, numInts)
+
+
 def dataKey(data):
     if type(data) == list:
         return tuple(data)
@@ -218,6 +228,16 @@ def compare(lhs, rhs):
                 return False
             return True
     return lhs == rhs
+
+def decodeRep(data):
+    rep = {}
+    rep['type'] = ValueType((data >> 48) & 0xFF)
+    rep['array'] = (data & ARRAY_BIT) != 0
+    rep['inline'] = (data & INLINE_BIT) != 0
+    rep['compressed'] = (data & COMPRESSED_BIT) != 0
+    rep['payload'] = data & PAYLOAD_MASK
+    rep['value'] = None
+    return rep
 
 
 class CrateFile:
@@ -536,14 +556,14 @@ class CrateFile:
         writeInt(self.file, len(buffer), 8)
         self.file.write(buffer)
         size = self.file.tell() - start
-        self.toc.append((b'TOKENS', start, size))
+        self.toc.append(('TOKENS', start, size))
 
     def writeStringsSection(self):
         start = self.file.tell()
         self.file.write(bytes(8))
         # This section is empty for now
         size = self.file.tell() - start
-        self.toc.append((b'STRINGS', start, size))
+        self.toc.append(('STRINGS', start, size))
 
     def writeFieldsSection(self):
         start = self.file.tell()
@@ -553,14 +573,14 @@ class CrateFile:
         writeInt(self.file, len(buffer), 8)
         self.file.write(buffer)
         size = self.file.tell() - start
-        self.toc.append((b'FIELDS', start, size))
+        self.toc.append(('FIELDS', start, size))
 
     def writeFieldSetsSection(self):
         start = self.file.tell()
         writeInt(self.file, len(self.fsets), 8)
         writeInt32Compressed(self.file, self.fsets)
         size = self.file.tell() - start
-        self.toc.append((b'FIELDSETS', start, size))
+        self.toc.append(('FIELDSETS', start, size))
 
     def writePathsSection(self):
         start = self.file.tell()
@@ -577,7 +597,7 @@ class CrateFile:
         writeInt32Compressed(self.file, tokens)
         writeInt32Compressed(self.file, jumps)
         size = self.file.tell() - start
-        self.toc.append((b'PATHS', start, size))
+        self.toc.append(('PATHS', start, size))
 
     def writeSpecsSection(self):
         start = self.file.tell()
@@ -593,7 +613,7 @@ class CrateFile:
         writeInt32Compressed(self.file, fsets)
         writeInt32Compressed(self.file, types)
         size = self.file.tell() - start
-        self.toc.append((b'SPECS', start, size))
+        self.toc.append(('SPECS', start, size))
 
     def writeSections(self):
         self.writeTokensSection()
@@ -608,8 +628,194 @@ class CrateFile:
         #print('tocStart: ', tocStart)
         writeInt(self.file, len(self.toc), 8)
         for name, start, size in self.toc:
-            self.file.write(name)
+            self.file.write(name.encode('utf-8'))
             self.file.write(bytes(16-len(name)))
             writeInt(self.file, start, 8)
             writeInt(self.file, size, 8)
         self.writeBootStrap(tocStart)
+
+    def getTableItem(self, sectionName):
+        for name, start, size in self.toc:
+            if sectionName == name:
+                return (start, size)
+        return (0, 0)
+
+    def seekTableOfContents(self):
+        self.file.seek(16)
+        tocStart = readInt(self.file, 8)
+        self.file.seek(tocStart)
+
+    def readTokensSection(self):
+        start, size = self.getTableItem('TOKENS')
+        if start > 0 and size > 0:
+            self.file.seek(start+8)
+            compressedSize = readInt(self.file, 8)
+            buffer = bytearray(self.file.read(compressedSize))
+            buffer = lz4Decompress(buffer)
+            self.tokens = buffer.decode('utf-8').split('\0')
+            #print(self.tokens)
+            self.tokenMap = {}
+            index = 0
+            for token in self.tokens:
+                self.tokenMap[token] = index
+                index += 1
+
+    def readStringsSection(self):
+        start, size = self.getTableItem('STRINGS')
+        if start > 0 and size > 0:
+            self.file.seek(start)
+            #print('Strings', self.file.read(size))
+
+    def readFieldsSection(self):
+        start, size = self.getTableItem('FIELDS')
+        if start > 0 and size > 0:
+            self.file.seek(start)
+            numFields = readInt(self.file, 8)
+            self.fields = readInt32Compressed(self.file, numFields)
+            #print(self.fields)
+            size = readInt(self.file, 8)
+            buffer = lz4Decompress(self.file.read(size))
+            self.reps = decodeInts(buffer, numFields, 8)
+            #print(self.reps)
+
+    def readFieldSetsSection(self):
+        start, size = self.getTableItem('FIELDSETS')
+        if start > 0 and size > 0:
+            self.file.seek(start)
+            numSets = readInt(self.file, 8)
+            self.fsets = readInt32Compressed(self.file, numSets)
+            #print(self.fsets)
+
+    def readPathsSection(self):
+        start, size = self.getTableItem('PATHS')
+        if start > 0 and size > 0:
+            self.file.seek(start)
+            numPaths = readInt(self.file, 8)
+            numPaths = readInt(self.file, 8)
+            paths = readInt32Compressed(self.file, numPaths)
+            tokens = readInt32Compressed(self.file, numPaths)
+            jumps = readInt32Compressed(self.file, numPaths)
+            self.paths = []
+            for i in range(0, numPaths):
+                self.paths.append((paths[i], tokens[i], jumps[i]))
+            #print(self.paths)
+
+    def readSpecsSection(self):
+        start, size = self.getTableItem('SPECS')
+        if start > 0 and size > 0:
+            self.file.seek(start)
+            numSpecs = readInt(self.file, 8)
+            paths = readInt32Compressed(self.file, numSpecs)
+            fsets = readInt32Compressed(self.file, numSpecs)
+            types = readInt32Compressed(self.file, numSpecs)
+            self.specs = []
+            for i in range(0, numSpecs):
+                self.specs.append((paths[i], fsets[i], types[i]))
+            #print(self.specs)
+
+    def readTableOfContents(self):
+        self.toc = []
+        self.seekTableOfContents()
+        numItems = readInt(self.file, 8)
+        for i in range(0, numItems):
+            name = self.file.read(16).decode('utf-8').rstrip('\0')
+            start = readInt(self.file, 8)
+            size = readInt(self.file, 8)
+            self.toc.append((name, start, size))
+        # Read Each Section
+        self.readTokensSection()
+        self.readStringsSection()
+        self.readFieldsSection()
+        self.readFieldSetsSection()
+        self.readPathsSection()
+        self.readSpecsSection()
+
+    def getFieldSet(self, index):
+        fset = []
+        while index < len(self.fsets) and self.fsets[index] >= 0:
+            fset.append(self.fsets[index])
+            index += 1
+        return fset
+
+    def buildData(self, index):
+        path, token, jump = self.paths[index]
+        path, fset, type = self.specs[path]
+        fset = self.getFieldSet(fset)
+        type = SpecType(type)
+        token = self.tokens[abs(token)]
+        data = {}
+        data['name'] = token
+        data['type'] = type
+        data['jump'] = jump
+        data['items'] = []
+        data['fields'] = {}
+
+        for field in fset:
+            if field < len(self.reps):
+                name = self.tokens[self.fields[field]]
+                rep = self.getRepValue(self.reps[field])
+                data['fields'][name] = rep
+
+        if jump == 0 or jump == -2:
+            index += 1
+        else:
+            item, index = self.buildData(index + 1)
+            data['items'].append(item)
+            while index < len(self.paths) and item['jump'] != -2:
+                item, index = self.buildData(index)
+                data['items'].append(item)
+        return (data, index)
+
+
+    def getData(self):
+        data, index = self.buildData(0)
+        return data
+
+    def getRepValue(self, rep):
+        rep = decodeRep(rep)
+        if rep['type'] == ValueType.token:
+            if not rep['inline']:
+                self.file.seek(rep['payload'])
+                numTokens = readInt(self.file, 4)
+                tokens = []
+                for i in range(numTokens):
+                    token = readInt(self.file, 4)
+                    if (token < len(self.tokens)):
+                        tokens.append(self.tokens[token])
+                return tokens
+            elif rep['payload'] < len(self.tokens):
+                return self.tokens[rep['payload']]
+        elif rep['type'] == ValueType.TokenVector:
+            self.file.seek(rep['payload'])
+            numTokens = readInt(self.file, 8)
+            tokens = []
+            for i in range(numTokens):
+                token = readInt(self.file, 4)
+                if (token < len(self.tokens)):
+                    tokens.append(self.tokens[token])
+            return tokens
+        elif rep['type'] == ValueType.PathListOp:
+            self.file.seek(rep['payload'])
+            listOp = {}
+            listOp['op'] = readInt(self.file, 8)
+            self.file.seek(self.file.tell()+1)
+            listOp['path'] = readInt(self.file, 4)
+            return listOp
+        elif rep['type'] == ValueType.Variability or rep['type'] == ValueType.bool:
+            return rep['payload'] == 1
+        return rep
+
+    def printContents(self):
+        for path, token, jump in self.paths:
+            path, fset, type = self.specs[path]
+            fset = self.getFieldSet(fset)
+            type = SpecType(type)
+            token = self.tokens[abs(token)]
+            print(type.name, token, jump)
+            for field in fset:
+                if field < len(self.fields):
+                    name = self.tokens[self.fields[field]]
+                    value = self.getRepValue(self.reps[field])
+                    print('\t', name, value)
+                else:
+                    print('\tERROR', field)
