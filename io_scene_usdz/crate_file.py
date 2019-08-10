@@ -737,6 +737,12 @@ class CrateFile:
             index += 1
         return fset
 
+    def getTokenStr(self, index):
+        index = abs(index)
+        if index < len(self.tokens):
+            return self.tokens[index]
+        return ''
+
     def buildData(self, index):
         path, token, jump = self.paths[index]
         path, fset, type = self.specs[path]
@@ -803,6 +809,38 @@ class CrateFile:
             return listOp
         elif rep['type'] == ValueType.Variability or rep['type'] == ValueType.bool:
             return rep['payload'] == 1
+        elif rep['type'] == ValueType.int:
+            if rep['inline']:
+                return 0
+            else:
+                return [0, 0]
+        elif rep['type'] == ValueType.float:
+            if rep['inline']:
+                return 0.0
+            else:
+                return [0.0, 0.0]
+        elif rep['type'] == ValueType.double:
+            if rep['inline']:
+                return 0.0
+            else:
+                return [0.0, 0.0]
+        elif rep['type'] == ValueType.vec2f:
+            if rep['inline']:
+                return (0.0, 0.0)
+            else:
+                return [(0.0, 0.0), (0.0, 0.0)]
+        elif rep['type'] == ValueType.vec3f:
+            if rep['inline']:
+                return (0.0, 0.0, 0.0)
+            else:
+                return [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0)]
+        elif rep['type'] == ValueType.vec4f:
+            if rep['inline']:
+                return (0.0, 0.0, 0.0, 0.0)
+            else:
+                return [(0.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0)]
+        #else:
+        #    print('UnHandled Type:', rep)
         return rep
 
     def printContents(self):

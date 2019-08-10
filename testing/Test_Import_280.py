@@ -38,8 +38,8 @@ exportsDir = bpy.path.abspath("//") + 'exports/'
 if not os.path.exists(exportsDir):
     os.makedirs(exportsDir)
 
-filepath = exportsDir + 'teapot.usdz'
-#filepath = exportsDir + 'testCopy.usdz'
+#filepath = exportsDir + 'teapot.usdz'
+filepath = exportsDir + 'testCopy.usdz'
 
 # Call the Import Function
 import_usdz(

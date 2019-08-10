@@ -502,9 +502,44 @@ class FileData:
             self.printData(item, tab+'  ')
 
     def buildItemFromCrate(self, crate, index):
-        path, token, jump = crate.paths[0]
-        path, fset, type = crate.specs[0]
+        path, token, jump = crate.paths[index]
+        path, fset, type = crate.specs[index]
         fset = crate.getFieldSet(fset)
+        item = FileItem(SpecType(type).name)
+        item.name = crate.getTokenStr(token)
+        item.pathJump = jump
+        item.pathIndex = path
+        self.nameToken = token
+
+        properties = {}
+        for field in fset:
+            if field < len(crate.reps):
+                name = crate.getTokenStr(crate.fields[field])
+                value = crate.getRepValue(crate.reps[field])
+                properties[name] = value
+
+        if 'typeName' in properties:
+            if item.type == 'Prim':
+                item.type = 'def ' + properties.pop('typeName')
+            else:
+                item.type = properties.pop('typeName')
+        if 'default' in properties:
+            item.data = properties.pop('default')
+        item.properties = properties
+
+        if jump == 0 or jump == -2:
+            index += 1
+        else:
+            child, index = self.buildItemFromCrate(crate, index + 1)
+            if 'def' in child.type or len(child.items) == 0:
+                #print(item.type, item.name, child.type, child.name, child.data)
+                item.items.append(child)
+            while index < len(crate.paths) and child.pathJump != -2:
+                child, index = self.buildItemFromCrate(crate, index)
+                if 'def' in child.type or len(child.items) == 0:
+                    #print(item.type, item.name, child.type, child.name, child.data)
+                    item.items.append(child)
+        return (item, index)
 
 
     def buildFromCrate(self, crate):
@@ -515,9 +550,9 @@ class FileData:
         # Get the Properties
         for field in fset:
             if field < len(crate.reps):
-                name = crate.tokens[crate.fields[field]]
-                rep = crate.getRepValue(crate.reps[field])
-                self.properties[name] = rep
+                name = crate.getTokenStr(crate.fields[field])
+                value = crate.getRepValue(crate.reps[field])
+                self.properties[name] = value
 
         # Get the Items
         if jump != 0 and jump != -2:
