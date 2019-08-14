@@ -777,6 +777,40 @@ class CrateFile:
         data, index = self.buildData(0)
         return data
 
+    def readFloatVector(self, size):
+        return struct.unpack('<%df'%size, self.file.read(4*size))
+
+    def readDoubleVector(self, size):
+        return struct.unpack('<%dd'%size, self.file.read(8*size))
+
+    def readMatrix(self, size):
+        return tuple(self.readDoubleVector(size) for i in range(size))
+
+    def decodeRepFloatVector(self, rep, size):
+        if rep['inline']:
+            return size*(0.0,)
+        self.file.seek(rep['payload'])
+        if rep['array']:
+            count = readInt(self.file, 4)
+            return [self.readFloatVector(size) for i in range(count)]
+        return self.readFloatVector(size)
+
+    def decodeRepDoubleVector(self, rep, size):
+        if rep['inline']:
+            return size*(0.0,)
+        self.file.seek(rep['payload'])
+        if rep['array']:
+            count = readInt(self.file, 4)
+            return [self.readDoubleVector(size) for i in range(count)]
+        return self.readDoubleVector(size)
+
+    def decodeRepMatrix(self, rep, size):
+        self.file.seek(rep['payload'])
+        if rep['array']:
+            count = readInt(self.file, 4)
+            return [self.readMatrix(size) for i in range(count)]
+        return self.readMatrix(size)
+
     def getRepValue(self, rep):
         rep = decodeRep(rep)
         if rep['type'] == ValueType.token:
@@ -808,12 +842,17 @@ class CrateFile:
             listOp['path'] = readInt(self.file, 4)
             return listOp
         elif rep['type'] == ValueType.Variability or rep['type'] == ValueType.bool:
-            return rep['payload'] == 1
+            return rep['payload']
         elif rep['type'] == ValueType.int:
             if rep['inline']:
-                return 0
-            else:
-                return [0, 0]
+                return rep['payload']
+            self.file.seek(rep['payload'])
+            if rep['array']:
+                size = readInt(self.file, 4)
+                if rep['compressed']:
+                    return readInt32Compressed(self.file, size)
+                return [readInt(self.file, 4, signed=True) for i in range(size)]
+            return readInt(self.file, 4, signed=True)
         elif rep['type'] == ValueType.float:
             if rep['inline']:
                 return 0.0
@@ -825,20 +864,23 @@ class CrateFile:
             else:
                 return [0.0, 0.0]
         elif rep['type'] == ValueType.vec2f:
-            if rep['inline']:
-                return (0.0, 0.0)
-            else:
-                return [(0.0, 0.0), (0.0, 0.0)]
+            return self.decodeRepFloatVector(rep, 2)
         elif rep['type'] == ValueType.vec3f:
-            if rep['inline']:
-                return (0.0, 0.0, 0.0)
-            else:
-                return [(0.0, 0.0, 0.0), (0.0, 0.0, 0.0)]
+            return self.decodeRepFloatVector(rep, 3)
         elif rep['type'] == ValueType.vec4f:
-            if rep['inline']:
-                return (0.0, 0.0, 0.0, 0.0)
-            else:
-                return [(0.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0)]
+            return self.decodeRepFloatVector(rep, 4)
+        elif rep['type'] == ValueType.vec2d:
+            return self.decodeRepDoubleVector(rep, 2)
+        elif rep['type'] == ValueType.vec3d:
+            return self.decodeRepDoubleVector(rep, 3)
+        elif rep['type'] == ValueType.vec4d:
+            return self.decodeRepDoubleVector(rep, 4)
+        elif rep['type'] == ValueType.matrix2d:
+            return self.decodeRepMatrix(rep, 2)
+        elif rep['type'] == ValueType.matrix3d:
+            return self.decodeRepMatrix(rep, 3)
+        elif rep['type'] == ValueType.matrix4d:
+            return self.decodeRepMatrix(rep, 4)
         #else:
         #    print('UnHandled Type:', rep)
         return rep
