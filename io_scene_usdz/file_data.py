@@ -503,9 +503,9 @@ class FileData:
 
     def buildItemFromCrate(self, crate, index):
         path, token, jump = crate.paths[index]
-        path, fset, type = crate.specs[index]
+        path, fset, spec = crate.specs[path]
         fset = crate.getFieldSet(fset)
-        item = FileItem(SpecType(type).name)
+        item = FileItem(SpecType(spec).name)
         item.name = crate.getTokenStr(token)
         item.pathJump = jump
         item.pathIndex = path
@@ -519,10 +519,13 @@ class FileData:
                 properties[name] = value
 
         if 'typeName' in properties:
+            typeName = properties.pop('typeName')
+            if type(typeName) == list:
+                typeName = typeName[0]
             if item.type == 'Prim':
-                item.type = 'def ' + properties.pop('typeName')
+                item.type = 'def ' + typeName
             else:
-                item.type = properties.pop('typeName')
+                item.type = typeName
         if 'default' in properties:
             item.data = properties.pop('default')
         item.properties = properties
@@ -569,6 +572,7 @@ class FileData:
         #print('printContents')
         #crate.printContents()
 
+        #print(crate.tokens)
         self.buildFromCrate(crate)
         print(self.printUsda())
 
