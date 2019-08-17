@@ -39,7 +39,8 @@ if not os.path.exists(exportsDir):
     os.makedirs(exportsDir)
 
 #filepath = exportsDir + 'teapot.usdz'
-filepath = exportsDir + 'testCopy.usdz'
+#filepath = exportsDir + 'testCopy.usdz'
+filepath = exportsDir + 'testTex.usdz'
 
 # Call the Import Function
 import_usdz(
