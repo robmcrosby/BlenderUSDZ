@@ -253,6 +253,7 @@ class CrateFile:
         self.fsets = []
         self.paths = []
         self.specs = []
+        self.specsMap = {}
         self.writenData = {}
         self.framesRef = -1
 
@@ -533,6 +534,7 @@ class CrateFile:
     def addSpec(self, fset, sType):
         path = len(self.specs)
         self.specs.append((path, fset, sType.value))
+        self.specsMap[path] = (fset, sType.value)
         return path
 
     def writeBootStrap(self, tocOffset = 0):
@@ -713,6 +715,7 @@ class CrateFile:
             self.specs = []
             for i in range(0, numSpecs):
                 self.specs.append((paths[i], fsets[i], types[i]))
+                self.specsMap[paths[i]] = (fsets[i], types[i])
             #print(self.specs)
 
     def readTableOfContents(self):
@@ -754,8 +757,15 @@ class CrateFile:
     def readMatrix(self, size):
         return tuple(self.readDoubleVector(size) for i in range(size))
 
+    def decodeInlineFloatVector(payload, size):
+        data = rep['payload'].to_bytes(4*size, byteorder='big')
+
     def decodeRepFloatVector(self, rep, size):
         if rep['inline']:
+            #data = rep['payload'].to_bytes(12, byteorder='big')
+            #print('inline float:', data)
+            #vec = struct.unpack('>%df'%size, data)
+            #print('inline float:', data, vec)
             return size*(0.0,)
         self.file.seek(rep['payload'])
         if rep['array']:
@@ -766,6 +776,7 @@ class CrateFile:
 
     def decodeRepDoubleVector(self, rep, size):
         if rep['inline']:
+            print('inline Double Vec')
             return size*(0.0,)
         self.file.seek(rep['payload'])
         if rep['array']:
@@ -827,7 +838,7 @@ class CrateFile:
             return readInt(self.file, 4, signed=True)
         elif rep['type'] == ValueType.float:
             if rep['inline']:
-                return 0.0
+                return struct.unpack('<f', rep['payload'].to_bytes(4, byteorder='little'))[0]
             self.file.seek(rep['payload'])
             if rep['array']:
                 countBytes = 4 if self.version < 7 else 8
@@ -836,7 +847,7 @@ class CrateFile:
             return struct.unpack('<f', self.file.read(4))
         elif rep['type'] == ValueType.double:
             if rep['inline']:
-                return 0.0
+                return struct.unpack('<d', rep['payload'].to_bytes(8, byteorder='little'))[0]
             self.file.seek(rep['payload'])
             if rep['array']:
                 countBytes = 4 if self.version < 7 else 8

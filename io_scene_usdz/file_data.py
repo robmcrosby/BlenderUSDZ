@@ -503,7 +503,7 @@ class FileData:
 
     def buildItemFromCrate(self, crate, index):
         path, token, jump = crate.paths[index]
-        path, fset, spec = crate.specs[path]
+        fset, spec = crate.specsMap[path]
         fset = crate.getFieldSet(fset)
         item = FileItem(SpecType(spec).name)
         item.name = crate.getTokenStr(token)
@@ -511,12 +511,15 @@ class FileData:
         item.pathIndex = path
         self.nameToken = token
 
+        # Get the Properties
+        print(item.type, item.name)
         properties = {}
         for field in fset:
             if field < len(crate.reps):
                 name = crate.getTokenStr(crate.fields[field])
                 value = crate.getRepValue(crate.reps[field])
                 properties[name] = value
+                print('  ', field, name, value)
 
         if 'typeName' in properties:
             typeName = properties.pop('typeName')
@@ -535,19 +538,17 @@ class FileData:
         else:
             child, index = self.buildItemFromCrate(crate, index + 1)
             if 'def' in child.type or len(child.items) == 0:
-                #print(item.type, item.name, child.type, child.name, child.data)
                 item.items.append(child)
             while index < len(crate.paths) and child.pathJump != -2:
                 child, index = self.buildItemFromCrate(crate, index)
                 if 'def' in child.type or len(child.items) == 0:
-                    #print(item.type, item.name, child.type, child.name, child.data)
                     item.items.append(child)
         return (item, index)
 
 
     def buildFromCrate(self, crate):
         path, token, jump = crate.paths[0]
-        path, fset, type = crate.specs[0]
+        fset, spec = crate.specsMap[path]
         fset = crate.getFieldSet(fset)
 
         # Get the Properties
@@ -573,6 +574,7 @@ class FileData:
         #crate.printContents()
 
         #print(crate.tokens)
+        print(crate.specs)
         self.buildFromCrate(crate)
         print(self.printUsda())
 
