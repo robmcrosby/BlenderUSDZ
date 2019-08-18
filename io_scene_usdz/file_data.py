@@ -174,7 +174,7 @@ class FileItem:
             for item in self.items:
                 item.updatePathStrings(self.pathStr, pathMap)
 
-    def printUsda(self, indent):
+    def printUsda(self, indent = ''):
         src = ''
         if 'def' in self.type:
             src += indent + '\n'
@@ -247,6 +247,12 @@ class FileItem:
         for child in children:
             items += child.getItemsOfType(type)
         return items
+
+    def getItemOfName(self, name):
+        for item in self.items:
+            if item.name == name:
+                return item
+        return None
 
     def writeSpecsAtt(self, crate):
         fset = []
@@ -375,7 +381,7 @@ class FileData:
         src += '\n'
         # Print the Items
         for item in self.items:
-            src += item.printUsda('')
+            src += item.printUsda()
         return src
 
     def writeUsda(self, filePath):
@@ -512,14 +518,12 @@ class FileData:
         self.nameToken = token
 
         # Get the Properties
-        print(item.type, item.name)
         properties = {}
         for field in fset:
             if field < len(crate.reps):
                 name = crate.getTokenStr(crate.fields[field])
                 value = crate.getRepValue(crate.reps[field])
                 properties[name] = value
-                print('  ', field, name, value)
 
         if 'typeName' in properties:
             typeName = properties.pop('typeName')
@@ -570,15 +574,6 @@ class FileData:
         file = open(filePath, 'rb')
         crate = CrateFile(file)
         crate.readTableOfContents()
-        #print('printContents')
-        #crate.printContents()
 
-        #print(crate.tokens)
-        print(crate.specs)
         self.buildFromCrate(crate)
-        print(self.printUsda())
-
-        #data = crate.getData()
-        #self.printData(data)
-        #print(data)
         file.close()
