@@ -44,12 +44,27 @@ def import_usdz(context, filepath = ''):
 
     return {'FINISHED'}
 
-def import_data(context, data):
-    meshes = data.getItemsOfType('Mesh')
-    for mesh in meshes:
-        add_mesh(context, mesh)
 
-def add_mesh(context, data):
+def import_data(context, data):
+    objects = get_objects(data)
+    for obj in objects:
+        add_object(context, obj)
+
+
+def add_object(context, data, parent = None):
+    meshes = get_meshes(data)
+    if len(meshes) > 0:
+        # Create A Mesh Object
+        obj = create_mesh_object(meshes[0].name, data.name)
+        add_to_collection(obj, context.scene.collection)
+
+        # Add the Geometry
+        for mesh in meshes:
+            add_mesh(obj, mesh)
+        obj.data.update()
+
+
+def add_mesh(obj, data):
     # Get Geometry From Data
     counts = data.getItemOfName('faceVertexCounts').data
     indices = data.getItemOfName('faceVertexIndices').data
@@ -62,10 +77,25 @@ def add_mesh(context, data):
         faces.append(tuple([indices[index+i] for i in range(count)]))
         index += count
 
-    # Create Object and Mesh
-    obj = create_mesh_object(data.name, data.name)
-    add_to_collection(obj, context.scene.collection)
-
-    # Add Geometry to Mesh
+    # Add Geometry to the Object
     obj.data.from_pydata(verts, [], faces)
-    obj.data.update()
+
+
+def get_objects(data):
+    objects = []
+    for item in data.items:
+        if item.type == 'def Scope':
+            objects += get_objects(item)
+        elif item.type == 'def Xform':
+            objects.append(item)
+    return objects
+
+
+def get_meshes(data):
+    meshes = []
+    for item in data.items:
+        if item.type == 'def Scope':
+            meshes += get_meshes(item)
+        elif item.type == 'def Mesh':
+            meshes.append(item)
+    return meshes
