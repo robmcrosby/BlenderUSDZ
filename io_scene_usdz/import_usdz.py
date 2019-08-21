@@ -49,7 +49,7 @@ def import_usdz(context, filepath = '', materials = True):
 def import_data(context, data, materials):
     materials = get_materials(data) if materials else {}
     objects = get_objects(data)
-    print(materials)
+    #print(materials)
     for objData in objects:
         add_object(context, objData, materials)
 
@@ -72,12 +72,19 @@ def add_mesh(obj, data):
     counts = data.getItemOfName('faceVertexCounts').data
     indices = data.getItemOfName('faceVertexIndices').data
     verts = data.getItemOfName('points').data
+    normals = data.getItemOfName('primvars:normals:indices')
+    normals = None if normals == None else normals.data
 
     # Compile Faces
     faces = []
+    smooth = []
     index = 0
     for count in counts:
         faces.append(tuple([indices[index+i] for i in range(count)]))
+        if normals != None:
+            smooth.append(len(set(normals[index+i] for i in range(count))) > 1)
+        else:
+            smooth.append(True)
         index += count
 
     # Create BMesh from Mesh Object
@@ -91,8 +98,9 @@ def add_mesh(obj, data):
     bm.verts.ensure_lookup_table()
 
     # Add the Faces
-    for face in faces:
-        bm.faces.new((bm.verts[i+base] for i in face))
+    for i, face in enumerate(faces):
+        f = bm.faces.new((bm.verts[i+base] for i in face))
+        f.smooth = smooth[i]
 
     # Apply BMesh back to Mesh Object
     bm.to_mesh(obj.data)
