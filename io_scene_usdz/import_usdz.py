@@ -57,23 +57,34 @@ def import_data(context, data, materials):
 def add_object(context, data, materials = {}, parent = None):
     meshes = get_meshes(data)
     if len(meshes) > 0:
+        #print(meshes[0].printUsda())
         # Create A Mesh Object
         obj = create_mesh_object(meshes[0].name, data.name)
         add_to_collection(obj, context.scene.collection)
 
+        # Create any UV maps
+        uvs = get_uv_map_names(meshes[0])
+        for uv in uvs:
+            obj.data.uv_layers.new(name=uv)
+
         # Add the Geometry
         for mesh in meshes:
-            add_mesh(obj, mesh)
+            add_mesh(obj, mesh, uvs)
         obj.data.update()
 
 
-def add_mesh(obj, data):
+def add_mesh(obj, data, uvs):
     # Get Geometry From Data
     counts = data.getItemOfName('faceVertexCounts').data
     indices = data.getItemOfName('faceVertexIndices').data
     verts = data.getItemOfName('points').data
     normals = data.getItemOfName('primvars:normals:indices')
     normals = None if normals == None else normals.data
+    uvMaps = {}
+    for uv in uvs:
+        uvCoords = data.getItemOfName('primvars:'+uv).data
+        uvIndices = data.getItemOfName('primvars:'+uv+':indices').data
+        uvMaps[uv] = [uvCoords[i] for i in uvIndices]
 
     # Compile Faces
     faces = []
@@ -98,9 +109,19 @@ def add_mesh(obj, data):
     bm.verts.ensure_lookup_table()
 
     # Add the Faces
+    index = 0
     for i, face in enumerate(faces):
         f = bm.faces.new((bm.verts[i+base] for i in face))
         f.smooth = smooth[i]
+
+    # Add the UVs
+    for uvName, uvs in uvMaps.items():
+        uvIndex = bm.loops.layers.uv[uvName]
+        index = 0
+        for f in bm.faces:
+            for i, l in enumerate(f.loops):
+                l[uvIndex].uv = uvs[index+i]
+            index += len(f.loops)
 
     # Apply BMesh back to Mesh Object
     bm.to_mesh(obj.data)
@@ -132,3 +153,10 @@ def get_materials(data):
     for mat in materials:
         materialMap[mat.name] = mat
     return materialMap
+
+def get_uv_map_names(mesh):
+    uvs = []
+    for item in mesh.items:
+        if item.type == 'texCoord2f[]':
+            uvs.append(item.name[9:])
+    return uvs
