@@ -157,6 +157,6 @@ def get_materials(data):
 def get_uv_map_names(mesh):
     uvs = []
     for item in mesh.items:
-        if item.type == 'texCoord2f[]':
+        if item.type == 'texCoord2f[]' or item.type == 'float2[]':
             uvs.append(item.name[9:])
     return uvs
