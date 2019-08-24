@@ -72,6 +72,21 @@ def add_object(context, data, materials = {}, parent = None):
             add_mesh(obj, mesh, uvs)
         obj.data.update()
 
+        # Apply any Transforms
+        opOrder = data.getItemOfName('xformOpOrder')
+        if opOrder != None and opOrder.data != None:
+            for op in opOrder.data:
+                apply_object_op(obj, data.getItemOfName(op))
+        if parent == None:
+            apply_object_rotation(obj, pi/2.0, 'X')
+
+
+def apply_object_op(obj, data):
+    if data != None and data.data != None:
+        # TODO: Add other xformOps
+        if data.name == 'xformOp:transform':
+            apply_object_transform(obj, data.data)
+
 
 def add_mesh(obj, data, uvs):
     # Get Geometry From Data
