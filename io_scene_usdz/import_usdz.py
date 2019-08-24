@@ -5,6 +5,7 @@ import tempfile
 import shutil
 import zipfile
 import bmesh
+import mathutils
 
 from io_scene_usdz.file_data import *
 from io_scene_usdz.scene_data import *
@@ -72,20 +73,27 @@ def add_object(context, data, materials = {}, parent = None):
             add_mesh(obj, mesh, uvs)
         obj.data.update()
 
+        if parent != None:
+            obj.parent = parent
+
         # Apply any Transforms
+        matrix = mathutils.Matrix()
         opOrder = data.getItemOfName('xformOpOrder')
         if opOrder != None and opOrder.data != None:
             for op in opOrder.data:
-                apply_object_op(obj, data.getItemOfName(op))
+                opItem = data.getItemOfName(op)
+                if opItem.name == 'xformOp:transform':
+                    m = mathutils.Matrix(opItem.data)
+                    m.transpose()
+                    matrix = matrix @ m
         if parent == None:
-            apply_object_rotation(obj, pi/2.0, 'X')
+            matrix = matrix @ mathutils.Matrix.Rotation(pi/2.0, 4, 'X')
+        obj.matrix_local = matrix
 
-
-def apply_object_op(obj, data):
-    if data != None and data.data != None:
-        # TODO: Add other xformOps
-        if data.name == 'xformOp:transform':
-            apply_object_transform(obj, data.data)
+        # Add the Children
+        children = get_objects(data)
+        for child in children:
+            add_object(context, child, materials, obj)
 
 
 def add_mesh(obj, data, uvs):

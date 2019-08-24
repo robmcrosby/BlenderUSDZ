@@ -71,13 +71,6 @@ def apply_object_modifers(object):
         bpy.ops.object.make_single_user()
         bpy.ops.object.convert(target='MESH')
 
-def apply_object_transform(object, transform):
-    object.matrix_local = mathutils.Matrix(transform) @ object.matrix_local
-
-def apply_object_rotation(object, rad, axis):
-    rotation = mathutils.Matrix.Rotation(rad, 4, axis)
-    apply_object_transform(object, rotation)
-
 def create_mesh_object(meshName, objName):
     mesh = bpy.data.meshes.new(meshName)
     obj = bpy.data.objects.new(objName, mesh)
