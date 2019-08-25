@@ -174,7 +174,7 @@ class FileItem:
             for item in self.items:
                 item.updatePathStrings(self.pathStr, pathMap)
 
-    def printUsda(self, indent):
+    def printUsda(self, indent = ''):
         src = ''
         if 'def' in self.type:
             src += indent + '\n'
@@ -247,6 +247,12 @@ class FileItem:
         for child in children:
             items += child.getItemsOfType(type)
         return items
+
+    def getItemOfName(self, name):
+        for item in self.items:
+            if item.name == name:
+                return item
+        return None
 
     def writeSpecsAtt(self, crate):
         fset = []
@@ -375,7 +381,7 @@ class FileData:
         src += '\n'
         # Print the Items
         for item in self.items:
-            src += item.printUsda('')
+            src += item.printUsda()
         return src
 
     def writeUsda(self, filePath):
@@ -502,22 +508,59 @@ class FileData:
             self.printData(item, tab+'  ')
 
     def buildItemFromCrate(self, crate, index):
-        path, token, jump = crate.paths[0]
-        path, fset, type = crate.specs[0]
+        path, token, jump = crate.paths[index]
+        fset, spec = crate.specsMap[path]
         fset = crate.getFieldSet(fset)
+        item = FileItem(SpecType(spec).name)
+        item.name = crate.getTokenStr(token)
+        item.pathJump = jump
+        item.pathIndex = path
+        self.nameToken = token
+
+        # Get the Properties
+        properties = {}
+        for field in fset:
+            if field < len(crate.reps):
+                name = crate.getTokenStr(crate.fields[field])
+                value = crate.getRepValue(crate.reps[field])
+                properties[name] = value
+
+        if 'typeName' in properties:
+            typeName = properties.pop('typeName')
+            if type(typeName) == list:
+                typeName = typeName[0]
+            if item.type == 'Prim':
+                item.type = 'def ' + typeName
+            else:
+                item.type = typeName
+        if 'default' in properties:
+            item.data = properties.pop('default')
+        item.properties = properties
+
+        if jump == 0 or jump == -2:
+            index += 1
+        else:
+            child, index = self.buildItemFromCrate(crate, index + 1)
+            if 'def' in child.type or len(child.items) == 0:
+                item.items.append(child)
+            while index < len(crate.paths) and child.pathJump != -2:
+                child, index = self.buildItemFromCrate(crate, index)
+                if 'def' in child.type or len(child.items) == 0:
+                    item.items.append(child)
+        return (item, index)
 
 
     def buildFromCrate(self, crate):
         path, token, jump = crate.paths[0]
-        path, fset, type = crate.specs[0]
+        fset, spec = crate.specsMap[path]
         fset = crate.getFieldSet(fset)
 
         # Get the Properties
         for field in fset:
             if field < len(crate.reps):
-                name = crate.tokens[crate.fields[field]]
-                rep = crate.getRepValue(crate.reps[field])
-                self.properties[name] = rep
+                name = crate.getTokenStr(crate.fields[field])
+                value = crate.getRepValue(crate.reps[field])
+                self.properties[name] = value
 
         # Get the Items
         if jump != 0 and jump != -2:
@@ -531,13 +574,6 @@ class FileData:
         file = open(filePath, 'rb')
         crate = CrateFile(file)
         crate.readTableOfContents()
-        #print('printContents')
-        #crate.printContents()
 
         self.buildFromCrate(crate)
-        print(self.printUsda())
-
-        #data = crate.getData()
-        #self.printData(data)
-        #print(data)
         file.close()

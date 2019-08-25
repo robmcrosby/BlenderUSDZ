@@ -218,8 +218,10 @@ def delete_collection(collection):
     if collection != None:
         bpy.data.collections.remove(collection)
 
-def add_to_collection(object, collection):
+def add_to_collection(object, collection = None):
     if object != None and collection != None:
+        if collection == None:
+            collection = bpy.context.scene.collection
         collection.objects.link(object)
 
 def get_joint_token(bone):

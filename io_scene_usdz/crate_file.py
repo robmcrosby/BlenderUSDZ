@@ -38,7 +38,6 @@ def readInt32Compressed(file, numInts):
     buffer = lz4Decompress(file.read(size))
     return usdInt32Decompress(buffer, numInts)
 
-
 def dataKey(data):
     if type(data) == list:
         return tuple(data)
@@ -243,6 +242,7 @@ def decodeRep(data):
 class CrateFile:
     def __init__(self, file):
         self.file = file
+        self.version = 6
         self.toc = []
         self.tokenMap = {}
         self.tokens = []
@@ -253,6 +253,7 @@ class CrateFile:
         self.fsets = []
         self.paths = []
         self.specs = []
+        self.specsMap = {}
         self.writenData = {}
         self.framesRef = -1
 
@@ -356,7 +357,7 @@ class CrateFile:
     def addFieldInt(self, field, data):
         field = self.getTokenIndex(field)
         if type(data) == list:
-            compress = len(data) > 16
+            compress = len(data) >= 16
             ref = self.getDataRefrence(data, ValueType.int)
             if ref < 0:
                 ref = self.file.tell()
@@ -533,6 +534,7 @@ class CrateFile:
     def addSpec(self, fset, sType):
         path = len(self.specs)
         self.specs.append((path, fset, sType.value))
+        self.specsMap[path] = (fset, sType.value)
         return path
 
     def writeBootStrap(self, tocOffset = 0):
@@ -641,6 +643,8 @@ class CrateFile:
         return (0, 0)
 
     def seekTableOfContents(self):
+        self.file.seek(9)
+        self.version = readInt(self.file, 1)
         self.file.seek(16)
         tocStart = readInt(self.file, 8)
         self.file.seek(tocStart)
@@ -711,6 +715,7 @@ class CrateFile:
             self.specs = []
             for i in range(0, numSpecs):
                 self.specs.append((paths[i], fsets[i], types[i]))
+                self.specsMap[paths[i]] = (fsets[i], types[i])
             #print(self.specs)
 
     def readTableOfContents(self):
@@ -737,39 +742,56 @@ class CrateFile:
             index += 1
         return fset
 
-    def buildData(self, index):
-        path, token, jump = self.paths[index]
-        path, fset, type = self.specs[path]
-        fset = self.getFieldSet(fset)
-        type = SpecType(type)
-        token = self.tokens[abs(token)]
-        data = {}
-        data['name'] = token
-        data['type'] = type
-        data['jump'] = jump
-        data['items'] = []
-        data['fields'] = {}
+    def getTokenStr(self, index):
+        index = abs(index)
+        if index < len(self.tokens):
+            return self.tokens[index]
+        return ''
 
-        for field in fset:
-            if field < len(self.reps):
-                name = self.tokens[self.fields[field]]
-                rep = self.getRepValue(self.reps[field])
-                data['fields'][name] = rep
+    def readFloatVector(self, size):
+        return struct.unpack('<%df'%size, self.file.read(4*size))
 
-        if jump == 0 or jump == -2:
-            index += 1
-        else:
-            item, index = self.buildData(index + 1)
-            data['items'].append(item)
-            while index < len(self.paths) and item['jump'] != -2:
-                item, index = self.buildData(index)
-                data['items'].append(item)
-        return (data, index)
+    def readDoubleVector(self, size):
+        return struct.unpack('<%dd'%size, self.file.read(8*size))
 
+    def readMatrix(self, size):
+        return tuple(self.readDoubleVector(size) for i in range(size))
 
-    def getData(self):
-        data, index = self.buildData(0)
-        return data
+    def decodeInlineFloatVector(payload, size):
+        data = rep['payload'].to_bytes(4*size, byteorder='big')
+
+    def decodeRepFloatVector(self, rep, size):
+        if rep['inline']:
+            #data = rep['payload'].to_bytes(12, byteorder='big')
+            #print('inline float:', data)
+            #vec = struct.unpack('>%df'%size, data)
+            #print('inline float:', data, vec)
+            return size*(0.0,)
+        self.file.seek(rep['payload'])
+        if rep['array']:
+            countBytes = 4 if self.version < 7 else 8
+            count = readInt(self.file, countBytes)
+            return [self.readFloatVector(size) for i in range(count)]
+        return self.readFloatVector(size)
+
+    def decodeRepDoubleVector(self, rep, size):
+        if rep['inline']:
+            print('inline Double Vec')
+            return size*(0.0,)
+        self.file.seek(rep['payload'])
+        if rep['array']:
+            countBytes = 4 if self.version < 7 else 8
+            count = readInt(self.file, countBytes)
+            return [self.readDoubleVector(size) for i in range(count)]
+        return self.readDoubleVector(size)
+
+    def decodeRepMatrix(self, rep, size):
+        self.file.seek(rep['payload'])
+        if rep['array']:
+            countBytes = 4 if self.version < 7 else 8
+            count = readInt(self.file, countBytes)
+            return [self.readMatrix(size) for i in range(count)]
+        return self.readMatrix(size)
 
     def getRepValue(self, rep):
         rep = decodeRep(rep)
@@ -802,20 +824,54 @@ class CrateFile:
             listOp['path'] = readInt(self.file, 4)
             return listOp
         elif rep['type'] == ValueType.Variability or rep['type'] == ValueType.bool:
-            return rep['payload'] == 1
+            return rep['payload']
+        elif rep['type'] == ValueType.int:
+            if rep['inline']:
+                return rep['payload']
+            self.file.seek(rep['payload'])
+            if rep['array']:
+                countBytes = 4 if self.version < 7 else 8
+                count = readInt(self.file, countBytes)
+                if rep['compressed']:
+                    return readInt32Compressed(self.file, count)
+                return [readInt(self.file, 4, signed=True) for i in range(count)]
+            return readInt(self.file, 4, signed=True)
+        elif rep['type'] == ValueType.float:
+            if rep['inline']:
+                return struct.unpack('<f', rep['payload'].to_bytes(4, byteorder='little'))[0]
+            self.file.seek(rep['payload'])
+            if rep['array']:
+                countBytes = 4 if self.version < 7 else 8
+                count = readInt(self.file, countBytes)
+                return list(struct.unpack('<%df'%count, self.file.read(4*count)))
+            return struct.unpack('<f', self.file.read(4))
+        elif rep['type'] == ValueType.double:
+            if rep['inline']:
+                return struct.unpack('<d', rep['payload'].to_bytes(8, byteorder='little'))[0]
+            self.file.seek(rep['payload'])
+            if rep['array']:
+                countBytes = 4 if self.version < 7 else 8
+                count = readInt(self.file, countBytes)
+                return list(struct.unpack('<%dd'%count, self.file.read(8*count)))
+            return struct.unpack('<d', self.file.read(8))
+        elif rep['type'] == ValueType.vec2f:
+            return self.decodeRepFloatVector(rep, 2)
+        elif rep['type'] == ValueType.vec3f:
+            return self.decodeRepFloatVector(rep, 3)
+        elif rep['type'] == ValueType.vec4f:
+            return self.decodeRepFloatVector(rep, 4)
+        elif rep['type'] == ValueType.vec2d:
+            return self.decodeRepDoubleVector(rep, 2)
+        elif rep['type'] == ValueType.vec3d:
+            return self.decodeRepDoubleVector(rep, 3)
+        elif rep['type'] == ValueType.vec4d:
+            return self.decodeRepDoubleVector(rep, 4)
+        elif rep['type'] == ValueType.matrix2d:
+            return self.decodeRepMatrix(rep, 2)
+        elif rep['type'] == ValueType.matrix3d:
+            return self.decodeRepMatrix(rep, 3)
+        elif rep['type'] == ValueType.matrix4d:
+            return self.decodeRepMatrix(rep, 4)
+        #else:
+        #    print('UnHandled Type:', rep)
         return rep
-
-    def printContents(self):
-        for path, token, jump in self.paths:
-            path, fset, type = self.specs[path]
-            fset = self.getFieldSet(fset)
-            type = SpecType(type)
-            token = self.tokens[abs(token)]
-            print(type.name, token, jump)
-            for field in fset:
-                if field < len(self.fields):
-                    name = self.tokens[self.fields[field]]
-                    value = self.getRepValue(self.reps[field])
-                    print('\t', name, value)
-                else:
-                    print('\tERROR', field)
