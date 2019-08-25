@@ -2,10 +2,10 @@
 bl_info = {
     "name":        "USDZ Export",
     "author":      "Robert Crosby",
-    "version":     (0, 0, 1),
+    "version":     (0, 0, 2),
     "blender":     (2, 80, 0),
-    "location":    "File > Export",
-    "description": "Export USDZ Files",
+    "location":    "File > Import-Export",
+    "description": "Import/Export USDZ Files",
     "category":    "Import-Export"
     }
 
@@ -24,6 +24,29 @@ from bpy_extras.io_utils import (
         path_reference_mode,
         axis_conversion,
         )
+
+class ImportUSDZ(bpy.types.Operator, ImportHelper):
+    """Import a USDZ File"""
+    bl_idname       = "import.usdz"
+    bl_label        = "Import USDZ File"
+    bl_options      = {'PRESET', 'UNDO'}
+
+    filename_ext    = ".usdz"
+    filter_glob: StringProperty(
+            default="*.usdz;*.usda",
+            options={'HIDDEN'},
+            )
+    materials = BoolProperty(
+        name="Import Materials",
+        description="Import Materials and textures",
+        default=True,
+        )
+
+    def execute(self, context):
+        from . import import_usdz
+        keywords = self.as_keywords(ignore=("filter_glob",))
+        return import_usdz.import_usdz(context, **keywords)
+
 
 class ExportUSDZ(bpy.types.Operator, ExportHelper):
     """Save a USDZ File"""
@@ -99,11 +122,15 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
         return export_usdz.export_usdz(context, **keywords)
 
 
+def menu_func_usdz_import(self, context):
+    self.layout.operator(ImportUSDZ.bl_idname, text="USDZ (.usdz)")
+
 def menu_func_usdz_export(self, context):
-    self.layout.operator(ExportUSDZ.bl_idname, text="USDZ (.usdz)");
+    self.layout.operator(ExportUSDZ.bl_idname, text="USDZ (.usdz)")
 
 
 classes = (
+    ImportUSDZ,
     ExportUSDZ,
 )
 
@@ -111,11 +138,15 @@ classes = (
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_usdz_import)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_usdz_export)
 
 
 def unregister():
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_usdz_import)
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_usdz_export)
+
     for cls in classes:
         bpy.utils.unregister_class(cls)
 
