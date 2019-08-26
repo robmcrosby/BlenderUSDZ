@@ -141,7 +141,7 @@ def add_mesh(obj, data, uvs):
     for uvName, uvs in uvMaps.items():
         uvIndex = bm.loops.layers.uv[uvName]
         index = 0
-        for f in bm.faces:
+        for f in bm.faces[-len(faces):]:
             for i, l in enumerate(f.loops):
                 l[uvIndex].uv = uvs[index+i]
             index += len(f.loops)
@@ -172,9 +172,11 @@ def get_meshes(data):
 
 def get_materials(data):
     materialMap = {}
+    #print(data.printUsda())
     materials = data.getItemsOfType('Material')
     for mat in materials:
         materialMap[mat.name] = mat
+        #print(mat.printUsda())
     return materialMap
 
 def get_uv_map_names(mesh):

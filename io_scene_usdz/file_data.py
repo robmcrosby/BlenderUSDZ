@@ -507,6 +507,20 @@ class FileData:
         for item in data['items']:
             self.printData(item, tab+'  ')
 
+    def buildPathMap(self, crate, index, basePath = ''):
+        path, token, jump = crate.paths[index]
+        basePath = basePath + '/' + crate.getTokenStr(token)
+        self.pathMap[path] = basePath
+        #print(path, basePath)
+
+        if jump == 0 or jump == -2:
+            return (index + 1, jump)
+        index, jump = self.buildPathMap(crate, index + 1, basePath)
+        while index < len(crate.paths) and jump != -2:
+            index, jump = self.buildPathMap(crate, index, basePath)
+        return (index, -1)
+
+
     def buildItemFromCrate(self, crate, index):
         path, token, jump = crate.paths[index]
         fset, spec = crate.specsMap[path]
@@ -534,7 +548,33 @@ class FileData:
             else:
                 item.type = typeName
         if 'default' in properties:
+            # Set the Default value
             item.data = properties.pop('default')
+        if item.type == 'token' and item.data != None:
+            # Put quotes on tokens
+            item.data = '"' + item.data + '"'
+        if item.type == 'Relationship':
+            item.type = 'rel'
+            if 'targetPaths' in properties:
+                paths = properties.pop('targetPaths')
+                item.data = '<' + self.pathMap[paths['path']] + '>'
+            if 'targetChildren' in properties:
+                properties.pop('targetChildren')
+            if 'variability' in properties:
+                properties.pop('variability')
+        elif 'variability' in properties:
+            # Add uniform keyword
+            item.type = 'uniform ' + item.type
+            properties.pop('variability')
+        if 'connectionPaths' in properties:
+            paths = properties.pop('connectionPaths')
+            if paths['path'] in self.pathMap:
+                item.data = '<' + self.pathMap[paths['path']] + '>'
+                # Replace last '/' with '.'
+                item.data = item.data[::-1].replace('/', '.', 1)[::-1]
+                item.name += '.connect'
+        if 'connectionChildren' in properties:
+            properties.pop('connectionChildren')
         item.properties = properties
 
         if jump == 0 or jump == -2:
@@ -551,6 +591,7 @@ class FileData:
 
 
     def buildFromCrate(self, crate):
+        self.pathMap = {}
         path, token, jump = crate.paths[0]
         fset, spec = crate.specsMap[path]
         fset = crate.getFieldSet(fset)
@@ -562,8 +603,13 @@ class FileData:
                 value = crate.getRepValue(crate.reps[field])
                 self.properties[name] = value
 
-        # Get the Items
         if jump != 0 and jump != -2:
+            # Build the Path Map
+            index = 1
+            while index < len(crate.paths):
+                index, jump = self.buildPathMap(crate, index)
+
+            # Get the Items
             index = 1
             while index < len(crate.paths):
                 item, index = self.buildItemFromCrate(crate, index)
