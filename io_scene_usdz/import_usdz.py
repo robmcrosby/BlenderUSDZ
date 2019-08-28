@@ -64,21 +64,6 @@ def add_object(context, data, materials = {}, parent = None):
         obj = create_mesh_object(meshes[0].name, data.name)
         add_to_collection(obj, context.scene.collection)
 
-        # Get the materials
-        for mesh in meshes:
-            matRel = mesh.getItemOfName('material:binding')
-            if matRel != None:
-                print('matRel:', matRel.data)
-                matName = matRel.data.strip('<>')
-                matName = matName[matName.rfind('/')+1:]
-                if matName in materials:
-                    print('add material:', matName)
-                    matIndex = len(obj.data.materials)
-                    mat = materials[matName]
-                    #print('mat', mat)
-                    obj.data.materials.append(mat)
-                    #obj.active_material_index = matIndex
-
         # Create any UV maps
         uvs = get_uv_map_names(meshes[0])
         for uv in uvs:
@@ -86,7 +71,7 @@ def add_object(context, data, materials = {}, parent = None):
 
         # Add the Geometry
         for mesh in meshes:
-            add_mesh(obj, mesh, uvs)
+            add_mesh(obj, mesh, uvs, materials)
         obj.data.update()
 
         if parent != None:
@@ -112,7 +97,7 @@ def add_object(context, data, materials = {}, parent = None):
             add_object(context, child, materials, obj)
 
 
-def add_mesh(obj, data, uvs):
+def add_mesh(obj, data, uvs, materials):
     # Get Geometry From Data
     counts = data.getItemOfName('faceVertexCounts').data
     indices = data.getItemOfName('faceVertexIndices').data
@@ -137,6 +122,16 @@ def add_mesh(obj, data, uvs):
             smooth.append(True)
         index += count
 
+    # Assign the Material
+    matIndex = 0
+    matRel = data.getItemOfName('material:binding')
+    if matRel != None:
+        matName = matRel.data.strip('<>')
+        matName = matName[matName.rfind('/')+1:]
+        if matName in materials:
+            matIndex = len(obj.data.materials)
+            obj.data.materials.append(materials[matName])
+
     # Create BMesh from Mesh Object
     bm = bmesh.new()
     bm.from_mesh(obj.data)
@@ -152,6 +147,7 @@ def add_mesh(obj, data, uvs):
     for i, face in enumerate(faces):
         f = bm.faces.new((bm.verts[i+base] for i in face))
         f.smooth = smooth[i]
+        f.material_index = matIndex
 
     # Add the UVs
     for uvName, uvs in uvMaps.items():
