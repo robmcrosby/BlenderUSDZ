@@ -10,6 +10,7 @@ import mathutils
 from io_scene_usdz.file_data import *
 from io_scene_usdz.scene_data import *
 from io_scene_usdz.object_utils import *
+from io_scene_usdz.material_utils import *
 
 def find_usdz(dirpath):
     files = os.listdir(dirpath)
@@ -62,6 +63,21 @@ def add_object(context, data, materials = {}, parent = None):
         # Create A Mesh Object
         obj = create_mesh_object(meshes[0].name, data.name)
         add_to_collection(obj, context.scene.collection)
+
+        # Get the materials
+        for mesh in meshes:
+            matRel = mesh.getItemOfName('material:binding')
+            if matRel != None:
+                print('matRel:', matRel.data)
+                matName = matRel.data.strip('<>')
+                matName = matName[matName.rfind('/')+1:]
+                if matName in materials:
+                    print('add material:', matName)
+                    matIndex = len(obj.data.materials)
+                    mat = materials[matName]
+                    #print('mat', mat)
+                    obj.data.materials.append(mat)
+                    #obj.active_material_index = matIndex
 
         # Create any UV maps
         uvs = get_uv_map_names(meshes[0])
@@ -174,9 +190,10 @@ def get_materials(data):
     materialMap = {}
     #print(data.printUsda())
     materials = data.getItemsOfType('Material')
-    for mat in materials:
-        materialMap[mat.name] = mat
-        #print(mat.printUsda())
+    for matData in materials:
+        print(matData.printUsda())
+        mat = create_material(matData.name)
+        materialMap[matData.name] = mat
     return materialMap
 
 def get_uv_map_names(mesh):
