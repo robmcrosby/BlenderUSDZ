@@ -264,15 +264,30 @@ def set_shader_input_texture(data, mat, inputName, matData, tempDir):
         texName = data.data[data.data.rfind('/')+1:data.data.find('.outputs')]
         texData = matData.getItemOfName(texName)
         if texData != None:
+            # Compile the File Path
+            filePath = texData.getItemOfName('inputs:file').data.replace('@', '')
+            filePath = tempDir + filePath
+            # Add an Image Texture Node
             texNode = mat.node_tree.nodes.new('ShaderNodeTexImage')
-            mat.node_tree.links.new(input, texNode.outputs[0])
-            #print('Set Texture:', texData.printUsda())
-            file = texData.getItemOfName('inputs:file').data.replace('@', '')
-            file = tempDir + file
-            #imageName = file[file.rfind('/')+1:file.rfind('.')]
-            #print(imageName, file)
-            texNode.image = bpy.data.images.load(file)
+            texNode.image = bpy.data.images.load(filePath)
             texNode.image.pack()
+            if data.type == 'color3f':
+                # Connect to the Color Input
+                mat.node_tree.links.new(input, texNode.outputs[0])
+            elif data.type == 'float':
+                # Add and link a Seperate Color Node
+                texNode.image.colorspace_settings.name = 'Non-Color'
+                sepNode = mat.node_tree.nodes.new('ShaderNodeSeparateRGB')
+                mat.node_tree.links.new(sepNode.inputs[0], texNode.outputs[0])
+                mat.node_tree.links.new(input, sepNode.outputs[0])
+            elif data.type == 'normal3f':
+                # Add and link a Normal Map Node
+                texNode.image.colorspace_settings.name = 'Non-Color'
+                mapNode = mat.node_tree.nodes.new('ShaderNodeNormalMap')
+                mat.node_tree.links.new(mapNode.inputs[1], texNode.outputs[0])
+                mat.node_tree.links.new(input, mapNode.outputs[0])
+            #else:
+            #    print('UnHandled Type:', node.type)
 
 
 def get_uv_map_names(mesh):
