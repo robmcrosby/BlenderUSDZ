@@ -1,7 +1,5 @@
 import bpy
 
-def create_material(name):
-    return bpy.data.materials.new(name)
 
 def get_material_name(material):
     return material.name.replace('.', '_')
