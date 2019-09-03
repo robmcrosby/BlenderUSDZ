@@ -266,11 +266,13 @@ def set_shader_input_texture(data, mat, inputName, matData, tempDir):
         if texData != None:
             texNode = mat.node_tree.nodes.new('ShaderNodeTexImage')
             mat.node_tree.links.new(input, texNode.outputs[0])
-            print('Set Texture:', texData.printUsda())
+            #print('Set Texture:', texData.printUsda())
             file = texData.getItemOfName('inputs:file').data.replace('@', '')
             file = tempDir + file
-            imageName = file[file.rfind('/')+1:file.rfind('.')]
-            print(imageName, file)
+            #imageName = file[file.rfind('/')+1:file.rfind('.')]
+            #print(imageName, file)
+            texNode.image = bpy.data.images.load(file)
+            texNode.image.pack()
 
 
 def get_uv_map_names(mesh):
