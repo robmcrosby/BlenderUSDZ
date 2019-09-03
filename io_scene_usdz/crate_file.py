@@ -807,6 +807,8 @@ class CrateFile:
                 return tokens
             elif rep['payload'] < len(self.tokens):
                 return self.tokens[rep['payload']]
+        elif rep['type'] == ValueType.asset:
+            return '@' + self.tokens[rep['payload']] + '@'
         elif rep['type'] == ValueType.TokenVector:
             self.file.seek(rep['payload'])
             numTokens = readInt(self.file, 8)
@@ -825,6 +827,12 @@ class CrateFile:
             return listOp
         elif rep['type'] == ValueType.Variability or rep['type'] == ValueType.bool:
             return rep['payload']
+        elif rep['type'] == ValueType.PathVector:
+            self.file.seek(rep['payload'])
+            numPaths = readInt(self.file, 8)
+            path = readInt(self.file, 4)
+            #print('numPaths', numPaths, 'path', path)
+            return path
         elif rep['type'] == ValueType.int:
             if rep['inline']:
                 return rep['payload']
