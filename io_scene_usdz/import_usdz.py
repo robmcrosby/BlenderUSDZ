@@ -156,7 +156,10 @@ def add_mesh(obj, data, uvs, materials):
         index = 0
         for f in bm.faces[-len(faces):]:
             for i, l in enumerate(f.loops):
-                l[uvIndex].uv = uvs[index+i]
+                if index+i < len(uvs):
+                    l[uvIndex].uv = uvs[index+i]
+                else:
+                    l[uvIndex].uv = (0.0, 0.0)
             index += len(f.loops)
 
     # Apply BMesh back to Mesh Object
