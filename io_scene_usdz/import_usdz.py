@@ -191,14 +191,14 @@ def get_materials(data, tempDir):
     #print(data.printUsda())
     materials = data.getItemsOfType('Material')
     for matData in materials:
-        print(matData.printUsda())
+        #print(matData.printUsda())
         mat = create_material(matData, tempDir)
         materialMap[matData.name] = mat
     return materialMap
 
 def create_material(data, tempDir):
     shader = get_shader_data(data)
-    print('Shader:', shader.printUsda())
+    #print('Shader:', shader.printUsda())
 
     mat = bpy.data.materials.new(data.name)
     mat.use_nodes = True

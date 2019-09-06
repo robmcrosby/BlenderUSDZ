@@ -523,6 +523,9 @@ class FileData:
 
     def buildItemFromCrate(self, crate, index):
         path, token, jump = crate.paths[index]
+        if not path in crate.specsMap:
+            print('token:', crate.getTokenStr(token))
+            return (None, index+1)
         fset, spec = crate.specsMap[path]
         fset = crate.getFieldSet(fset)
         item = FileItem(SpecType(spec).name)
@@ -581,12 +584,14 @@ class FileData:
             index += 1
         else:
             child, index = self.buildItemFromCrate(crate, index + 1)
-            if 'def' in child.type or len(child.items) == 0:
-                item.items.append(child)
-            while index < len(crate.paths) and child.pathJump != -2:
-                child, index = self.buildItemFromCrate(crate, index)
+            if child != None:
                 if 'def' in child.type or len(child.items) == 0:
                     item.items.append(child)
+            while index < len(crate.paths) and (child == None or child.pathJump != -2):
+                child, index = self.buildItemFromCrate(crate, index)
+                if child != None:
+                    if 'def' in child.type or len(child.items) == 0:
+                        item.items.append(child)
         return (item, index)
 
 
@@ -613,7 +618,8 @@ class FileData:
             index = 1
             while index < len(crate.paths):
                 item, index = self.buildItemFromCrate(crate, index)
-                self.items.append(item)
+                if item != None:
+                    self.items.append(item)
 
 
     def readUsdc(self, filePath):
