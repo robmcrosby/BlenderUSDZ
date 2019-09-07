@@ -126,6 +126,10 @@ def add_mesh(obj, data, uvs, materials):
     # Assign the Material
     matIndex = 0
     matRel = data.getItemOfName('material:binding')
+    if matRel == None:
+        geomSubsets = data.getItemsOfType('GeomSubset')
+        if len(geomSubsets) > 0:
+            matRel = geomSubsets[0].getItemOfName('material:binding')
     if matRel != None:
         matName = matRel.data.strip('<>')
         matName = matName[matName.rfind('/')+1:]
@@ -191,14 +195,14 @@ def get_materials(data, tempDir):
     #print(data.printUsda())
     materials = data.getItemsOfType('Material')
     for matData in materials:
-        print(matData.printUsda())
+        #print(matData.printUsda())
         mat = create_material(matData, tempDir)
         materialMap[matData.name] = mat
     return materialMap
 
 def create_material(data, tempDir):
     shader = get_shader_data(data)
-    print('Shader:', shader.printUsda())
+    #print('Shader:', shader.printUsda())
 
     mat = bpy.data.materials.new(data.name)
     mat.use_nodes = True
@@ -233,8 +237,6 @@ def set_material_values(matData, mat, tempDir, valName, inputName):
         valData = shaderData.getItemOfName('inputs:'+valName+'.connect')
         if valData != None:
             set_shader_input_texture(valData, mat, inputName, matData, tempDir)
-        else:
-            print('Cant find data')
 
 
 def set_shader_input_value(data, mat, inputName):
