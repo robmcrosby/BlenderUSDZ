@@ -524,7 +524,6 @@ class FileData:
     def buildItemFromCrate(self, crate, index):
         path, token, jump = crate.paths[index]
         if not path in crate.specsMap:
-            print('token:', crate.getTokenStr(token))
             return (None, index+1)
         fset, spec = crate.specsMap[path]
         fset = crate.getFieldSet(fset)
