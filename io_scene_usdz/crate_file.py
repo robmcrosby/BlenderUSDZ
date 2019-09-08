@@ -180,7 +180,7 @@ def getValueTypeStr(typeStr):
 
 def writeValue(file, value, vType):
     if type(value) == list:
-        writeInt(file, len(value), 4)
+        writeInt(file, len(value), 8)
         for v in value:
             writeValue(file, v, vType)
     elif vType.name[:6] == 'matrix':
@@ -306,7 +306,7 @@ class CrateFile:
             if ref < 0:
                 ref = self.file.tell()
                 self.addWritenData(tokens, ValueType.token, ref)
-                writeInt(self.file, len(tokens), 4)
+                writeInt(self.file, len(tokens), 8)
                 for token in tokens:
                     writeInt(self.file, token, 4)
             return self.addFieldItem(field, ValueType.token, True, False, False, ref)
@@ -362,7 +362,7 @@ class CrateFile:
             if ref < 0:
                 ref = self.file.tell()
                 self.addWritenData(data, ValueType.int, ref)
-                writeInt(self.file, len(data), 4)
+                writeInt(self.file, len(data), 8)
                 if compress:
                     writeInt32Compressed(self.file, data)
                 else:
@@ -378,7 +378,7 @@ class CrateFile:
             if ref < 0:
                 ref = self.file.tell()
                 self.addWritenData(data, ValueType.float, ref)
-                writeInt(self.file, len(data), 4)
+                writeInt(self.file, len(data), 8)
                 for f in data:
                     writeFloat(self.file, f)
             return self.addFieldItem(field, ValueType.float, True, False, False, ref)
@@ -392,7 +392,7 @@ class CrateFile:
             if ref < 0:
                 ref = self.file.tell()
                 self.addWritenData(data, ValueType.double, ref)
-                writeInt(self.file, len(data), 4)
+                writeInt(self.file, len(data), 8)
                 for d in data:
                     writeDouble(self.file, d)
             return self.addFieldItem(field, ValueType.double, True, False, False, ref)
@@ -407,7 +407,7 @@ class CrateFile:
             if ref < 0:
                 ref = self.file.tell()
                 self.addWritenData(data, vType, ref)
-                writeInt(self.file, len(data), 4)
+                writeInt(self.file, len(data), 8)
                 for v in data:
                     self.file.write(struct.pack(packStr, *v))
             return self.addFieldItem(field, vType, True, False, False, ref)
@@ -434,7 +434,7 @@ class CrateFile:
             self.addWritenData(data, vType, ref)
             packStr = '<'+vType.name[-2:]
             if type(data) == list:
-                writeInt(self.file, len(data), 4)
+                writeInt(self.file, len(data), 8)
                 for matrix in data:
                     for row in matrix:
                         self.file.write(struct.pack(packStr, *row))
@@ -541,7 +541,7 @@ class CrateFile:
         self.file.seek(0)
         self.file.write(b'PXR-USDC')
         # Version
-        self.file.write(b'\x00\x06\x00\x00\x00\x00\x00\x00')
+        self.file.write(b'\x00\x07\x00\x00\x00\x00\x00\x00')
         # Table of Contents Offset
         #print('tocOffset: ', tocOffset)
         writeInt(self.file, tocOffset, 8)
