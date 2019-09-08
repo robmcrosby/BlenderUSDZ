@@ -5,7 +5,7 @@ import binascii
 from io_scene_usdz.crate_file import *
 tab = '   '
 
-def print_data(data):
+def print_data(data, reduced = False):
     if type(data) is str:
         return data
     if type(data) is int:
@@ -13,22 +13,25 @@ def print_data(data):
     if type(data) is float:
         return '%.6g' % round(data, 6)
     if type(data) is list:
-        return '[' + ', '.join(print_data(item) for item in data) + ']'
+        if reduced and len(data) > 3:
+            return '[' + ', '.join(print_data(item) for item in data[:3]) + ', ...]'
+        else:
+            return '[' + ', '.join(print_data(item) for item in data) + ']'
     if type(data) is tuple:
         return '(' + ', '.join(print_data(item) for item in data) + ')'
     return ''
 
 
-def print_properties(properties, indent = ''):
+def print_properties(properties, indent = '', reduced = False):
     src = '(\n'
     for name, data in properties.items():
-        src += indent+tab + name + ' = ' + print_data(data) + '\n'
+        src += indent+tab + name + ' = ' + print_data(data, reduced) + '\n'
     return src + indent + ')\n'
 
-def print_time_samples(samples, indent = ''):
+def print_time_samples(samples, indent = '', reduced = False):
     src = '{\n'
     for frame, data in samples:
-        src += indent+tab + print_data(frame) + ': ' + print_data(data) + ',\n'
+        src += indent+tab + print_data(frame, reduced) + ': ' + print_data(data, reduced) + ',\n'
     return src + indent + '}\n'
 
 def interleave_lists(lists):
@@ -174,25 +177,25 @@ class FileItem:
             for item in self.items:
                 item.updatePathStrings(self.pathStr, pathMap)
 
-    def printUsda(self, indent = ''):
+    def printUsda(self, indent = '', reduced = False):
         src = ''
         if 'def' in self.type:
             src += indent + '\n'
             src += indent + self.type + ' "' + self.name + '"\n'
             src += indent + '{\n'
             for item in self.items:
-                src += item.printUsda(indent+tab)
+                src += item.printUsda(indent+tab, reduced)
             src += indent + '}\n'
         else:
             src += indent + self.type + ' ' + self.name
             if self.data != None:
-                src += ' = ' + print_data(self.data)
+                src += ' = ' + print_data(self.data, reduced)
                 if len(self.properties) > 0:
-                    src += ' ' + print_properties(self.properties, indent)
+                    src += ' ' + print_properties(self.properties, indent, reduced)
                 else:
                     src += '\n'
             elif len(self.items) > 0:
-                src += ' = ' + print_time_samples(self.items, indent)
+                src += ' = ' + print_time_samples(self.items, indent, reduced)
             else:
                 src += '\n'
         return src
@@ -373,15 +376,15 @@ class FileData:
             items += child.getItemsOfType(type)
         return items
 
-    def printUsda(self):
+    def printUsda(self, reduced = False):
         src = '#usda 1.0\n'
         # Print the Properties
         if len(self.properties) > 0:
-            src += print_properties(self.properties, '')
+            src += print_properties(self.properties, '', reduced)
         src += '\n'
         # Print the Items
         for item in self.items:
-            src += item.printUsda()
+            src += item.printUsda(reduced = reduced)
         return src
 
     def writeUsda(self, filePath):
