@@ -22,14 +22,28 @@ def print_data(data, reduced = False):
     return ''
 
 
+def print_dictionary(indent = '', dic = {}):
+    src = '{\n'
+    for key, value in dic.items():
+        if type(value) is dict:
+            src += indent + tab + 'dictionary ' + key + ' = ' + print_dictionary(indent + tab, value)
+        elif type(value) is str:
+            src += indent + tab + 'string ' + key + ' = "' + value + '"\n'
+        elif type(value) is bool:
+            src += indent + tab + 'bool ' + key + ' = ' + '1\n' if value else '0\n'
+    src += indent + '}\n'
+    return src
+
+
 def print_properties(properties, indent = '', reduced = False):
     src = '(\n'
     for name, data in properties.items():
         if type(data) is dict:
-            src += indent+tab + name + ' = {\n'
-            for key, value in data.items():
-                src += indent+tab+tab + 'string ' + key + ' = "' + value + '"\n'
-            src += indent+tab + '}\n'
+            src += indent+tab + name + ' = ' + print_dictionary(indent+tab, data)
+            #src += indent+tab + name + ' = {\n'
+            #for key, value in data.items():
+            #    src += indent+tab+tab + 'string ' + key + ' = "' + value + '"\n'
+            #src += indent+tab + '}\n'
         else:
             src += indent+tab + name + ' = ' + print_data(data, reduced) + '\n'
     return src + indent + ')\n'

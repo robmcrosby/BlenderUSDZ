@@ -784,6 +784,29 @@ class CrateFile:
     def readMatrix(self, size):
         return tuple(self.readDoubleVector(size) for i in range(size))
 
+    def readDictionary(self, loc):
+        self.file.seek(loc)
+        numItems = readInt(self.file, 8)
+        dic = {}
+        for i in range(numItems):
+            key = self.getStringStr(readInt(self.file, 4))
+            itemSize = readInt(self.file, 8)
+            loc = self.file.tell()
+            if itemSize > 4:
+                self.file.seek(loc + itemSize - 4)
+                vt = ValueType((readInt(self.file, 4) >> 16) & 0xFF)
+                self.file.seek(loc)
+                if vt == ValueType.Dictionary:
+                    dic[key] = self.readDictionary(loc)
+                elif vt == ValueType.string:
+                    dic[key] = self.getStringStr(readInt(self.file, 4))
+                elif vt == ValueType.bool:
+                    dic[key] = readInt(self.file, 4) > 0
+                #else:
+                #    print('Unhandled Dictionary Type:', vt.name)
+            self.file.seek(loc + itemSize)
+        return dic
+
     def decodeInlineFloatVector(payload, size):
         data = rep['payload'].to_bytes(4*size, byteorder='big')
 
@@ -819,6 +842,7 @@ class CrateFile:
             count = readInt(self.file, countBytes)
             return [self.readMatrix(size) for i in range(count)]
         return self.readMatrix(size)
+
 
     def getRepValue(self, rep):
         rep = decodeRep(rep)
@@ -907,15 +931,8 @@ class CrateFile:
             return self.decodeRepMatrix(rep, 3)
         elif rep['type'] == ValueType.matrix4d:
             return self.decodeRepMatrix(rep, 4)
-        #elif rep['type'] == ValueType.Dictionary:
-        #    print('Get Dictionary:', rep)
-        #    self.file.seek(rep['payload'])
-        #    numItems = readInt(self.file, 8)
-        #    for i in range(numItems):
-        #        print(self.getStringStr(readInt(self.file, 4)))
-        #        print('size:', readInt(self.file, 8))
-        #        print(self.getStringStr(readInt(self.file, 4)))
-        #        print('TfPointerAndBits:', readInt(self.file, 4))
+        elif rep['type'] == ValueType.Dictionary:
+            return self.readDictionary(rep['payload'])
         #else:
         #    print('UnHandled Type:', rep)
         return rep
