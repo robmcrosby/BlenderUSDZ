@@ -706,5 +706,8 @@ class Scene:
             data.properties['startTimeCode'] = self.startFrame
             data.properties['endTimeCode'] = self.endFrame
             data.properties['timeCodesPerSecond'] = self.fps
+        layerData = {}
+        layerData['creator'] = 'Blender USDZ Plugin'
+        data.properties['customLayerData'] = layerData
         data.items = self.exportObjectItems()
         return data

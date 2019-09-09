@@ -170,6 +170,8 @@ def getValueType(value):
         return getValueType(value[0])
     if t == SpecifierType:
         return ValueType.Specifier
+    if t == dict:
+        return ValueType.Dictionary
     return ValueType.Invalid
 
 def getValueTypeStr(typeStr):
@@ -272,6 +274,11 @@ class CrateFile:
             self.tokenMap[token] = len(self.tokens)
             self.tokens.append(token)
         return self.tokenMap[token]
+
+    def getStringIndex(self, str):
+        strIndex = len(self.strings)
+        self.strings.append(self.getTokenIndex(str))
+        return strIndex
 
     def addFieldSet(self, fset):
         index = len(self.fsets)
@@ -455,6 +462,17 @@ class CrateFile:
         data = 1 if data else 0
         return self.addFieldItem(field, ValueType.Variability, False, True, False, data)
 
+    def addFieldDictionary(self, field, data):
+        field = self.getTokenIndex(field)
+        ref = self.file.tell()
+        writeInt(self.file, len(data), 8)
+        for key, value in data.items():
+            writeInt(self.file, self.getStringIndex(key), 4)
+            writeInt(self.file, 8, 8)
+            writeInt(self.file, self.getStringIndex(value), 4)
+            writeInt(self.file, 1074397184, 4)
+        return self.addFieldItem(field, ValueType.Dictionary, False, False, False, ref)
+
     def addFieldTimeSamples(self, field, data, vType):
         field = self.getTokenIndex(field)
         vType = getValueTypeStr(vType)
@@ -523,6 +541,8 @@ class CrateFile:
             return self.addFieldBool(field, value)
         if type == ValueType.Variability:
             return self.addFieldVariability(field, value)
+        if type == ValueType.Dictionary:
+            return self.addFieldDictionary(field, value)
         #print('type: ', type.name, value)
         return self.addFieldItem(field, type, False, True, False, value)
 
@@ -562,8 +582,9 @@ class CrateFile:
 
     def writeStringsSection(self):
         start = self.file.tell()
-        self.file.write(bytes(8))
-        # This section is empty for now
+        writeInt(self.file, len(self.strings), 8)
+        for i in self.strings:
+            writeInt(self.file, i, 4)
         size = self.file.tell() - start
         self.toc.append(('STRINGS', start, size))
 
@@ -668,7 +689,8 @@ class CrateFile:
         start, size = self.getTableItem('STRINGS')
         if start > 0 and size > 0:
             self.file.seek(start)
-            #print('Strings', self.file.read(size))
+            numStrings = readInt(self.file, 8)
+            self.strings = [readInt(self.file, 4) for i in range(numStrings)]
 
     def readFieldsSection(self):
         start, size = self.getTableItem('FIELDS')
@@ -746,6 +768,11 @@ class CrateFile:
         index = abs(index)
         if index < len(self.tokens):
             return self.tokens[index]
+        return ''
+
+    def getStringStr(self, index):
+        if index < len(self.strings):
+            return self.getTokenStr(self.strings[index])
         return ''
 
     def readFloatVector(self, size):
@@ -880,6 +907,15 @@ class CrateFile:
             return self.decodeRepMatrix(rep, 3)
         elif rep['type'] == ValueType.matrix4d:
             return self.decodeRepMatrix(rep, 4)
+        #elif rep['type'] == ValueType.Dictionary:
+        #    print('Get Dictionary:', rep)
+        #    self.file.seek(rep['payload'])
+        #    numItems = readInt(self.file, 8)
+        #    for i in range(numItems):
+        #        print(self.getStringStr(readInt(self.file, 4)))
+        #        print('size:', readInt(self.file, 8))
+        #        print(self.getStringStr(readInt(self.file, 4)))
+        #        print('TfPointerAndBits:', readInt(self.file, 4))
         #else:
         #    print('UnHandled Type:', rep)
         return rep

@@ -25,7 +25,13 @@ def print_data(data, reduced = False):
 def print_properties(properties, indent = '', reduced = False):
     src = '(\n'
     for name, data in properties.items():
-        src += indent+tab + name + ' = ' + print_data(data, reduced) + '\n'
+        if type(data) is dict:
+            src += indent+tab + name + ' = {\n'
+            for key, value in data.items():
+                src += indent+tab+tab + 'string ' + key + ' = "' + value + '"\n'
+            src += indent+tab + '}\n'
+        else:
+            src += indent+tab + name + ' = ' + print_data(data, reduced) + '\n'
     return src + indent + ')\n'
 
 def print_time_samples(samples, indent = '', reduced = False):
