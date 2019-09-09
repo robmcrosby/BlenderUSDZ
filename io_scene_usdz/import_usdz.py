@@ -192,7 +192,7 @@ def get_meshes(data):
 
 def get_materials(data, tempDir):
     materialMap = {}
-    print(data.printUsda(reduced = True))
+    #print(data.printUsda(reduced = True))
     materials = data.getItemsOfType('Material')
     for matData in materials:
         #print(matData.printUsda())
