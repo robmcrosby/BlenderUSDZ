@@ -78,3 +78,64 @@ class ValueType(Enum):
     UnregisteredValue = 53
     UnregisteredValueListOp = 54
     PayloadListOp = 55
+
+
+def getTupleValueType(value):
+    l = len(value)
+    if l > 0:
+        t = type(value[0])
+        if t == int:
+            if l == 2:
+                return ValueType.vec2i
+            if l == 3:
+                return ValueType.vec3i
+            if l == 4:
+                return ValueType.vec4i
+        elif t == float:
+            if l == 2:
+                return ValueType.vec2f
+            if l == 3:
+                return ValueType.vec3f
+            if l == 4:
+                return ValueType.vec4f
+        elif t == tuple and len(value[0]) > 0 and type(value[0][0]) == float:
+            l = len(value[0])
+            if l == 2:
+                return ValueType.matrix2d
+            if l == 3:
+                return ValueType.matrix3d
+            if l == 4:
+                return ValueType.matrix4d
+    return ValueType.Invalid
+
+
+def getValueType(value):
+    t = type(value)
+    if t == bool:
+        return ValueType.bool
+    if t == int:
+        return ValueType.int
+    if t == float:
+        return ValueType.float
+    if t == str:
+        if len(value) > 0 and value[0] == '@':
+            return ValueType.asset
+        return ValueType.token
+    if t == tuple:
+        return getTupleValueType(value)
+    if t == list and len(value) > 0:
+        if type(value[0]) == str:
+            return ValueType.token
+        return getValueType(value[0])
+    if t == SpecifierType:
+        return ValueType.Specifier
+    if t == dict:
+        return ValueType.Dictionary
+    return ValueType.Invalid
+
+
+def getValueTypeStr(typeStr):
+    typeStr = typeStr.replace('[]', '')
+    if typeStr == 'float3':
+        return ValueType.vec3f
+    return ValueType[typeStr]
