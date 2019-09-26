@@ -3,7 +3,8 @@ import itertools
 import binascii
 
 from io_scene_usdz.crate_file import *
-tab = '   '
+from io_scene_usdz.value_types import *
+TAB = '   '
 
 def print_data(data, reduced = False):
     if type(data) is str:
@@ -26,11 +27,11 @@ def print_dictionary(indent = '', dic = {}):
     src = '{\n'
     for key, value in dic.items():
         if type(value) is dict:
-            src += indent + tab + 'dictionary ' + key + ' = ' + print_dictionary(indent + tab, value)
+            src += indent + TAB + 'dictionary ' + key + ' = ' + print_dictionary(indent + TAB, value)
         elif type(value) is str:
-            src += indent + tab + 'string ' + key + ' = "' + value + '"\n'
+            src += indent + TAB + 'string ' + key + ' = "' + value + '"\n'
         elif type(value) is bool:
-            src += indent + tab + 'bool ' + key + ' = ' + '1\n' if value else '0\n'
+            src += indent + TAB + 'bool ' + key + ' = ' + '1\n' if value else '0\n'
     src += indent + '}\n'
     return src
 
@@ -39,19 +40,19 @@ def print_properties(properties, indent = '', reduced = False):
     src = '(\n'
     for name, data in properties.items():
         if type(data) is dict:
-            src += indent+tab + name + ' = ' + print_dictionary(indent+tab, data)
-            #src += indent+tab + name + ' = {\n'
+            src += indent+TAB + name + ' = ' + print_dictionary(indent+TAB, data)
+            #src += indent+TAB + name + ' = {\n'
             #for key, value in data.items():
-            #    src += indent+tab+tab + 'string ' + key + ' = "' + value + '"\n'
-            #src += indent+tab + '}\n'
+            #    src += indent+TAB+TAB + 'string ' + key + ' = "' + value + '"\n'
+            #src += indent+TAB + '}\n'
         else:
-            src += indent+tab + name + ' = ' + print_data(data, reduced) + '\n'
+            src += indent+TAB + name + ' = ' + print_data(data, reduced) + '\n'
     return src + indent + ')\n'
 
 def print_time_samples(samples, indent = '', reduced = False):
     src = '{\n'
     for frame, data in samples:
-        src += indent+tab + print_data(frame, reduced) + ': ' + print_data(data, reduced) + ',\n'
+        src += indent+TAB + print_data(frame, reduced) + ': ' + print_data(data, reduced) + ',\n'
     return src + indent + '}\n'
 
 def interleave_lists(lists):
@@ -204,7 +205,7 @@ class FileItem:
             src += indent + self.type + ' "' + self.name + '"\n'
             src += indent + '{\n'
             for item in self.items:
-                src += item.printUsda(indent+tab, reduced)
+                src += item.printUsda(indent+TAB, reduced)
             src += indent + '}\n'
         else:
             src += indent + self.type + ' ' + self.name
@@ -523,12 +524,12 @@ class FileData:
         crate.writeTableOfContents()
         file.close()
 
-    def printData(self, data, tab = ''):
-        print(tab + '*'+data['name'] + '<'+data['type'].name+'>')
+    def printData(self, data, indent = ''):
+        print(indent + '*'+data['name'] + '<'+data['type'].name+'>')
         for name, value in data['fields'].items():
-            print(tab + '  -'+name, value)
+            print(indent + '  -'+name, value)
         for item in data['items']:
-            self.printData(item, tab+'  ')
+            self.printData(item, indent + '  ')
 
     def buildPathMap(self, crate, index, basePath = ''):
         path, token, jump = crate.paths[index]
