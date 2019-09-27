@@ -42,6 +42,8 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     # Export image files
     data = scene.exportFileData()
 
+    print(scene)
+
     if useConverter:
         # Crate text usda file and run the USDZ Converter Tool
         data.writeUsda(usdaFile)

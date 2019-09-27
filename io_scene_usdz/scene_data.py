@@ -4,6 +4,11 @@ import mathutils
 from io_scene_usdz.object_utils import *
 from io_scene_usdz.material_utils import *
 from io_scene_usdz.file_data import FileData, FileItem
+from io_scene_usdz.value_types import *
+
+class BpyClass(UsdClass):
+    def __init__(self, name = '', type = ClassType.PseudoRoot):
+        super().__init__(name, type)
 
 
 class ShaderInput:
@@ -247,15 +252,16 @@ class Material:
 
 
 
-class Object:
+class Object(BpyClass):
     """Wraper for Blender Objects"""
     def __init__(self, object, scene, type = 'EMPTY'):
-        self.name = object.name.replace('.', '_')
+        super().__init__(object.name.replace('.', '_'), ClassType.Xform)
+        #self.name = object.name.replace('.', '_')
         self.object = object
         self.scene = scene
         self.type = type
         self.parent = None
-        self.children = []
+        #self.children = []
         self.objectCopy = None
         self.armatueCopy = None
         self.materials = []
@@ -608,9 +614,10 @@ class Object:
 
 
 
-class Scene:
+class Scene(BpyClass):
     """Container for Objects"""
     def __init__(self):
+        super().__init__()
         self.context = None
         self.objects = []
         self.objMap = {}
@@ -675,6 +682,7 @@ class Scene:
         else:
             self.objects.append(obj)
             self.objMap[obj.name] = obj
+            self.addChild(obj)
         if type == 'MESH':
             obj.setAsMesh()
         return obj

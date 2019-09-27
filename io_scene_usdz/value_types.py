@@ -1,5 +1,7 @@
 from enum import Enum
 
+TAB_SPACE = '   '
+
 
 class SpecifierType(Enum):
     Def = 0
@@ -20,6 +22,16 @@ class SpecType(Enum):
     Variant     = 10
     VariantSet  = 11
 
+
+class ClassType(Enum):
+    PseudoRoot = 0
+    Xform = 1
+    Mesh = 2
+    SkelRoot = 3
+    Skeleton = 4
+    SkelAnimation = 5
+    Material = 6
+    Shader = 7
 
 class ValueType(Enum):
     Invalid = 0
@@ -139,3 +151,110 @@ def getValueTypeStr(typeStr):
     if typeStr == 'float3':
         return ValueType.vec3f
     return ValueType[typeStr]
+
+def valueToString(value, reduced = False):
+    if type(value) is str:
+        return value
+    if type(value) is int:
+        return '%d' % value
+    if type(value) is float:
+        return '%.6g' % round(value, 6)
+    if type(value) is list:
+        if reduced and len(value) > 3:
+            return '[' + ', '.join(valueToString(item) for item in value[:3]) + ', ...]'
+        else:
+            return '[' + ', '.join(valueToString(item) for item in value) + ']'
+    if type(value) is tuple:
+        return '(' + ', '.join(valueToString(item) for item in value) + ')'
+    return ''
+
+
+class UsdAttribute:
+    def __init__(self, name = '', value = None, type = ValueType.Invalid):
+        self.name = name
+        self.value = value
+        self.valueType = type
+        self.parent = None
+        if type == ValueType.Invalid:
+            self.valueType = getValueType(value)
+
+    def __str__(self):
+        ret = self.valueType.name+' '+self.name
+        if self.value != None:
+            ret += ' = '+valueToString(self.value)
+        return ret
+
+    def getPathStr(self):
+        if self.parent == None:
+            return self.name
+        return self.parent.getPathStr() + '/' + self.name
+
+class UsdClass:
+    def __init__(self, name = '', type = ClassType.PseudoRoot):
+        self.name = name
+        self.classType = type
+        self.properties = {}
+        self.attributes = []
+        self.children = []
+        self.parent = None
+
+
+    def __str__(self):
+        return self.toString()
+
+
+    def toString(self, indent = ''):
+        ret = indent
+        if self.classType == ClassType.PseudoRoot:
+            ret += '#usda 1.0\n'
+            ret += self.propertiesToString(indent)
+            ret += indent+'\n'
+            ret += self.childrenToString(indent)
+            ret += '\n'
+        else:
+            ret += 'def '+self.classType.name+' "'+self.name+'"\n'
+            ret += indent+'{\n'
+            ret += self.attributesToString(indent+TAB_SPACE)
+            #ret += self.childrenToString(indent+TAB_SPACE)
+            ret += indent + '}\n'
+        return ret
+
+
+    def propertiesToString(self, indent):
+        ret = indent + '(\n'
+        ret += indent + ')\n'
+        return ret
+
+    def attributesToString(self, indent):
+        ret = ''
+        for att in self.attributes:
+            ret += indent + str(att) + '\n'
+        ret += indent+'\n'
+        return ret
+
+    def childrenToString(self, indent):
+        ret = ''
+        for child in self.children:
+            ret += child.toString(indent)
+        return ret
+
+    def addAttribute(self, attribute):
+        attribute.parent = self
+        self.attributes.append(attribute)
+        return attribute
+
+    def createAttribute(self, name, value = None, type = ValueType.Invalid):
+        return self.addAttribute(UsdAttribute(name, value, type))
+
+    def addChild(self, child):
+        child.parent = self
+        self.children.append(child)
+        return child
+
+    def createChild(self, name, type):
+        return self.addClass(UsdClass(name, type))
+
+    def getPathStr(self):
+        if self.parent == None:
+            return self.name
+        return self.parent.getPathStr() + '/' + self.name
