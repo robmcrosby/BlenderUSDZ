@@ -166,6 +166,28 @@ class UsdzFile:
         self.file.close()
 
 
+class UsdAttribute:
+    def __init__(self, name = '', value = None, type = ValueType.Invalid):
+        self.name = name
+        self.value = value
+        self.valueType = type
+        self.parent = None
+        if type == ValueType.Invalid:
+            self.valueType = getValueType(value)
+
+    def __str__(self):
+        ret = self.valueType.name+' '+self.name
+        if self.value != None:
+            ret += ' = '+valueToString(self.value)
+        return ret
+
+    def getPathStr(self):
+        if self.parent == None:
+            return self.name
+        return self.parent.getPathStr() + '/' + self.name
+
+
+
 class FileItem:
     def __init__(self, type, name = '', data = None):
         self.type = type
@@ -358,7 +380,6 @@ class FileItem:
         for item in self.getChildren():
             count += item.countItems()
         return count
-
 
 
 class FileData:

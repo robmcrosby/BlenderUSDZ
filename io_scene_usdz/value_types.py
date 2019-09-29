@@ -24,7 +24,7 @@ class SpecType(Enum):
 
 
 class ClassType(Enum):
-    PseudoRoot = 0
+    Scope = 0
     Xform = 1
     Mesh = 2
     SkelRoot = 3
@@ -90,6 +90,15 @@ class ValueType(Enum):
     UnregisteredValue = 53
     UnregisteredValueListOp = 54
     PayloadListOp = 55
+
+    def toString(self):
+        if self == ValueType.vec2f:
+            return 'float2'
+        if self == ValueType.vec3f:
+            return 'float3'
+        if self == ValueType.vec4f:
+            return 'float4'
+        return self.name
 
 
 def getTupleValueType(value):
@@ -168,75 +177,152 @@ def valueToString(value, reduced = False):
         return '(' + ', '.join(valueToString(item) for item in value) + ')'
     return ''
 
+def dictionaryToString(dic, space):
+    indent = space + TAB_SPACE
+    ret = '{\n'
+    for key, value in dic.items():
+        if type(value) is dict:
+            ret += indent + 'dictionary ' + key + ' = '
+            ret += dictionaryToString(value, indent)
+        elif type(value) is str:
+            ret += indent + 'string ' + key + ' = ' + value + '\n'
+        elif type(value) is bool:
+            ret += indent + 'bool ' + key + ' = '
+            ret += '1\n' if value else '0\n'
+        else:
+            valueType = getValueType(value)
+            ret += indent + valueType.toString() + ' ' + key + ' = '
+            ret += valueToString(value) + '\n'
+    return ret + space + '}\n'
+
+def propertyToString(prop, space):
+    if type(prop) is str:
+        return '"' + prop + '"'
+    if type(prop) is dict:
+        return dictionaryToString(prop, space)
+    return valueToString(prop)
 
 class UsdAttribute:
     def __init__(self, name = '', value = None, type = ValueType.Invalid):
         self.name = name
         self.value = value
+        self.frames = []
+        self.qualifiers = []
+        self.properties = {}
         self.valueType = type
         self.parent = None
         if type == ValueType.Invalid:
-            self.valueType = getValueType(value)
-
-    def __str__(self):
-        ret = self.valueType.name+' '+self.name
-        if self.value != None:
-            ret += ' = '+valueToString(self.value)
-        return ret
-
-    def getPathStr(self):
-        if self.parent == None:
-            return self.name
-        return self.parent.getPathStr() + '/' + self.name
-
-class UsdClass:
-    def __init__(self, name = '', type = ClassType.PseudoRoot):
-        self.name = name
-        self.classType = type
-        self.properties = {}
-        self.attributes = []
-        self.children = []
-        self.parent = None
-
+            self.valueType = self.getValueType()
 
     def __str__(self):
         return self.toString()
 
+    def __setitem__(self, key, item):
+        self.properties[key] = item
 
-    def toString(self, indent = ''):
-        ret = indent
-        if self.classType == ClassType.PseudoRoot:
-            ret += '#usda 1.0\n'
-            ret += self.propertiesToString(indent)
-            ret += indent+'\n'
-            ret += self.childrenToString(indent)
-            ret += '\n'
+    def __getitem__(self, key):
+        return self.properties[key]
+
+    def toString(self, space = ''):
+        ret = space
+        att = self.value if self.isConnection() else self
+        if len(att.qualifiers) > 0:
+            ret += ' '.join(q for q in att.qualifiers) + ' '
+        ret += att.valueType.toString()
+        ret += '[]' if att.isArray() else ''
+        ret += ' ' + self.name
+        if self.isConnection():
+            ret += '.connect = <' + self.value.getPathStr() + '>'
+        elif len(self.frames) > 0:
+            ret += self.framesToString(space)
         else:
-            ret += 'def '+self.classType.name+' "'+self.name+'"\n'
-            ret += indent+'{\n'
-            ret += self.attributesToString(indent+TAB_SPACE)
-            #ret += self.childrenToString(indent+TAB_SPACE)
-            ret += indent + '}\n'
-        return ret
+            if self.value != None:
+                ret += ' = ' + self.valueToString()
+                if len(self.properties) > 0:
+                    ret += self.propertiesToString(space)
+        return ret + '\n'
+
+    def propertiesToString(self, space):
+        indent = space + TAB_SPACE
+        ret = ' (\n'
+        for k, v in self.properties.items():
+            ret += indent + k + ' = ' + propertyToString(v, indent) + '\n'
+        return ret + space + ')\n'
+
+    def framesToString(self, space):
+        indent = space + TAB_SPACE
+        ret = '.timeSamples = {\n'
+        for frame, value in self.frames:
+            ret += indent + '%d: '%frame + valueToString(value) + ',\n'
+        return ret + space + '}\n'
+
+    def addQualifier(self, qualifier):
+        self.qualifiers.append(qualifier)
+
+    def addTimeSample(self, frame, value):
+        if self.valueType == ValueType.Invalid:
+            self.valueType = getValueType(value)
+        self.frames.append((frame, value))
+
+    def valueToString(self):
+        if self.isConnection():
+            return self.value.valueToString()
+        if self.valueType == ValueType.token or self.valueType == ValueType.string:
+            return '"' + valueToString(self.value) + '"'
+        return valueToString(self.value)
+
+    def isArray(self):
+        if self.isConnection():
+            return self.value.isArray()
+        if len(self.frames) > 0:
+            return type(self.frames[0][1]) is list
+        return self.value != None and type(self.value) is list
+
+    def isConnection(self):
+        return type(self.value) is UsdAttribute
+
+    def getPathStr(self):
+        if self.isConnection():
+            return self.value.getPathStr()
+        if self.parent == None:
+            return self.name
+        return self.parent.getPathStr() + '.' + self.name
+
+    def getValueType(self):
+        if self.isConnection():
+            return self.value.getValueType()
+        return getValueType(self.value)
 
 
-    def propertiesToString(self, indent):
-        ret = indent + '(\n'
-        ret += indent + ')\n'
-        return ret
+class UsdClass:
+    def __init__(self, name = '', type = ClassType.Scope):
+        self.name = name
+        self.classType = type
+        self.attributes = []
+        self.children = []
+        self.parent = None
 
-    def attributesToString(self, indent):
-        ret = ''
-        for att in self.attributes:
-            ret += indent + str(att) + '\n'
-        ret += indent+'\n'
-        return ret
+    def __str__(self):
+        return self.toString()
 
-    def childrenToString(self, indent):
-        ret = ''
-        for child in self.children:
-            ret += child.toString(indent)
-        return ret
+    def __setitem__(self, key, item):
+        if type(item) is ValueType:
+            self.createAttribute(key, type=item)
+        else:
+            self.createAttribute(key, item)
+
+    def __getitem__(self, key):
+        return next((att for att in self.attributes if att.name == key), None)
+
+    def toString(self, space = ''):
+        indent = space + TAB_SPACE
+        line = indent + '\n'
+        ret = space + 'def ' + self.classType.name + ' "' + self.name + '"\n'
+        ret += space + '{\n'
+        ret += ''.join(att.toString(indent) for att in self.attributes)
+        ret += line if len(self.children) > 0 else ''
+        ret += line.join(c.toString(indent) for c in self.children)
+        return ret + space + '}\n'
 
     def addAttribute(self, attribute):
         attribute.parent = self
@@ -252,9 +338,44 @@ class UsdClass:
         return child
 
     def createChild(self, name, type):
-        return self.addClass(UsdClass(name, type))
+        return self.addChild(UsdClass(name, type))
 
     def getPathStr(self):
         if self.parent == None:
-            return self.name
+            return '/' + self.name
         return self.parent.getPathStr() + '/' + self.name
+
+
+class UsdData:
+    def __init__(self):
+        self.properties = {}
+        self.children = []
+
+    def __str__(self):
+        return self.toString()
+
+    def __setitem__(self, key, item):
+        self.properties[key] = item
+
+    def __getitem__(self, key):
+        return self.properties[key]
+
+    def toString(self):
+        ret = '#usda 1.0\n'
+        ret += self.propertiesToString()
+        ret += '\n'
+        return ret + ''.join(c.toString() for c in self.children)
+
+    def propertiesToString(self):
+        ret = '(\n'
+        for k, v in self.properties.items():
+            ret += TAB_SPACE + k + ' = ' + propertyToString(v, TAB_SPACE) + '\n'
+        return ret + ')\n'
+
+    def addChild(self, child):
+        child.parent = None
+        self.children.append(child)
+        return child
+
+    def createChild(self, name, type):
+        return self.addChild(UsdClass(name, type))
