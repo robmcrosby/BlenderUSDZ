@@ -15,6 +15,7 @@ class ShaderInput:
         self.value = default
         self.image = None
         self.uvMap = None
+        self.usdAtt = None
 
     def exportShaderInputItem(self, material):
         if self.image != None and self.uvMap != None:
@@ -23,6 +24,14 @@ class ShaderInput:
                 path = '<'+material.getPath()+'/'+self.name+'_map.outputs:r>'
             return FileItem(self.type, 'inputs:'+self.name+'.connect', path)
         return FileItem(self.type, 'inputs:'+self.name, self.value)
+
+    def exportShaderInputUsd(self, material, usdShader):
+        if self.usdAtt != None:
+            usdShader['inputs:'+self.name] = self.usdAtt
+        else:
+            usdShader['inputs:'+self.name] = self.value
+            if usdShader['inputs:'+self.name].valueType.name != self.type:
+                usdShader['inputs:'+self.name].valueTypeStr = self.type
 
     def exportShaderItem(self, material):
         if self.image != None and self.uvMap != None:
@@ -43,12 +52,35 @@ class ShaderInput:
             return item
         return None
 
+    def exportShaderUsd(self, material, usdMaterial):
+        if self.image != None and self.uvMap != None:
+            v = self.value
+            default = (v, v, v, 1.0) if self.type == 'float' else v+(1.0,)
+            usdShader = usdMaterial.createChild(self.name+'_map', ClassType.Shader)
+            usdShader['info:id'] = 'UsdUVTexture'
+            usdShader['info:id'].addQualifier('uniform')
+            usdShader['inputs:default'] = default
+            usdShader['inputs:file'] = self.image
+            usdShader['inputs:file'].valueType = ValueType.asset
+            primUsdShader = usdMaterial.getChild('primvar_'+self.uvMap)
+            if primUsdShader != None:
+                usdShader['inputs:st'] = primUsdShader['outputs:result']
+            usdShader['inputs:wrapS'] = 'repeat'
+            usdShader['inputs:wrapT'] = 'repeat'
+            if self.type == 'float':
+                usdShader['outputs:r'] = ValueType.vec3f
+                self.usdAtt = usdShader['outputs:r']
+            else:
+                usdShader['outputs:rgb'] = ValueType.vec3f
+                self.usdAtt = usdShader['outputs:rgb']
+
 
 class Material:
     """Wraper for Blender Material"""
     def __init__(self, object, material):
         self.object = object
         self.material = material
+        self.usdMaterial = None
         self.name = get_material_name(material)
         self.outputNode = get_output_node(material)
         self.shaderNode = get_shader_node(self.outputNode)
@@ -218,6 +250,17 @@ class Material:
             items.append(item)
         return items
 
+    def exportPrimvarUsd(self, usdMaterial):
+        uvMaps = self.getUVMaps()
+        for map in uvMaps:
+            usdMaterial['inputs:frame:stPrimvar_' + map] = map
+            usdShader = usdMaterial.createChild('primvar_'+map, ClassType.Shader)
+            usdShader['info:id'] = 'UsdPrimvarReader_float2'
+            usdShader['info:id'].addQualifier('uniform')
+            usdShader['inputs:default'] = (0.0, 0.0)
+            usdShader['inputs:varname'] = usdMaterial['inputs:frame:stPrimvar_' + map]
+            usdShader['outputs:result'] = ValueType.vec2f
+
     def exportInputItems(self):
         items = []
         for input in self.inputs.values():
@@ -225,6 +268,10 @@ class Material:
             if item != None:
                 items.append(item)
         return items
+
+    def exportInputsUsd(self, usdMaterial):
+        for input in self.inputs.values():
+            input.exportShaderUsd(self, usdMaterial)
 
     def exportPbrShaderItem(self):
         item = FileItem('def Shader', 'pbr')
@@ -234,6 +281,15 @@ class Material:
         item.addItem('token', 'outputs:displacement')
         item.addItem('token', 'outputs:surface')
         return item
+
+    def exportPbrShaderUsd(self, usdMaterial):
+        usdShader = usdMaterial.createChild('pbr', ClassType.Shader)
+        usdShader['info:id'] = 'UsdPreviewSurface'
+        for input in self.inputs.values():
+            input.exportShaderInputUsd(self, usdShader)
+        usdShader['outputs:displacement'] = ValueType.token
+        usdShader['outputs:surface'] = ValueType.token
+        return usdShader
 
     def exportItem(self):
         item = FileItem('def Material', self.name)
@@ -245,7 +301,13 @@ class Material:
         item.items += self.exportInputItems()
         return item
 
-
+    def exportUsd(self, parent):
+        self.usdMaterial = parent.createChild(self.name, ClassType.Material)
+        self.exportPrimvarUsd(self.usdMaterial)
+        self.exportInputsUsd(self.usdMaterial)
+        pbrShader = self.exportPbrShaderUsd(self.usdMaterial)
+        self.usdMaterial['outputs:displacement'] = pbrShader['outputs:displacement']
+        self.usdMaterial['outputs:surface'] = pbrShader['outputs:surface']
 
 
 class Object:
@@ -446,6 +508,16 @@ class Object:
             items.append(FileItem('int[]', 'primvars:'+name+':indices', indices))
         return items
 
+    def exportMeshUvs(self, usdMesh, material):
+        mesh = self.objectCopy.data
+        for layer in mesh.uv_layers:
+            indices, uvs = export_mesh_uvs(mesh, layer, material)
+            name = layer.name.replace('.', '_')
+            usdMesh['primvars:'+name] = uvs
+            usdMesh['primvars:'+name].valueTypeStr = 'texCoord2f'
+            usdMesh['primvars:'+name]['interpolation'] = 'faceVarying'
+            usdMesh['primvars:'+name+':indices'] = indices
+
     def exportJointItems(self, material):
         mesh = self.objectCopy.data
         items = []
@@ -462,6 +534,21 @@ class Object:
             skeleton = '<'+self.getPath()+'/'+self.armature.name.replace('.', '_')+'>'
             items.append(FileItem('prepend rel', 'skel:skeleton', skeleton))
         return items
+
+    def exportJoints(self, usdMesh, material):
+        mesh = self.objectCopy.data
+        if self.armatueCopy != None and self.scene.animated:
+            indices, weights, size = export_mesh_weights(self.objectCopy, material)
+            usdMesh['primvars:skel:jointIndices'] = indices
+            usdMesh['primvars:skel:jointIndices']['elementSize'] = size
+            usdMesh['primvars:skel:jointIndices']['interpolation'] = 'vertex'
+            usdMesh['primvars:skel:jointWeights'] = weights
+            usdMesh['primvars:skel:jointWeights']['elementSize'] = size
+            usdMesh['primvars:skel:jointWeights']['interpolation'] = 'vertex'
+            #animation = '<'+self.getPath()+'/Animation>'
+            #items.append(FileItem('prepend rel', 'skel:animationSource', animation))
+            #skeleton = '<'+self.getPath()+'/'+self.armature.name.replace('.', '_')+'>'
+            #items.append(FileItem('prepend rel', 'skel:skeleton', skeleton))
 
     def exportMeshItem(self, material = -1):
         mesh = self.objectCopy.data
@@ -496,6 +583,35 @@ class Object:
         item.addItem('uniform token', 'subdivisionScheme', '"none"')
         return item
 
+    def exportMeshUsd(self, usdObj, usdSkeleton, usdAnimation, material = -1):
+        mesh = self.objectCopy.data
+        name = self.object.data.name.replace('.', '_')
+        if material >= 0:
+            name += '_' + self.materials[material].name
+        usdMesh = usdObj.createChild(name, ClassType.Mesh)
+        usdMesh['extent'] = object_extents(self.objectCopy, self.scene.scale)
+        usdMesh['faceVertexCounts'] = mesh_vertex_counts(mesh, material)
+        indices, points = export_mesh_vertices(mesh, material)
+        usdMesh['faceVertexIndices'] = indices
+        if material >= 0:
+            usdMesh['material:binding'] = self.materials[material].usdMaterial
+        usdMesh['points'] = points
+        usdMesh['points'].valueTypeStr = 'point3f'
+        self.exportMeshUvs(usdMesh, material)
+        indices, normals = export_mesh_normals(mesh, material)
+        usdMesh['primvars:normals'] = normals
+        usdMesh['primvars:normals'].valueTypeStr = 'normal3f'
+        usdMesh['primvars:normals']['interpolation'] = 'faceVarying'
+        usdMesh['primvars:normals:indices'] = indices
+        if usdSkeleton != None and usdAnimation != None:
+            self.exportJoints(usdMesh, material)
+            usdMesh['skel:animationSource'] = usdAnimation
+            usdMesh['skel:animationSource'].addQualifier('prepend')
+            usdMesh['skel:skeleton'] = usdSkeleton
+            usdMesh['skel:skeleton'].addQualifier('prepend')
+        usdMesh['subdivisionScheme'] = 'none'
+        usdMesh['subdivisionScheme'].addQualifier('uniform')
+
     def exportMeshItems(self):
         items = []
         if len(self.materials) > 0:
@@ -505,11 +621,24 @@ class Object:
             items.append(self.exportMeshItem())
         return items
 
+    def exportMeshsUsd(self, usdObj):
+        usdSkeleton = self.exportSkeletonUsd(usdObj)
+        usdAnimation = self.exportAnimationUsd(usdObj)
+        if len(self.materials) > 0:
+            for mat in range(0, len(self.materials)):
+                self.exportMeshUsd(usdObj, usdSkeleton, usdAnimation, mat)
+        else:
+            self.exportMeshUsd(usdObj, usdSkeleton, usdAnimation)
+
     def exportMaterialItems(self):
         items = []
         for mat in self.materials:
             items.append(mat.exportItem())
         return items
+
+    def exportMaterialsUsd(self, usdObj):
+        for mat in self.materials:
+            mat.exportUsd(usdObj)
 
     def exportSkeletonItems(self):
         items = []
@@ -523,6 +652,24 @@ class Object:
             item.addItem('uniform matrix4d[]', 'restTransforms', rest)
             items.append(item)
         return items
+
+    def exportSkeletonUsd(self, usdObj):
+        usdSkeleton = None
+        if self.armatueCopy != None and self.scene.animated:
+            name = self.armature.name.replace('.', '_')
+            joints = get_joint_tokens(self.armatueCopy)
+            bind = get_bind_transforms(self.armatueCopy)
+            rest = get_rest_transforms(self.armatueCopy)
+            usdSkeleton = usdObj.createChild(name, ClassType.Skeleton)
+            usdSkeleton['joints'] = joints
+            usdSkeleton['joints'].addQualifier('uniform')
+            usdSkeleton['bindTransforms'] = bind
+            usdSkeleton['bindTransforms'].addQualifier('uniform')
+            usdSkeleton['restTransforms'] = rest
+            usdSkeleton['restTransforms'].addQualifier('uniform')
+        return usdSkeleton
+
+
 
     def exportArmatureAnimationItems(self, armature):
         rotationItem = FileItem('quatf[]', 'rotations.timeSamples')
@@ -561,6 +708,46 @@ class Object:
         bpy.ops.object.mode_set(mode='OBJECT')
         return [rotationItem, scaleItem, translationItem]
 
+    def exportArmatureAnimationUsd(self, armature, usdAnimation):
+        usdAnimation['rotations'] = ValueType.vec4f
+        usdRotations = usdAnimation['rotations']
+        usdRotations.valueTypeStr = 'quatf'
+        usdAnimation['scales'] = ValueType.vec3f
+        usdScales = usdAnimation['scales']
+        usdAnimation['translations'] = ValueType.vec3f
+        usdTranslations = usdAnimation['translations']
+        start = self.scene.startFrame
+        end = self.scene.endFrame
+        select_object(armature)
+        armature.data.pose_position = 'POSE'
+        for frame in range(start, end+1):
+            self.scene.context.scene.frame_set(frame)
+            rotations = []
+            scales = []
+            locations = []
+            for bone in armature.data.bones:
+                bone = armature.pose.bones[bone.name]
+                scale = bone.scale.copy()
+                location = bone.location.copy()
+                rotation = bone.bone.matrix.to_quaternion() @ bone.rotation_quaternion
+                if bone.parent != None:
+                    if bone.bone.use_connect:
+                        location = mathutils.Vector((0, bone.parent.length, 0))
+                    else:
+                        location += mathutils.Vector((0, bone.parent.length, 0))
+                else:
+                    scale *= self.scene.scale
+                    location *= self.scene.scale
+                    rotation = bone.rotation_quaternion
+                rotations.append(rotation[:])
+                scales.append(scale[:])
+                locations.append(location[:])
+            usdRotations.addTimeSample(frame, rotations)
+            usdScales.addTimeSample(frame, scales)
+            usdTranslations.addTimeSample(frame, locations)
+        self.scene.context.scene.frame_set(self.scene.curFrame)
+        bpy.ops.object.mode_set(mode='OBJECT')
+
     def exportAnimationItems(self):
         items = []
         if self.armatueCopy != None and self.scene.animated:
@@ -572,6 +759,15 @@ class Object:
             items.append(item)
         return items
 
+    def exportAnimationUsd(self, usdObj):
+        usdAnimation = None
+        if self.armatueCopy != None and self.scene.animated:
+            self.armatueCopy.data.pose_position = 'POSE'
+            usdAnimation = usdObj.createChild('Animation', ClassType.SkelAnimation)
+            usdAnimation['joints'] = get_joint_tokens(self.armatueCopy)
+            self.exportArmatureAnimationUsd(self.armatueCopy, usdAnimation)
+        return usdAnimation
+
     def exportMatrixTimeSamples(self):
         item = FileItem('matrix4d', 'xformOp:transform:transforms.timeSamples')
         start = self.scene.startFrame
@@ -581,6 +777,16 @@ class Object:
             item.addTimeSample(frame, self.getTransform())
         self.scene.context.scene.frame_set(self.scene.curFrame)
         return item
+
+    def exportTimeSamples(self, item):
+        item['xformOp:transform:transforms'] = ValueType.matrix4d
+        item = item['xformOp:transform:transforms']
+        start = self.scene.startFrame
+        end = self.scene.endFrame
+        for frame in range(start, end+1):
+            self.scene.context.scene.frame_set(frame)
+            item.addTimeSample(frame, self.getTransform())
+        self.scene.context.scene.frame_set(self.scene.curFrame)
 
     def exportItem(self):
         item = FileItem('def Xform', self.name)
@@ -606,7 +812,30 @@ class Object:
             item.append(child.exportItem())
         return item
 
-
+    def exportUsd(self, parent):
+        usdObj = None
+        if self.armatueCopy != None and self.scene.animated:
+            # Export Skinned Object
+            usdObj = parent.createChild(self.name, ClassType.SkelRoot)
+        else:
+            # Export Ridgid Object
+            usdObj = parent.createChild(self.name, ClassType.Xform)
+            if self.scene.animated and self.object.animation_data != None:
+                self.exportTimeSamples(usdObj)
+                usdObj['xformOpOrder'] = ['xformOp:transform:transforms']
+                usdObj['xformOpOrder'].addQualifier('uniform')
+            else:
+                usdObj['xformOp:transform'] = self.getTransform()
+                usdObj['xformOp:transform'].addQualifier('custom')
+                usdObj['xformOpOrder'] = ['xformOp:transform']
+                usdObj['xformOpOrder'].addQualifier('uniform')
+        # Add Meshes if Mesh Object
+        if self.type == 'MESH':
+            self.exportMaterialsUsd(usdObj)
+            self.exportMeshsUsd(usdObj)
+        # Add Children
+        for child in self.children:
+            child.exportUsd(usdObj)
 
 
 class Scene:
@@ -711,4 +940,16 @@ class Scene:
         layerData['creator'] = 'Blender USDZ Plugin'
         data.properties['customLayerData'] = layerData
         data.items = self.exportObjectItems()
+        return data
+
+    def exportUsdData(self):
+        data = UsdData()
+        data['upAxis'] = 'Y'
+        if self.animated:
+            data['startTimeCode'] = self.startFrame
+            data['endTimeCode'] = self.endFrame
+            data['timeCodesPerSecond'] = self.fps
+        data['customLayerData'] = {'creator':'Blender USDZ Plugin'}
+        for obj in self.objects:
+            obj.exportUsd(data)
         return data

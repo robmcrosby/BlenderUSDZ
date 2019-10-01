@@ -5,7 +5,7 @@ import tempfile
 import shutil
 
 #from io_scene_usdz.file_data import *
-#from io_scene_usdz.scene_data import *
+from io_scene_usdz.scene_data import *
 from io_scene_usdz.value_types import *
 
 def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
@@ -19,7 +19,6 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     usdcFile = filePath+'/'+fileName+'.usdc'
     usdzFile = filePath+'/'+fileName+'.usdz'
 
-    """
     tempPath = None
     if not keepUSDA:
         tempPath = tempfile.mkdtemp()
@@ -38,18 +37,24 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     scene.animated = animated
     scene.loadContext(context)
 
+    # Export image files
     if bakeTextures or bakeAO:
         scene.exportBakedTextures()
 
-    # Export image files
-    data = scene.exportFileData()
+    usdData = scene.exportUsdData()
+    print(usdData)
+
+    scene.cleanup()
+    if tempPath != None:
+        shutil.rmtree(tempPath)
 
     if useConverter:
         # Crate text usda file and run the USDZ Converter Tool
-        data.writeUsda(usdaFile)
+        usdData.writeUsda(usdaFile)
         args = ['xcrun', 'usdz_converter', usdaFile, usdzFile]
         args += ['-v']
         subprocess.run(args)
+    """
     else:
         if keepUSDA:
             data.writeUsda(usdaFile)
@@ -60,12 +65,9 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
         for textureFile in scene.textureFilePaths:
             usdz.addFile(textureFile)
         usdz.close()
-
-    scene.cleanup()
-    if tempPath != None:
-        shutil.rmtree(tempPath)
     """
 
+    """
     usdData = UsdData()
     usdData['upAxis'] = 'Y'
     usdData['test'] = {
@@ -95,7 +97,7 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     testMesh2['indices'] = [1, 2, 3]
     testMesh2['points'] = [(1.0, 2.0), (3.0, 4.0)]
     testMesh2['points']['interpolation'] = 'faceVarying'
-
     print(usdData)
+    """
 
     return {'FINISHED'}

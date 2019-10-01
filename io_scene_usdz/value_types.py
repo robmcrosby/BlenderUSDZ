@@ -185,7 +185,7 @@ def dictionaryToString(dic, space):
             ret += indent + 'dictionary ' + key + ' = '
             ret += dictionaryToString(value, indent)
         elif type(value) is str:
-            ret += indent + 'string ' + key + ' = ' + value + '\n'
+            ret += indent + 'string ' + key + ' = "' + value + '"\n'
         elif type(value) is bool:
             ret += indent + 'bool ' + key + ' = '
             ret += '1\n' if value else '0\n'
@@ -210,9 +210,12 @@ class UsdAttribute:
         self.qualifiers = []
         self.properties = {}
         self.valueType = type
+        self.valueTypeStr = None
         self.parent = None
         if type == ValueType.Invalid:
             self.valueType = self.getValueType()
+        if self.isRelationship():
+            self.valueTypeStr = 'rel'
 
     def __str__(self):
         return self.toString()
@@ -228,11 +231,13 @@ class UsdAttribute:
         att = self.value if self.isConnection() else self
         if len(att.qualifiers) > 0:
             ret += ' '.join(q for q in att.qualifiers) + ' '
-        ret += att.valueType.toString()
+        ret += att.valueTypeToString()
         ret += '[]' if att.isArray() else ''
         ret += ' ' + self.name
         if self.isConnection():
             ret += '.connect = <' + self.value.getPathStr() + '>'
+        elif self.isRelationship():
+            ret += ' = <' + self.value.getPathStr() + '>'
         elif len(self.frames) > 0:
             ret += self.framesToString(space)
         else:
@@ -247,14 +252,14 @@ class UsdAttribute:
         ret = ' (\n'
         for k, v in self.properties.items():
             ret += indent + k + ' = ' + propertyToString(v, indent) + '\n'
-        return ret + space + ')\n'
+        return ret + space + ')'
 
     def framesToString(self, space):
         indent = space + TAB_SPACE
         ret = '.timeSamples = {\n'
         for frame, value in self.frames:
             ret += indent + '%d: '%frame + valueToString(value) + ',\n'
-        return ret + space + '}\n'
+        return ret + space + '}'
 
     def addQualifier(self, qualifier):
         self.qualifiers.append(qualifier)
@@ -268,8 +273,17 @@ class UsdAttribute:
         if self.isConnection():
             return self.value.valueToString()
         if self.valueType == ValueType.token or self.valueType == ValueType.string:
+            if type(self.value) is list:
+                return '[' + ', '.join('"' + v + '"' for v in self.value) + ']'
             return '"' + valueToString(self.value) + '"'
+        if self.valueType == ValueType.asset:
+            return '@' + valueToString(self.value) + '@'
         return valueToString(self.value)
+
+    def valueTypeToString(self):
+        if self.valueTypeStr != None:
+            return self.valueTypeStr
+        return self.valueType.toString()
 
     def isArray(self):
         if self.isConnection():
@@ -281,6 +295,9 @@ class UsdAttribute:
     def isConnection(self):
         return type(self.value) is UsdAttribute
 
+    def isRelationship(self):
+        return type(self.value) is UsdClass
+
     def getPathStr(self):
         if self.isConnection():
             return self.value.getPathStr()
@@ -291,6 +308,8 @@ class UsdAttribute:
     def getValueType(self):
         if self.isConnection():
             return self.value.getValueType()
+        elif self.isRelationship():
+            return ValueType.Invalid
         return getValueType(self.value)
 
 
@@ -340,6 +359,9 @@ class UsdClass:
     def createChild(self, name, type):
         return self.addChild(UsdClass(name, type))
 
+    def getChild(self, name):
+        return next((c for c in self.children if c.name == name), None)
+
     def getPathStr(self):
         if self.parent == None:
             return '/' + self.name
@@ -379,3 +401,8 @@ class UsdData:
 
     def createChild(self, name, type):
         return self.addChild(UsdClass(name, type))
+
+    def writeUsda(self, filePath):
+        f = open(filePath, 'w')
+        f.write(str(self))
+        f.close()
