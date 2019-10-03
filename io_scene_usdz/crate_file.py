@@ -521,6 +521,107 @@ class CrateFile:
             writeInt(self.file, size, 8)
         self.writeBootStrap(tocStart)
 
+    def writeUsdConnection(self, usdAtt):
+        fset = []
+        pathIndex = usdAtt.value.pathIndex
+        fset.append(self.addField('typeName', usdAtt.value.valueTypeToString()))
+        for q in usdAtt.value.qualifiers:
+            if q == 'uniform':
+                fset.append(self.addField('variability', True, ValueType.Variability))
+            elif q == 'custom':
+                fset.append(self.addField('custom', True))
+        fset.append(self.addFieldPathListOp('connectionPaths', pathIndex))
+        fset.append(self.addFieldPathVector('connectionChildren', pathIndex))
+        fset = self.addFieldSet(fset)
+        usdAtt.pathIndex = self.addSpec(fset, SpecType.Attribute)
+        nameToken = self.getTokenIndex(usdAtt.name)
+        pathJump = usdAtt.getPathJump()
+        self.addPath(usdAtt.pathIndex, nameToken, pathJump, True)
+
+    def writeUsdRelationship(self, usdAtt):
+        fset = []
+        pathIndex = usdAtt.value.pathIndex
+        fset.append(self.addField('variability', True, ValueType.Variability))
+        fset.append(self.addFieldPathListOp('targetPaths', pathIndex))
+        fset.append(self.addFieldPathVector('targetChildren', pathIndex))
+        fset = self.addFieldSet(fset)
+        usdAtt.pathIndex = self.addSpec(fset, SpecType.Relationship)
+        nameToken = self.getTokenIndex(usdAtt.name)
+        pathJump = usdAtt.getPathJump()
+        self.addPath(usdAtt.pathIndex, nameToken, pathJump, True)
+
+    def writeUsdAttribute(self, usdAtt):
+        fset = []
+        fset.append(self.addField('typeName', usdAtt.valueTypeToString()))
+        for q in usdAtt.qualifiers:
+            if q == 'uniform':
+                fset.append(self.addField('variability', True, ValueType.Variability))
+            elif q == 'custom':
+                fset.append(self.addField('custom', True))
+        for name, value in usdAtt.properties.items():
+            fset.append(self.addField(name, value))
+        if usdAtt.value != None:
+            fset.append(self.addField('default', usdAtt.value, usdAtt.valueType))
+        if usdAtt.hasTimeSamples():
+            fset.append(self.addFieldTimeSamples('timeSamples', usdAtt.frames, usdAtt.valueType.name))
+        fset = self.addFieldSet(fset)
+        usdAtt.pathIndex = self.addSpec(fset, SpecType.Attribute)
+        nameToken = self.getTokenIndex(usdAtt.name)
+        pathJump = usdAtt.getPathJump()
+        self.addPath(usdAtt.pathIndex, nameToken, pathJump, True)
+
+    def writeUsdPrim(self, usdPrim):
+        # Add Prim Properties
+        fset = []
+        fset.append(self.addField('typeName', usdPrim.classType.name))
+        fset.append(self.addField('specifier', SpecifierType.Def))
+        if len(usdPrim.attributes) > 0:
+            tokens = [att.name for att in usdPrim.attributes]
+            fset.append(self.addFieldTokenVector('properties', tokens))
+        if len(usdPrim.children) > 0:
+            tokens = [child.name for child in usdPrim.children]
+            fset.append(self.addFieldTokenVector('primChildren', tokens))
+        fset = self.addFieldSet(fset)
+        usdPrim.pathIndex = self.addSpec(fset, SpecType.Prim)
+        nameToken = self.getTokenIndex(usdPrim.name)
+        pathJump = usdPrim.getPathJump()
+        # Add Prim Path
+        self.addPath(usdPrim.pathIndex, nameToken, pathJump, False)
+        # Write Prim Children
+        for child in usdPrim.children:
+            self.writeUsdPrim(child)
+        # Write Prim Attributes
+        for attribute in usdPrim.attributes:
+            if attribute.isConnection():
+                self.writeUsdConnection(attribute)
+            elif attribute.isRelationship():
+                self.writeUsdRelationship(attribute)
+            else:
+                self.writeUsdAttribute(attribute)
+
+    def writeUsd(self, usdData):
+        usdData.updatePathIndices()
+        self.writeBootStrap()
+        # Add Root Properties
+        fset = []
+        for name, value in usdData.properties.items():
+            fset.append(self.addField(name, value))
+        if len(usdData.children) > 0:
+            tokens = [c.name for c in usdData.children]
+            fset.append(self.addFieldTokenVector('primChildren', tokens))
+        fset = self.addFieldSet(fset)
+        usdData.pathIndex = self.addSpec(fset, SpecType.PseudoRoot)
+        # Add First Path
+        nameToken = self.getTokenIndex('')
+        pathJump = usdData.getPathJump()
+        self.addPath(usdData.pathIndex, nameToken, pathJump, False)
+        # Write the Children
+        for child in usdData.children:
+            self.writeUsdPrim(child)
+        # Finish Writing the Crate File
+        self.writeSections()
+        self.writeTableOfContents()
+
     def getTableItem(self, sectionName):
         for name, start, size in self.toc:
             if sectionName == name:

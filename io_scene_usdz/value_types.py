@@ -212,6 +212,8 @@ class UsdAttribute:
         self.valueType = type
         self.valueTypeStr = None
         self.parent = None
+        self.pathIndex = -1
+        self.pathJump = 0
         if type == ValueType.Invalid:
             self.valueType = self.getValueType()
         if self.isRelationship():
@@ -238,7 +240,7 @@ class UsdAttribute:
             ret += '.connect = <' + self.value.getPathStr() + '>'
         elif self.isRelationship():
             ret += ' = <' + self.value.getPathStr() + '>'
-        elif len(self.frames) > 0:
+        elif self.hasTimeSamples():
             ret += self.framesToString(space)
         else:
             if self.value != None:
@@ -298,12 +300,22 @@ class UsdAttribute:
     def isRelationship(self):
         return type(self.value) is UsdClass
 
+    def hasTimeSamples(self):
+        return len(self.frames) > 0
+
     def getPathStr(self):
         if self.isConnection():
             return self.value.getPathStr()
         if self.parent == None:
             return self.name
         return self.parent.getPathStr() + '.' + self.name
+
+    def getPathJump(self):
+        self.pathJump = 0
+        if self.parent != None and self.parent.attributes[-1] == self:
+            self.pathJump = -2
+        #print(self.name, ':', self.pathJump)
+        return self.pathJump
 
     def getValueType(self):
         if self.isConnection():
@@ -320,6 +332,8 @@ class UsdClass:
         self.attributes = []
         self.children = []
         self.parent = None
+        self.pathIndex = -1
+        self.pathJump = -1
 
     def __str__(self):
         return self.toString()
@@ -362,16 +376,43 @@ class UsdClass:
     def getChild(self, name):
         return next((c for c in self.children if c.name == name), None)
 
+    def updatePathIndices(self, pathIndex):
+        self.pathIndex = pathIndex
+        pathIndex += 1
+        for child in self.children:
+            pathIndex = child.updatePathIndices(pathIndex)
+        for att in self.attributes:
+            att.pathIndex = pathIndex
+            pathIndex += 1
+        return pathIndex
+
     def getPathStr(self):
         if self.parent == None:
             return '/' + self.name
         return self.parent.getPathStr() + '/' + self.name
+
+    def countItems(self):
+        #count = len(self.attributes) + len(self.children)
+        count = len(self.attributes) + len(self.children)
+        for child in self.children:
+            count += child.countItems()
+        return count
+
+    def getPathJump(self):
+        if self.parent == None or (self.parent.children[-1] == self and len(self.parent.attributes) == 0):
+            self.pathJump = -1
+        else:
+            self.pathJump = self.countItems() + 1
+        #print(self.name, ':', self.pathJump)
+        return self.pathJump
 
 
 class UsdData:
     def __init__(self):
         self.properties = {}
         self.children = []
+        self.pathIndex = 0
+        self.pathJump = -1
 
     def __str__(self):
         return self.toString()
@@ -401,6 +442,16 @@ class UsdData:
 
     def createChild(self, name, type):
         return self.addChild(UsdClass(name, type))
+
+    def updatePathIndices(self):
+        pathIndex = 1
+        for child in self.children:
+            pathIndex = child.updatePathIndices(pathIndex)
+
+    def getPathJump(self):
+        self.pathJump = -1 if len(self.children) > 0 else -2
+        #print('root:', self.pathJump)
+        return self.pathJump
 
     def writeUsda(self, filePath):
         f = open(filePath, 'w')
