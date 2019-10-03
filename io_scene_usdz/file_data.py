@@ -436,7 +436,6 @@ class FileData:
         f.write(src)
         f.close()
 
-    """
     def addPaths(self, crate):
         children = self.getChildren()
         attributes = self.getAttributes()
@@ -674,4 +673,3 @@ class FileData:
 
         self.buildFromCrate(crate)
         file.close()
-    """
