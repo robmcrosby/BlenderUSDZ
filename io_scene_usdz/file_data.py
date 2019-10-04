@@ -93,7 +93,7 @@ class UsdzFile:
         # Mod Time/Date
         self.file.write(entry['time'])
         self.file.write(entry['date'])
-        writeInt(self.file, entry['crc'], 4)
+        writeInt(self.file, entry['crc'], 4, signed=True)
         # Size Uncompressed/Compressed
         writeInt(self.file, len(contents), 4)
         writeInt(self.file, len(contents), 4)
