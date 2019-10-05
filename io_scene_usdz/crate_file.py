@@ -19,6 +19,10 @@ def writeDouble(file, value, byteorder='little'):
     packStr = '<d' if byteorder.lower() == 'little' else '>d'
     file.write(struct.pack(packStr, value))
 
+def toSigned32(n):
+    n = n & 0xffffffff
+    return (n ^ 0x80000000) - 0x80000000
+
 def writeInt32Compressed(file, data):
     buffer = lz4Compress(usdInt32Compress(data))
     writeInt(file, len(buffer), 8)

@@ -545,10 +545,6 @@ class Object:
             usdMesh['primvars:skel:jointWeights'] = weights
             usdMesh['primvars:skel:jointWeights']['elementSize'] = size
             usdMesh['primvars:skel:jointWeights']['interpolation'] = 'vertex'
-            #animation = '<'+self.getPath()+'/Animation>'
-            #items.append(FileItem('prepend rel', 'skel:animationSource', animation))
-            #skeleton = '<'+self.getPath()+'/'+self.armature.name.replace('.', '_')+'>'
-            #items.append(FileItem('prepend rel', 'skel:skeleton', skeleton))
 
     def exportMeshItem(self, material = -1):
         mesh = self.objectCopy.data

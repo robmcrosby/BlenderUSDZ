@@ -1,4 +1,5 @@
 from enum import Enum
+import itertools
 
 TAB_SPACE = '   '
 
@@ -202,6 +203,9 @@ def propertyToString(prop, space):
         return dictionaryToString(prop, space)
     return valueToString(prop)
 
+def interleaveLists(lists):
+    return [x for x in itertools.chain(*itertools.zip_longest(*lists)) if x is not None]
+
 class UsdAttribute:
     def __init__(self, name = '', value = None, type = ValueType.Invalid):
         self.name = name
@@ -234,7 +238,6 @@ class UsdAttribute:
         if len(att.qualifiers) > 0:
             ret += ' '.join(q for q in att.qualifiers) + ' '
         ret += att.valueTypeToString()
-        ret += '[]' if att.isArray() else ''
         ret += ' ' + self.name
         if self.isConnection():
             ret += '.connect = <' + self.value.getPathStr() + '>'
@@ -284,8 +287,8 @@ class UsdAttribute:
 
     def valueTypeToString(self):
         if self.valueTypeStr != None:
-            return self.valueTypeStr
-        return self.valueType.toString()
+            return self.valueTypeStr + ('[]' if self.isArray() else '')
+        return self.valueType.toString() + ('[]' if self.isArray() else '')
 
     def isArray(self):
         if self.isConnection():
@@ -370,11 +373,27 @@ class UsdClass:
         self.children.append(child)
         return child
 
+    def addChildFront(self, child):
+        child.parent = self
+        self.children = [child] + self.children
+        return child
+
     def createChild(self, name, type):
         return self.addChild(UsdClass(name, type))
 
+    def createChildFront(self, name, type):
+        return self.addChildFront(UsdClass(name, type))
+
     def getChild(self, name):
         return next((c for c in self.children if c.name == name), None)
+
+    def getChildrenOfType(self, type):
+        children = []
+        for child in self.children:
+            if child.classType == type:
+                children.append(child)
+            children += child.getChildrenOfType(type)
+        return children
 
     def updatePathIndices(self, pathIndex):
         self.pathIndex = pathIndex
@@ -443,6 +462,14 @@ class UsdData:
     def createChild(self, name, type):
         return self.addChild(UsdClass(name, type))
 
+    def getChildrenOfType(self, type):
+        children = []
+        for child in self.children:
+            if child.classType == type:
+                children.append(child)
+            children += child.getChildrenOfType(type)
+        return children
+
     def updatePathIndices(self):
         pathIndex = 1
         for child in self.children:
@@ -457,3 +484,31 @@ class UsdData:
         f = open(filePath, 'w')
         f.write(str(self))
         f.close()
+
+    def getItems(self):
+        xforms = self.getChildrenOfType(ClassType.Xform)
+        xforms += self.getChildrenOfType(ClassType.SkelRoot)
+        #materials = self.getChildrenOfType(ClassType.Material)
+        materials = []
+        materialAtts = []
+        for mat in self.getChildrenOfType(ClassType.Material):
+            materials.append(mat)
+            materials += mat.children
+            materialAtts += [c.attributes for c in mat.children]
+            materialAtts.append(mat.attributes)
+        animations = self.getChildrenOfType(ClassType.SkelAnimation)
+        skeletons = self.getChildrenOfType(ClassType.Skeleton)
+        meshes = reversed(self.getChildrenOfType(ClassType.Mesh))
+        items = []
+        items += xforms
+        items += materials
+        items += animations
+        items += skeletons
+        items += meshes
+        items += interleaveLists([a.attributes for a in animations])
+        items += interleaveLists([a.attributes for s in skeletons])
+        items += interleaveLists(materialAtts)
+        #items += interleaveLists([m.attributes for m in materials])
+        items += interleaveLists([m.attributes for m in meshes])
+        items += interleaveLists([x.attributes for x in reversed(xforms)])
+        return items

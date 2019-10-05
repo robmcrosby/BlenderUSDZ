@@ -29,7 +29,10 @@ def import_usdz(context, filepath = '', materials = True):
         with zipfile.ZipFile(filepath, 'r') as zf:
             # Create a temp directory to extract to
             tempPath = tempfile.mkdtemp()
-            zf.extractall(tempPath)
+            try:
+                zf.extractall(tempPath)
+            except Exception as e:
+                print(e)
             zf.close()
 
             # Find the usdc file
@@ -84,7 +87,7 @@ def add_object(context, data, materials = {}, parent = None):
         if opOrder != None and opOrder.data != None:
             for op in opOrder.data:
                 opItem = data.getItemOfName(op)
-                if opItem.name == 'xformOp:transform':
+                if opItem != None and opItem.name == 'xformOp:transform':
                     m = mathutils.Matrix(opItem.data)
                     m.transpose()
                     matrix = matrix @ m

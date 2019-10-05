@@ -1,6 +1,12 @@
 import os
 import itertools
-import binascii
+import struct
+
+try:
+    import zlib
+    crc32 = zlib.crc32
+except ImportError:
+    crc32 = binascii.crc32
 
 from io_scene_usdz.crate_file import *
 from io_scene_usdz.value_types import *
@@ -80,7 +86,12 @@ class UsdzFile:
         entry = {}
         entry['name'] = os.path.basename(filePath)
         entry['offset'] = self.file.tell()
-        entry['crc'] = binascii.crc32(contents)
+        entry['crc'] = crc32(contents) & 0xffffffff
+        #mtime = time.localtime(st.st_mtime)
+        #date_time = mtime[0:6]
+        #dt=(1980,1,1,0,0,0)
+        #dosdate = (dt[0] - 1980) << 9 | dt[1] << 5 | dt[2]
+        #dostime = dt[3] << 11 | dt[4] << 5 | (dt[5] // 2)
         entry['time'] = b'\x0C\x80'
         entry['date'] = b'\xB3\x4E'
         extraSize = self.getExtraAlignmentSize(entry['name'])
@@ -93,7 +104,8 @@ class UsdzFile:
         # Mod Time/Date
         self.file.write(entry['time'])
         self.file.write(entry['date'])
-        writeInt(self.file, entry['crc'], 4, signed=True)
+        # CRC Hash
+        writeInt(self.file, entry['crc'], 4)
         # Size Uncompressed/Compressed
         writeInt(self.file, len(contents), 4)
         writeInt(self.file, len(contents), 4)
@@ -108,7 +120,7 @@ class UsdzFile:
         # Padding Bytes and File Contents
         self.file.write(bytes(extraSize))
         self.file.write(contents)
-        entry['size'] = self.file.tell() - entry['offset']
+        entry['size'] = len(contents)
         self.entries.append(entry)
 
     def writeCentralDir(self):
@@ -126,6 +138,7 @@ class UsdzFile:
             writeInt(self.file, 0, 2)
             self.file.write(entry['time'])
             self.file.write(entry['date'])
+            # CRC Hash
             writeInt(self.file, entry['crc'], 4)
             # Size Compressed/Uncompressed
             writeInt(self.file, entry['size'], 4)
@@ -577,6 +590,7 @@ class FileData:
         item.pathJump = jump
         item.pathIndex = path
         self.nameToken = token
+        #print(item.pathJump, item.name)
 
         # Get the Properties
         properties = {}
@@ -599,7 +613,10 @@ class FileData:
             item.data = properties.pop('default')
         if item.type == 'token' and item.data != None:
             # Put quotes on tokens
-            item.data = '"' + item.data + '"'
+            if type(item.data) is list:
+                item.data = ['"' + t + '"' for t in item.data]
+            else:
+                item.data = '"' + item.data + '"'
         if item.type == 'Relationship':
             item.type = 'rel'
             if 'targetPaths' in properties:
