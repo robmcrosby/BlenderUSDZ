@@ -585,7 +585,8 @@ class FileData:
             return (None, index+1)
         fset, spec = crate.specsMap[path]
         fset = crate.getFieldSet(fset)
-        item = FileItem(SpecType(spec).name)
+        specType = SpecType(spec)
+        item = FileItem(specType.name)
         item.name = crate.getTokenStr(token)
         item.pathJump = jump
         item.pathIndex = path
@@ -617,6 +618,8 @@ class FileData:
                 item.data = ['"' + t + '"' for t in item.data]
             else:
                 item.data = '"' + item.data + '"'
+        elif item.type == 'token[]' and item.data != None:
+            item.data = ['"' + t + '"' for t in item.data]
         if item.type == 'Relationship':
             item.type = 'rel'
             if 'targetPaths' in properties:

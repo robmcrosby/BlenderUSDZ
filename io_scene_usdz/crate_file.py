@@ -176,7 +176,8 @@ class CrateFile:
         if type(data) == list:
             tokens = []
             for token in data:
-                tokens.append(self.getTokenIndex(token.replace('"', '')))
+                token = token.replace('"', '')
+                tokens.append(self.getTokenIndex(token))
             ref = self.getDataRefrence(tokens, ValueType.token)
             if ref < 0:
                 ref = self.file.tell()
