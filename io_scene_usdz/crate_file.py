@@ -610,7 +610,10 @@ class CrateFile:
         # Add Root Properties
         fset = []
         for name, value in usdData.properties.items():
-            fset.append(self.addField(name, value))
+            if type(value) is float:
+                fset.append(self.addFieldDouble(name, value))
+            else:
+                fset.append(self.addField(name, value))
         if len(usdData.children) > 0:
             tokens = [c.name for c in usdData.children]
             fset.append(self.addFieldTokenVector('primChildren', tokens))

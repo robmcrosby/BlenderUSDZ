@@ -652,10 +652,10 @@ class Object:
     def exportSkeletonUsd(self, usdObj):
         usdSkeleton = None
         if self.armatueCopy != None and self.scene.animated:
-            name = self.armature.name.replace('.', '_')
             joints = get_joint_tokens(self.armatueCopy)
             bind = get_bind_transforms(self.armatueCopy)
             rest = get_rest_transforms(self.armatueCopy)
+            name = self.armature.name.replace('.', '_')
             usdSkeleton = usdObj.createChild(name, ClassType.Skeleton)
             usdSkeleton['joints'] = joints
             usdSkeleton['joints'].addQualifier('uniform')
@@ -705,9 +705,9 @@ class Object:
         return [rotationItem, scaleItem, translationItem]
 
     def exportArmatureAnimationUsd(self, armature, usdAnimation):
-        usdAnimation['rotations'] = ValueType.vec4f
+        usdAnimation['rotations'] = ValueType.quatf
         usdRotations = usdAnimation['rotations']
-        usdRotations.valueTypeStr = 'quatf'
+        #usdRotations.valueTypeStr = 'quatf'
         usdAnimation['scales'] = ValueType.vec3f
         usdScales = usdAnimation['scales']
         usdAnimation['translations'] = ValueType.vec3f
@@ -761,6 +761,7 @@ class Object:
             self.armatueCopy.data.pose_position = 'POSE'
             usdAnimation = usdObj.createChild('Animation', ClassType.SkelAnimation)
             usdAnimation['joints'] = get_joint_tokens(self.armatueCopy)
+            usdAnimation['joints'].addQualifier('uniform')
             self.exportArmatureAnimationUsd(self.armatueCopy, usdAnimation)
         return usdAnimation
 
@@ -942,9 +943,9 @@ class Scene:
         data = UsdData()
         data['upAxis'] = 'Y'
         if self.animated:
-            data['startTimeCode'] = self.startFrame
-            data['endTimeCode'] = self.endFrame
-            data['timeCodesPerSecond'] = self.fps
+            data['startTimeCode'] = float(self.startFrame)
+            data['endTimeCode'] = float(self.endFrame)
+            data['timeCodesPerSecond'] = float(self.fps)
         data['customLayerData'] = {'creator':'Blender USDZ Plugin'}
         for obj in self.objects:
             obj.exportUsd(data)
