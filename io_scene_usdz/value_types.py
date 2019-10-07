@@ -430,6 +430,7 @@ class UsdData:
     def __init__(self):
         self.properties = {}
         self.children = []
+        self.attributes = []
         self.pathIndex = 0
         self.pathJump = -1
 
@@ -455,7 +456,7 @@ class UsdData:
         return ret + ')\n'
 
     def addChild(self, child):
-        child.parent = None
+        child.parent = self
         self.children.append(child)
         return child
 
