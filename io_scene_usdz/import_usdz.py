@@ -38,10 +38,16 @@ def import_usdz(context, filepath = '', materials = True):
             # Find the usdc file
             usdcFile = find_usdz(tempPath)
             if usdcFile != '':
-                data = FileData()
-                data.readUsdc(usdcFile)
-                tempDir = usdcFile[:usdcFile.rfind('/')+1]
-                import_data(context, data, materials, tempDir)
+                file = open(usdcFile, 'rb')
+                crate = CrateFile(file)
+                usdData = crate.readUsd()
+                file.close()
+
+                print(usdData)
+                #data = FileData()
+                #data.readUsdc(usdcFile)
+                #tempDir = usdcFile[:usdcFile.rfind('/')+1]
+                #import_data(context, data, materials, tempDir)
             else:
                 print('No usdc file found')
 

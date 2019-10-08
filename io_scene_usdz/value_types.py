@@ -158,8 +158,12 @@ def getValueType(value):
 
 def getValueTypeStr(typeStr):
     typeStr = typeStr.replace('[]', '')
-    if typeStr == 'float3':
+    if typeStr in ('float2', 'texCoord2f'):
+        return ValueType.vec2f
+    if typeStr in ('float3', 'color3f', 'normal3f', 'point3f'):
         return ValueType.vec3f
+    if typeStr == 'float4':
+        return ValueType.vec4f
     return ValueType[typeStr]
 
 def valueToString(value, reduced = False):
@@ -395,6 +399,31 @@ class UsdClass:
             children += child.getChildrenOfType(type)
         return children
 
+    def getItemAtPathIndex(self, pathIndex):
+        for att in self.attributes:
+            if att.pathIndex == pathIndex:
+                return att
+        for child in self.children:
+            if child.pathIndex == pathIndex:
+                return child
+            item = child.getItemAtPathIndex(pathIndex)
+            if item != None:
+                return item
+        return None
+
+    def resolvePaths(self, root):
+        for att in self.attributes:
+            if 'connectionChildren' in att.properties:
+                att.properties.pop('connectionPaths')
+                pathIndex = att.properties.pop('connectionChildren')
+                att.value = root.getItemAtPathIndex(pathIndex)
+            if 'targetChildren' in att.properties:
+                att.properties.pop('targetPaths')
+                pathIndex = att.properties.pop('targetChildren')
+                att.value = root.getItemAtPathIndex(pathIndex)
+        for child in self.children:
+            child.resolvePaths(root)
+
     def updatePathIndices(self, pathIndex):
         self.pathIndex = pathIndex
         pathIndex += 1
@@ -449,6 +478,9 @@ class UsdData:
         ret += '\n'
         return ret + ''.join(c.toString() for c in self.children)
 
+    def getPathStr(self):
+        return ''
+
     def propertiesToString(self):
         ret = '(\n'
         for k, v in self.properties.items():
@@ -480,6 +512,19 @@ class UsdData:
         self.pathJump = -1 if len(self.children) > 0 else -2
         #print('root:', self.pathJump)
         return self.pathJump
+
+    def getItemAtPathIndex(self, pathIndex):
+        for child in self.children:
+            if child.pathIndex == pathIndex:
+                return child
+            item = child.getItemAtPathIndex(pathIndex)
+            if item != None:
+                return item
+        return None
+
+    def resolvePaths(self):
+        for child in self.children:
+            child.resolvePaths(self)
 
     def writeUsda(self, filePath):
         f = open(filePath, 'w')

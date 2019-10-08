@@ -630,6 +630,74 @@ class CrateFile:
         self.writeSections()
         self.writeTableOfContents()
 
+    def getFieldSetProperties(self, fset):
+        properties = {}
+        fset = self.getFieldSet(fset)
+        for field in fset:
+            if field < len(self.reps):
+                name = self.getTokenStr(self.fields[field])
+                value = self.getRepValue(self.reps[field])
+                properties[name] = value
+        return properties
+
+
+    def readUsdItem(self, parent = None, index = 0):
+        path, token, jump = self.paths[index]
+        if not path in self.specsMap:
+            return (index + 1, -1)
+        fset, spec = self.specsMap[path]
+        specType = SpecType(spec)
+        properties = self.getFieldSetProperties(fset)
+        name = self.getTokenStr(token)
+        if specType == SpecType.Prim:
+            classType = ClassType[properties.pop('typeName')]
+            prim = parent.createChild(name, classType)
+            prim.pathIndex = path
+            print(jump, classType.name, name)
+            index += 1
+            while index < len(self.paths) and jump != -2:
+                index, jump = self.readUsdItem(prim, index)
+            return (index, -1)
+        elif specType == SpecType.Attribute:
+            valueTypeStr = properties.pop('typeName').replace('[]', '')
+            valueType = getValueTypeStr(valueTypeStr)
+            value = properties.pop('default') if 'default' in properties else None
+            if valueType == ValueType.asset and type(value) == str:
+                value = value.replace('@', '')
+            att = parent.createAttribute(name, value, valueType)
+            att.pathIndex = path
+            if att.valueType.name != valueTypeStr:
+                att.valueTypeStr = valueTypeStr
+            if 'variability' in properties and properties.pop('variability') == 1:
+                att.addQualifier('uniform')
+            if 'custom' in properties and properties.pop('custom') == 1:
+                att.addQualifier('custom')
+            att.properties = properties
+        elif specType == SpecType.Relationship:
+            rel = parent.createAttribute(name)
+            rel.pathIndex = path
+            rel.valueTypeStr = 'rel'
+            if 'variability' in properties and properties.pop('variability') == 1:
+                rel.addQualifier('uniform')
+            if 'custom' in properties and properties.pop('custom') == 1:
+                rel.addQualifier('custom')
+            rel.properties = properties
+        return (index + 1, jump)
+
+    def readUsd(self):
+        self.readTableOfContents()
+        path, token, jump = self.paths[0]
+        fset, spec = self.specsMap[path]
+        data = UsdData()
+        data.properties = self.getFieldSetProperties(fset)
+        if 'primChildren' in data.properties:
+            data.properties.pop('primChildren')
+        index = 1
+        while index < len(self.paths):
+            index, jump = self.readUsdItem(data, index)
+        data.resolvePaths()
+        return data
+
     def getTableItem(self, sectionName):
         for name, start, size in self.toc:
             if sectionName == name:
