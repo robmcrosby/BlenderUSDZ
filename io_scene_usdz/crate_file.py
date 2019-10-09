@@ -653,7 +653,7 @@ class CrateFile:
             classType = ClassType[properties.pop('typeName')]
             prim = parent.createChild(name, classType)
             prim.pathIndex = path
-            print(jump, classType.name, name)
+            #print(jump, classType.name, name)
             index += 1
             while index < len(self.paths) and jump != -2:
                 index, jump = self.readUsdItem(prim, index)

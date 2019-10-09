@@ -354,6 +354,9 @@ class UsdClass:
     def __getitem__(self, key):
         return next((att for att in self.attributes if att.name == key), None)
 
+    def __contains__(self, key):
+        return self[key] != None
+
     def toString(self, space = ''):
         indent = space + TAB_SPACE
         line = indent + '\n'
@@ -388,6 +391,9 @@ class UsdClass:
     def createChildFront(self, name, type):
         return self.addChildFront(UsdClass(name, type))
 
+    def getAttributesOfTypeStr(self, typeStr):
+        return [a for a in self.attributes if a.valueTypeToString() == typeStr]
+
     def getChild(self, name):
         return next((c for c in self.children if c.name == name), None)
 
@@ -414,13 +420,17 @@ class UsdClass:
     def resolvePaths(self, root):
         for att in self.attributes:
             if 'connectionChildren' in att.properties:
-                att.properties.pop('connectionPaths')
                 pathIndex = att.properties.pop('connectionChildren')
                 att.value = root.getItemAtPathIndex(pathIndex)
+            if 'connectionPaths' in att.properties:
+                paths = att.properties.pop('connectionPaths')
+                att.value = root.getItemAtPathIndex(paths['path'])
             if 'targetChildren' in att.properties:
-                att.properties.pop('targetPaths')
                 pathIndex = att.properties.pop('targetChildren')
                 att.value = root.getItemAtPathIndex(pathIndex)
+            if 'targetPaths' in att.properties:
+                paths = att.properties.pop('targetPaths')
+                att.value = root.getItemAtPathIndex(paths['path'])
         for child in self.children:
             child.resolvePaths(root)
 
@@ -502,6 +512,9 @@ class UsdData:
                 children.append(child)
             children += child.getChildrenOfType(type)
         return children
+
+    def getAllMaterials(self):
+        return self.getChildrenOfType(ClassType.Material)
 
     def updatePathIndices(self):
         pathIndex = 1

@@ -42,12 +42,9 @@ def import_usdz(context, filepath = '', materials = True):
                 crate = CrateFile(file)
                 usdData = crate.readUsd()
                 file.close()
-
-                print(usdData)
-                #data = FileData()
-                #data.readUsdc(usdcFile)
-                #tempDir = usdcFile[:usdcFile.rfind('/')+1]
-                #import_data(context, data, materials, tempDir)
+                #print(usdData)
+                tempDir = usdcFile[:usdcFile.rfind('/')+1]
+                importData(context, usdData, tempDir, materials)
             else:
                 print('No usdc file found')
 
@@ -58,43 +55,42 @@ def import_usdz(context, filepath = '', materials = True):
     return {'FINISHED'}
 
 
-def import_data(context, data, materials, tempDir):
-    materials = get_materials(data, tempDir) if materials else {}
-    objects = get_objects(data)
-    #print(materials)
-    for objData in objects:
-        add_object(context, objData, materials)
+def importData(context, usdData, tempDir, materials):
+    materials = importMaterials(usdData, tempDir) if materials else {}
+    objects = getObjects(usdData)
+    for object in objects:
+        addObject(context, object, materials)
 
 
-def add_object(context, data, materials = {}, parent = None):
-    meshes = get_meshes(data)
+def addObject(context, data, materials = {}, parent = None):
+    meshes = getMeshes(data)
     if len(meshes) > 0:
-        #print(meshes[0].printUsda())
         # Create A Mesh Object
         obj = create_mesh_object(meshes[0].name, data.name)
         add_to_collection(obj, context.scene.collection)
 
         # Create any UV maps
-        uvs = get_uv_map_names(meshes[0])
+        uvs = meshes[0].getAttributesOfTypeStr('texCoord2f[]')
+        uvs += meshes[0].getAttributesOfTypeStr('float2[]')
+        uvs = [uv.name[9:] for uv in uvs]
         for uv in uvs:
-            obj.data.uv_layers.new(name=uv)
+            obj.data.uv_layers.new(name = uv)
 
         # Add the Geometry
         for mesh in meshes:
-            add_mesh(obj, mesh, uvs, materials)
+            addMesh(obj, mesh, uvs, materials)
         obj.data.update()
 
+        # Set the Parent
         if parent != None:
             obj.parent = parent
 
         # Apply any Transforms
         matrix = mathutils.Matrix()
-        opOrder = data.getItemOfName('xformOpOrder')
-        if opOrder != None and opOrder.data != None:
-            for op in opOrder.data:
-                opItem = data.getItemOfName(op)
-                if opItem != None and opItem.name == 'xformOp:transform':
-                    m = mathutils.Matrix(opItem.data)
+        if 'xformOpOrder' in data:
+            for opName in data['xformOpOrder'].value:
+                if opName == 'xformOp:transform':
+                    m = mathutils.Matrix(data[opName].value)
                     m.transpose()
                     matrix = matrix @ m
         if parent == None:
@@ -102,49 +98,54 @@ def add_object(context, data, materials = {}, parent = None):
         obj.matrix_local = matrix
 
         # Add the Children
-        children = get_objects(data)
+        children = getObjects(data)
         for child in children:
-            add_object(context, child, materials, obj)
+            addObject(context, child, materials, obj)
 
 
-def add_mesh(obj, data, uvs, materials):
+def addMesh(obj, data, uvs, materials):
+    #print(data)
     # Get Geometry From Data
-    counts = data.getItemOfName('faceVertexCounts').data
-    indices = data.getItemOfName('faceVertexIndices').data
-    verts = data.getItemOfName('points').data
-    normals = data.getItemOfName('primvars:normals:indices')
-    normals = None if normals == None else normals.data
+    counts = data['faceVertexCounts'].value
+    indices = data['faceVertexIndices'].value
+    verts = data['points'].value
+    normals = None
+    if 'primvars:normals:indices' in data:
+        normals = data['primvars:normals:indices'].value
     uvMaps = {}
     for uv in uvs:
-        uvCoords = data.getItemOfName('primvars:'+uv).data
-        uvIndices = data.getItemOfName('primvars:'+uv+':indices').data
+        uvCoords = data['primvars:'+uv].value
+        uvIndices = data['primvars:'+uv+':indices'].value
         uvMaps[uv] = [uvCoords[i] for i in uvIndices]
-
     # Compile Faces
     faces = []
     smooth = []
     index = 0
     for count in counts:
-        faces.append(tuple([indices[index+i] for i in range(count)]))
+        faces.append(tuple([indices[index + i] for i in range(count)]))
         if normals != None:
-            smooth.append(len(set(normals[index+i] for i in range(count))) > 1)
+            smooth.append(len(set(normals[index + i] for i in range(count))) > 1)
         else:
             smooth.append(True)
         index += count
-
     # Assign the Material
     matIndex = 0
+
+    matRel = None
+    if 'material:binding' in data:
+        matRel = data['material:binding']
+    """
     matRel = data.getItemOfName('material:binding')
     if matRel == None:
         geomSubsets = data.getItemsOfType('GeomSubset')
         if len(geomSubsets) > 0:
             matRel = geomSubsets[0].getItemOfName('material:binding')
-    if matRel != None:
-        matName = matRel.data.strip('<>')
-        matName = matName[matName.rfind('/')+1:]
-        if matName in materials:
+    """
+
+    if matRel != None and matRel.value != None:
+        if matRel.value.name in materials:
             matIndex = len(obj.data.materials)
-            obj.data.materials.append(materials[matName])
+            obj.data.materials.append(materials[matRel.value.name])
 
     # Create BMesh from Mesh Object
     bm = bmesh.new()
@@ -159,7 +160,7 @@ def add_mesh(obj, data, uvs, materials):
     # Add the Faces
     index = 0
     for i, face in enumerate(faces):
-        f = bm.faces.new((bm.verts[i+base] for i in face))
+        f = bm.faces.new((bm.verts[i + base] for i in face))
         f.smooth = smooth[i]
         f.material_index = matIndex
 
@@ -170,7 +171,7 @@ def add_mesh(obj, data, uvs, materials):
         for f in bm.faces[-len(faces):]:
             for i, l in enumerate(f.loops):
                 if index+i < len(uvs):
-                    l[uvIndex].uv = uvs[index+i]
+                    l[uvIndex].uv = uvs[index + i]
                 else:
                     l[uvIndex].uv = (0.0, 0.0)
             index += len(f.loops)
@@ -180,133 +181,109 @@ def add_mesh(obj, data, uvs, materials):
     bm.free()
 
 
-def get_objects(data):
+def getObjects(data):
     objects = []
-    for item in data.items:
-        if item.type == 'def Scope':
-            objects += get_objects(item)
-        elif item.type == 'def Xform':
-            objects.append(item)
+    for child in data.children:
+        if child.classType == ClassType.Scope:
+            objects += getObjects(child)
+        elif child.classType == ClassType.Xform:
+            objects.append(child)
     return objects
 
 
-def get_meshes(data):
+def getMeshes(data):
     meshes = []
-    for item in data.items:
-        if item.type == 'def Scope':
-            meshes += get_meshes(item)
-        elif item.type == 'def Mesh':
-            meshes.append(item)
+    for child in data.children:
+        if child.classType == ClassType.Scope:
+            meshes += getObjects(child)
+        elif child.classType == ClassType.Mesh:
+            meshes.append(child)
     return meshes
 
-def get_materials(data, tempDir):
+def importMaterials(data, tempDir):
     materialMap = {}
     #print(data.printUsda(reduced = True))
-    materials = data.getItemsOfType('Material')
+    materials = data.getAllMaterials()
     for matData in materials:
-        #print(matData.printUsda())
-        mat = create_material(matData, tempDir)
+        mat = createMaterial(matData, tempDir)
         materialMap[matData.name] = mat
     return materialMap
 
-def create_material(data, tempDir):
-    shader = get_shader_data(data)
-    #print('Shader:', shader.printUsda())
-
+def createMaterial(data, tempDir):
     mat = bpy.data.materials.new(data.name)
     mat.use_nodes = True
 
-    set_material_values(data, mat, tempDir, 'diffuseColor', 'Base Color')
-    set_material_values(data, mat, tempDir, 'clearcoat', 'Clearcoat')
-    set_material_values(data, mat, tempDir, 'clearcoatRoughness', 'Clearcoat Roughness')
-    set_material_values(data, mat, tempDir, 'emissiveColor', 'Emissive')
-    set_material_values(data, mat, tempDir, 'ior', 'IOR')
-    set_material_values(data, mat, tempDir, 'metallic', 'Metallic')
-    set_material_values(data, mat, tempDir, 'normal', 'Normal')
-    #set_material_values(data, mat, tempDir, 'occlusion', 'Occlusion')
-    set_material_values(data, mat, tempDir, 'roughness', 'Roughness')
-    set_material_values(data, mat, tempDir, 'specularColor', 'Specular')
-
+    setMaterialInput(data, mat, tempDir, 'diffuseColor', 'Base Color')
+    setMaterialInput(data, mat, tempDir, 'clearcoat', 'Clearcoat')
+    setMaterialInput(data, mat, tempDir, 'clearcoatRoughness', 'Clearcoat Roughness')
+    #setMaterialInput(data, mat, tempDir, 'emissiveColor', 'Emissive')
+    setMaterialInput(data, mat, tempDir, 'ior', 'IOR')
+    setMaterialInput(data, mat, tempDir, 'metallic', 'Metallic')
+    setMaterialInput(data, mat, tempDir, 'normal', 'Normal')
+    #setMaterialInput(data, mat, tempDir, 'occlusion', 'Occlusion')
+    setMaterialInput(data, mat, tempDir, 'roughness', 'Roughness')
+    setMaterialInput(data, mat, tempDir, 'specularColor', 'Specular')
     return mat
 
-def get_shader_data(materialData):
-    name = materialData.getItemOfName('outputs:surface.connect')
-    if name != None and name.data != None:
-        name = name.data[name.data.rfind('/')+1:name.data.find('.outputs')]
-        return materialData.getItemOfName(name)
-    return None
+def getSurfaceShaderData(materialData):
+    return materialData['outputs:surface'].value.parent
 
+def setMaterialInput(matData, mat, tempDir, valName, inputName):
+    shaderData = getSurfaceShaderData(matData)
+    inputData = shaderData['inputs:' + valName]
+    if inputData != None:
+        if inputData.isConnection():
+            setShaderInputTexture(inputData, mat, inputName, matData, tempDir)
+        else:
+            setShaderInputValue(inputData, mat, inputName)
 
-def set_material_values(matData, mat, tempDir, valName, inputName):
-    shaderData = get_shader_data(matData)
-    valData = shaderData.getItemOfName('inputs:'+valName)
-    if valData != None:
-        set_shader_input_value(valData, mat, inputName)
-    else:
-        valData = shaderData.getItemOfName('inputs:'+valName+'.connect')
-        if valData != None:
-            set_shader_input_texture(valData, mat, inputName, matData, tempDir)
-
-
-def set_shader_input_value(data, mat, inputName):
+def setShaderInputValue(data, mat, inputName):
     outputNode = get_output_node(mat)
     shaderNode = get_shader_node(outputNode)
     input = get_node_input(shaderNode, inputName)
     if input == None:
         print('Input', inputName, 'Not found')
     else:
-        if data.type == 'float':
-            input.default_value = data.data
-        elif data.type == 'color3f':
+        valueType = data.valueTypeToString()
+        if valueType == 'float':
+            input.default_value = data.value
+        elif valueType == 'color3f':
             if type(input.default_value) == float:
-                input.default_value = data.data[0]
+                input.default_value = data.value[0]
             else:
-                input.default_value = data.data + (1,)
-        elif data.type == 'normal3f':
+                input.default_value = data.value + (1,)
+        elif valueType == 'normal3f':
             input.default_value = (0.0, 0.0, 1.0)
         else:
             print('Value Not Set:', data.printUsda())
 
-
-def set_shader_input_texture(data, mat, inputName, matData, tempDir):
+def setShaderInputTexture(data, mat, inputName, matData, tempDir):
     outputNode = get_output_node(mat)
     shaderNode = get_shader_node(outputNode)
     input = get_node_input(shaderNode, inputName)
     if input == None:
         print('Input', inputName, 'Not found')
     else:
-        texName = data.data[data.data.rfind('/')+1:data.data.find('.outputs')]
-        texData = matData.getItemOfName(texName)
-        if texData != None:
-            # Compile the File Path
-            filePath = texData.getItemOfName('inputs:file').data.replace('@', '')
-            filePath = tempDir + filePath
-            # Add an Image Texture Node
-            texNode = mat.node_tree.nodes.new('ShaderNodeTexImage')
-            texNode.image = bpy.data.images.load(filePath)
-            texNode.image.pack()
-            if data.type == 'color3f':
-                # Connect to the Color Input
-                mat.node_tree.links.new(input, texNode.outputs[0])
-            elif data.type == 'float':
-                # Add and link a Seperate Color Node
-                texNode.image.colorspace_settings.name = 'Non-Color'
-                sepNode = mat.node_tree.nodes.new('ShaderNodeSeparateRGB')
-                mat.node_tree.links.new(sepNode.inputs[0], texNode.outputs[0])
-                mat.node_tree.links.new(input, sepNode.outputs[0])
-            elif data.type == 'normal3f':
-                # Add and link a Normal Map Node
-                texNode.image.colorspace_settings.name = 'Non-Color'
-                mapNode = mat.node_tree.nodes.new('ShaderNodeNormalMap')
-                mat.node_tree.links.new(mapNode.inputs[1], texNode.outputs[0])
-                mat.node_tree.links.new(input, mapNode.outputs[0])
-            #else:
-            #    print('UnHandled Type:', node.type)
-
-
-def get_uv_map_names(mesh):
-    uvs = []
-    for item in mesh.items:
-        if item.type == 'texCoord2f[]' or item.type == 'float2[]':
-            uvs.append(item.name[9:])
-    return uvs
+        # Get the Image File Path
+        texData = data.value.parent
+        filePath = tempDir + texData['inputs:file'].value
+        # Add an Image Texture Node
+        texNode = mat.node_tree.nodes.new('ShaderNodeTexImage')
+        texNode.image = bpy.data.images.load(filePath)
+        texNode.image.pack()
+        valueType = data.valueTypeToString()
+        if valueType == 'color3f':
+            # Connect to the Color Input
+            mat.node_tree.links.new(input, texNode.outputs[0])
+        elif valueType == 'float':
+            # Add and link a Seperate Color Node
+            texNode.image.colorspace_settings.name = 'Non-Color'
+            sepNode = mat.node_tree.nodes.new('ShaderNodeSeparateRGB')
+            mat.node_tree.links.new(sepNode.inputs[0], texNode.outputs[0])
+            mat.node_tree.links.new(input, sepNode.outputs[0])
+        elif valueType == 'normal3f':
+            # Add and link a Normal Map Node
+            texNode.image.colorspace_settings.name = 'Non-Color'
+            mapNode = mat.node_tree.nodes.new('ShaderNodeNormalMap')
+            mat.node_tree.links.new(mapNode.inputs[1], texNode.outputs[0])
+            mat.node_tree.links.new(input, mapNode.outputs[0])
