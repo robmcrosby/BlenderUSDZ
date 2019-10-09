@@ -653,11 +653,12 @@ class CrateFile:
             classType = ClassType[properties.pop('typeName')]
             prim = parent.createChild(name, classType)
             prim.pathIndex = path
-            #print(jump, classType.name, name)
             index += 1
-            while index < len(self.paths) and jump != -2:
-                index, jump = self.readUsdItem(prim, index)
-            return (index, -1)
+            itemJump = jump
+            while index < len(self.paths) and itemJump != -2:
+                index, itemJump = self.readUsdItem(prim, index)
+            jump = -2 if jump == -1 else -1
+            return (index, jump)
         elif specType == SpecType.Attribute:
             valueTypeStr = properties.pop('typeName').replace('[]', '')
             valueType = getValueTypeStr(valueTypeStr)
