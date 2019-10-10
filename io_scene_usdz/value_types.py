@@ -236,7 +236,7 @@ class UsdAttribute:
     def __getitem__(self, key):
         return self.properties[key]
 
-    def toString(self, space = ''):
+    def toString(self, space = '', debug = False):
         ret = space
         att = self.value if self.isConnection() else self
         if len(att.qualifiers) > 0:
@@ -248,10 +248,10 @@ class UsdAttribute:
         elif self.isRelationship():
             ret += ' = <' + self.value.getPathStr() + '>'
         elif self.hasTimeSamples():
-            ret += self.framesToString(space)
+            ret += self.framesToString(space, debug)
         else:
             if self.value != None:
-                ret += ' = ' + self.valueToString()
+                ret += ' = ' + self.valueToString(debug)
                 if len(self.properties) > 0:
                     ret += self.propertiesToString(space)
         return ret + '\n'
@@ -263,11 +263,16 @@ class UsdAttribute:
             ret += indent + k + ' = ' + propertyToString(v, indent) + '\n'
         return ret + space + ')'
 
-    def framesToString(self, space):
+    def framesToString(self, space, debug = False):
         indent = space + TAB_SPACE
         ret = '.timeSamples = {\n'
-        for frame, value in self.frames:
-            ret += indent + '%d: '%frame + valueToString(value) + ',\n'
+        if debug and len(self.frames) > 3:
+            for frame, value in self.frames[:3]:
+                ret += indent + '%d: '%frame + valueToString(value) + ',\n'
+            ret += indent + '...\n'
+        else:
+            for frame, value in self.frames:
+                ret += indent + '%d: '%frame + valueToString(value) + ',\n'
         return ret + space + '}'
 
     def addQualifier(self, qualifier):
@@ -278,16 +283,16 @@ class UsdAttribute:
             self.valueType = getValueType(value)
         self.frames.append((frame, value))
 
-    def valueToString(self):
+    def valueToString(self, debug = False):
         if self.isConnection():
-            return self.value.valueToString()
+            return self.value.valueToString(debug)
         if self.valueType == ValueType.token or self.valueType == ValueType.string:
             if type(self.value) is list:
                 return '[' + ', '.join('"' + v + '"' for v in self.value) + ']'
             return '"' + valueToString(self.value) + '"'
         if self.valueType == ValueType.asset:
             return '@' + valueToString(self.value) + '@'
-        return valueToString(self.value)
+        return valueToString(self.value, debug)
 
     def valueTypeToString(self):
         if self.valueTypeStr != None:
@@ -357,14 +362,14 @@ class UsdClass:
     def __contains__(self, key):
         return self[key] != None
 
-    def toString(self, space = ''):
+    def toString(self, space = '', debug = False):
         indent = space + TAB_SPACE
         line = indent + '\n'
         ret = space + 'def ' + self.classType.name + ' "' + self.name + '"\n'
         ret += space + '{\n'
-        ret += ''.join(att.toString(indent) for att in self.attributes)
+        ret += ''.join(att.toString(indent, debug) for att in self.attributes)
         ret += line if len(self.children) > 0 else ''
-        ret += line.join(c.toString(indent) for c in self.children)
+        ret += line.join(c.toString(indent, debug) for c in self.children)
         return ret + space + '}\n'
 
     def addAttribute(self, attribute):
@@ -482,11 +487,11 @@ class UsdData:
     def __getitem__(self, key):
         return self.properties[key]
 
-    def toString(self):
+    def toString(self, debug = False):
         ret = '#usda 1.0\n'
         ret += self.propertiesToString()
         ret += '\n'
-        return ret + ''.join(c.toString() for c in self.children)
+        return ret + ''.join(c.toString('', debug) for c in self.children)
 
     def getPathStr(self):
         return ''
