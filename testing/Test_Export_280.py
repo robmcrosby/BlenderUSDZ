@@ -18,7 +18,6 @@ import io_scene_usdz.value_types
 import io_scene_usdz.crate_file
 import io_scene_usdz.object_utils
 import io_scene_usdz.material_utils
-import io_scene_usdz.file_data
 import io_scene_usdz.scene_data
 import io_scene_usdz.export_usdz
 
@@ -27,7 +26,6 @@ importlib.reload(io_scene_usdz.value_types)
 importlib.reload(io_scene_usdz.crate_file)
 importlib.reload(io_scene_usdz.object_utils)
 importlib.reload(io_scene_usdz.material_utils)
-importlib.reload(io_scene_usdz.file_data)
 importlib.reload(io_scene_usdz.scene_data)
 importlib.reload(io_scene_usdz.export_usdz)
 
@@ -51,6 +49,6 @@ export_usdz(
     bakeSize = 512,
     samples = 64,
     scale = 4.0,
-    animated = False,
-    useConverter = True,
+    animated = True,
+    useConverter = False,
     )

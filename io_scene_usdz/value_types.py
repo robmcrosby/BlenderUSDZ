@@ -1,5 +1,4 @@
 from enum import Enum
-import itertools
 
 TAB = '   '
 
@@ -548,31 +547,3 @@ class UsdData:
         f = open(filePath, 'w')
         f.write(str(self))
         f.close()
-
-    def getItems(self):
-        xforms = self.getChildrenOfType(ClassType.Xform)
-        xforms += self.getChildrenOfType(ClassType.SkelRoot)
-        #materials = self.getChildrenOfType(ClassType.Material)
-        materials = []
-        materialAtts = []
-        for mat in self.getChildrenOfType(ClassType.Material):
-            materials.append(mat)
-            materials += mat.children
-            materialAtts += [c.attributes for c in mat.children]
-            materialAtts.append(mat.attributes)
-        animations = self.getChildrenOfType(ClassType.SkelAnimation)
-        skeletons = self.getChildrenOfType(ClassType.Skeleton)
-        meshes = reversed(self.getChildrenOfType(ClassType.Mesh))
-        items = []
-        items += xforms
-        items += materials
-        items += animations
-        items += skeletons
-        items += meshes
-        items += interleaveLists([a.attributes for a in animations])
-        items += interleaveLists([a.attributes for s in skeletons])
-        items += interleaveLists(materialAtts)
-        #items += interleaveLists([m.attributes for m in materials])
-        items += interleaveLists([m.attributes for m in meshes])
-        items += interleaveLists([x.attributes for x in reversed(xforms)])
-        return items

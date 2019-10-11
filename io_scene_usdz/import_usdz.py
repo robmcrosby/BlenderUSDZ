@@ -7,10 +7,10 @@ import zipfile
 import bmesh
 import mathutils
 
-from io_scene_usdz.file_data import *
 from io_scene_usdz.scene_data import *
 from io_scene_usdz.object_utils import *
 from io_scene_usdz.material_utils import *
+from io_scene_usdz.crate_file import *
 
 def find_usdz(dirpath):
     files = os.listdir(dirpath)
