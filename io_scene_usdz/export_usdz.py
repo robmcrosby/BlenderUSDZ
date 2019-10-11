@@ -42,9 +42,10 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     if bakeTextures or bakeAO:
         scene.exportBakedTextures()
 
-    usdData = scene.exportUsdData()
-    print(usdData)
+    # Export the USD Data
+    usdData = scene.exportUsd()
 
+    # Cleanup the scene and delete temp files
     scene.cleanup()
     if tempPath != None:
         shutil.rmtree(tempPath)
@@ -63,9 +64,6 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
         crate = CrateFile(crateFile)
         crate.writeUsd(usdData)
         crateFile.close()
-        #crateFile = CrateFile(usdcFile)
-        #crateFile.addUsdData(usdData)
-        #data.writeUsdc(usdcFile)
         usdz = UsdzFile(usdzFile)
         usdz.addFile(usdcFile)
         for textureFile in scene.textureFilePaths:

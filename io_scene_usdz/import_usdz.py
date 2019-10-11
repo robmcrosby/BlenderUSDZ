@@ -42,7 +42,7 @@ def import_usdz(context, filepath = '', materials = True):
                 crate = CrateFile(file)
                 usdData = crate.readUsd()
                 file.close()
-                print(usdData.toString(debug = True))
+                #print(usdData.toString(debug = True))
                 tempDir = usdcFile[:usdcFile.rfind('/')+1]
                 importData(context, usdData, tempDir, materials)
             else:
@@ -202,7 +202,6 @@ def getMeshes(data):
 
 def importMaterials(data, tempDir):
     materialMap = {}
-    #print(data.printUsda(reduced = True))
     materials = data.getAllMaterials()
     for matData in materials:
         mat = createMaterial(matData, tempDir)

@@ -1,7 +1,7 @@
 from enum import Enum
 import itertools
 
-TAB_SPACE = '   '
+TAB = '   '
 
 
 class SpecifierType(Enum):
@@ -183,7 +183,7 @@ def valueToString(value, reduced = False):
     return ''
 
 def dictionaryToString(dic, space):
-    indent = space + TAB_SPACE
+    indent = space + TAB
     ret = '{\n'
     for key, value in dic.items():
         if type(value) is dict:
@@ -257,14 +257,14 @@ class UsdAttribute:
         return ret + '\n'
 
     def propertiesToString(self, space):
-        indent = space + TAB_SPACE
+        indent = space + TAB
         ret = ' (\n'
         for k, v in self.properties.items():
             ret += indent + k + ' = ' + propertyToString(v, indent) + '\n'
         return ret + space + ')'
 
     def framesToString(self, space, debug = False):
-        indent = space + TAB_SPACE
+        indent = space + TAB
         ret = '.timeSamples = {\n'
         if debug and len(self.frames) > 3:
             for frame, value in self.frames[:3]:
@@ -363,7 +363,7 @@ class UsdClass:
         return self[key] != None
 
     def toString(self, space = '', debug = False):
-        indent = space + TAB_SPACE
+        indent = space + TAB
         line = indent + '\n'
         ret = space + 'def ' + self.classType.name + ' "' + self.name + '"\n'
         ret += space + '{\n'
@@ -499,7 +499,7 @@ class UsdData:
     def propertiesToString(self):
         ret = '(\n'
         for k, v in self.properties.items():
-            ret += TAB_SPACE + k + ' = ' + propertyToString(v, TAB_SPACE) + '\n'
+            ret += TAB + k + ' = ' + propertyToString(v, TAB) + '\n'
         return ret + ')\n'
 
     def addChild(self, child):
