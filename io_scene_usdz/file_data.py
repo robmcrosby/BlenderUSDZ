@@ -1,15 +1,11 @@
 import os
-import itertools
-import struct
+import time
 
 try:
     import zlib
     crc32 = zlib.crc32
 except ImportError:
     crc32 = binascii.crc32
-
-from io_scene_usdz.crate_file import *
-from io_scene_usdz.value_types import *
 
 
 def readFileContents(filePath):
@@ -32,15 +28,15 @@ class UsdzFile:
         contents = readFileContents(filePath)
         entry = {}
         entry['name'] = os.path.basename(filePath)
+        # File offset and crc32 hash
         entry['offset'] = self.file.tell()
         entry['crc'] = crc32(contents) & 0xffffffff
-        #mtime = time.localtime(st.st_mtime)
-        #date_time = mtime[0:6]
-        #dt=(1980,1,1,0,0,0)
-        #dosdate = (dt[0] - 1980) << 9 | dt[1] << 5 | dt[2]
-        #dostime = dt[3] << 11 | dt[4] << 5 | (dt[5] // 2)
-        entry['time'] = b'\x0C\x80'
-        entry['date'] = b'\xB3\x4E'
+        # Write the Current Date and Time
+        dt = time.localtime(time.time())
+        dosdate = (dt[0] - 1980) << 9 | dt[1] << 5 | dt[2]
+        dostime = dt[3] << 11 | dt[4] << 5 | (dt[5] // 2)
+        entry['time'] = dosdate.to_bytes(2, byteorder = 'little')
+        entry['date'] = dostime.to_bytes(2, byteorder = 'little')
         extraSize = self.getExtraAlignmentSize(entry['name'])
         # Local Entry Signature
         self.file.write(b'\x50\x4b\x03\x04')
