@@ -165,7 +165,7 @@ class Material:
     def setupBakeMetallic(self, asset):
         input = get_metallic_input(self.shaderNode)
         if self.setupBakeFloatInput(input):
-            self.inputs['metallic'].image = assetw
+            self.inputs['metallic'].image = asset
             self.inputs['metallic'].uvMap = self.object.bakeUVMap
             self.inputs['useSpecularWorkflow'].value = 0
             return True
