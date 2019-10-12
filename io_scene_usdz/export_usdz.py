@@ -21,11 +21,9 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
                 bakeSize = 1024):
     filePath, fileName = os.path.split(filepath)
     fileName, fileType = fileName.split('.')
-
     usdaFile = filePath+'/'+fileName+'.usda'
     usdcFile = filePath+'/'+fileName+'.usdc'
     usdzFile = filePath+'/'+fileName+'.usdz'
-
     tempPath = None
     if not keepUSDA:
         tempPath = tempfile.mkdtemp()
@@ -43,19 +41,13 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     scene.scale = scale
     scene.animated = animated
     scene.loadContext(context)
-
     # Export image files
     if bakeTextures or bakeAO:
         scene.exportBakedTextures()
-
     # Export the USD Data
     usdData = scene.exportUsd()
-
-    # Cleanup the scene and delete temp files
+    # Cleanup the scene
     scene.cleanup()
-    if tempPath != None:
-        shutil.rmtree(tempPath)
-
     if useConverter:
         # Crate text usda file and run the USDZ Converter Tool
         usdData.writeUsda(usdaFile)
@@ -75,6 +67,9 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
         for textureFile in scene.textureFilePaths:
             usdz.addFile(textureFile)
         usdz.close()
+    if tempPath != None:
+        # Delete temp files
+        shutil.rmtree(tempPath)
     return {'FINISHED'}
 
 

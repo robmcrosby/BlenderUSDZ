@@ -12,19 +12,10 @@ from io_scene_usdz.object_utils import *
 from io_scene_usdz.material_utils import *
 from io_scene_usdz.crate_file import *
 
-def find_usdz(dirpath):
-    files = os.listdir(dirpath)
-    for file in files:
-        parts = file.split('.')
-        if len(parts) > 0 and parts[-1] == 'usdc':
-            return dirpath + '/' + file
-    return ''
-
 
 def import_usdz(context, filepath = '', materials = True):
     filePath, fileName = os.path.split(filepath)
     fileName, fileType = fileName.split('.')
-
     if fileType == 'usdz':
         with zipfile.ZipFile(filepath, 'r') as zf:
             # Create a temp directory to extract to
@@ -34,9 +25,8 @@ def import_usdz(context, filepath = '', materials = True):
             except Exception as e:
                 print(e)
             zf.close()
-
             # Find the usdc file
-            usdcFile = find_usdz(tempPath)
+            usdcFile = findUsdz(tempPath)
             if usdcFile != '':
                 file = open(usdcFile, 'rb')
                 crate = CrateFile(file)
@@ -47,12 +37,19 @@ def import_usdz(context, filepath = '', materials = True):
                 importData(context, usdData, tempDir, materials)
             else:
                 print('No usdc file found')
-
             # Cleanup Temp Files
             if tempPath != None:
                 shutil.rmtree(tempPath)
-
     return {'FINISHED'}
+
+
+def findUsdz(dirpath):
+    files = os.listdir(dirpath)
+    for file in files:
+        parts = file.split('.')
+        if len(parts) > 0 and parts[-1] == 'usdc':
+            return dirpath + '/' + file
+    return ''
 
 
 def importData(context, usdData, tempDir, materials):
@@ -68,23 +65,19 @@ def addObject(context, data, materials = {}, parent = None):
         # Create A Mesh Object
         obj = create_mesh_object(meshes[0].name, data.name)
         add_to_collection(obj, context.scene.collection)
-
         # Create any UV maps
         uvs = meshes[0].getAttributesOfTypeStr('texCoord2f[]')
         uvs += meshes[0].getAttributesOfTypeStr('float2[]')
         uvs = [uv.name[9:] for uv in uvs]
         for uv in uvs:
             obj.data.uv_layers.new(name = uv)
-
         # Add the Geometry
         for mesh in meshes:
             addMesh(obj, mesh, uvs, materials)
         obj.data.update()
-
         # Set the Parent
         if parent != None:
             obj.parent = parent
-
         # Apply any Transforms
         matrix = mathutils.Matrix()
         if 'xformOpOrder' in data:
@@ -96,7 +89,6 @@ def addObject(context, data, materials = {}, parent = None):
         if parent == None:
             matrix = matrix @ mathutils.Matrix.Rotation(pi/2.0, 4, 'X')
         obj.matrix_local = matrix
-
         # Add the Children
         children = getObjects(data)
         for child in children:
@@ -134,14 +126,10 @@ def addMesh(obj, data, uvs, materials):
     matRel = None
     if 'material:binding' in data:
         matRel = data['material:binding']
-    """
-    matRel = data.getItemOfName('material:binding')
-    if matRel == None:
-        geomSubsets = data.getItemsOfType('GeomSubset')
-        if len(geomSubsets) > 0:
-            matRel = geomSubsets[0].getItemOfName('material:binding')
-    """
-
+    else:
+        geomSubset = data.getChildOfType(ClassType.GeomSubset)
+        if geomSubset != None:
+            matRel = geomSubset['material:binding']
     if matRel != None and matRel.value != None:
         if matRel.value.name in materials:
             matIndex = len(obj.data.materials)

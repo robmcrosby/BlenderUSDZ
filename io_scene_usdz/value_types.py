@@ -32,6 +32,7 @@ class ClassType(Enum):
     SkelAnimation = 5
     Material = 6
     Shader = 7
+    GeomSubset = 8
 
 class ValueType(Enum):
     Invalid = 0
@@ -400,6 +401,9 @@ class UsdClass:
 
     def getChild(self, name):
         return next((c for c in self.children if c.name == name), None)
+
+    def getChildOfType(self, type):
+        return next((c for c in self.children if c.classType == type), None)
 
     def getChildrenOfType(self, type):
         children = []
