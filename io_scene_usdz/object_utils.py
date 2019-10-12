@@ -135,38 +135,46 @@ def export_mesh_vertices(mesh, material = -1):
 def export_mesh_normals(mesh, material = -1):
     indices = []
     normals = []
+    normalMap = {}
     for poly in mesh.polygons:
         if material == -1 or poly.material_index == material:
             if poly.use_smooth:
                 for i in poly.vertices:
                     normal = mesh.vertices[i].normal[:]
-                    if normal in normals:
-                        indices += [normals.index(normal)]
+                    if normal in normalMap:
+                        indices.append(normalMap[normal])
                     else:
-                        indices += [len(normals)]
+                        normalIndex = len(normals)
+                        indices.append(normalIndex)
                         normals.append(normal)
+                        normalMap[normal] = normalIndex
             else:
                 normal = poly.normal[:]
-                if normal in normals:
-                    indices += [normals.index(normal)] * len(poly.vertices)
+                if normal in normalMap:
+                    indices += [normalMap[normal]] * len(poly.vertices)
                 else:
-                    indices += [len(normals)] * len(poly.vertices)
+                    normalIndex = len(normals)
+                    indices += [normalIndex] * len(poly.vertices)
                     normals.append(normal)
+                    normalMap[normal] = normalIndex
     return (indices, normals)
 
 def export_mesh_uvs(mesh, layer, material = -1):
     indices = []
     uvs = []
+    uvMap = {}
     index = 0
     for poly in mesh.polygons:
         if material == -1 or poly.material_index == material:
             for i in range(index, index + len(poly.vertices)):
                 uv = layer.data[i].uv[:]
-                if uv in uvs:
-                    indices += [uvs.index(uv)]
+                if uv in uvMap:
+                    indices.append(uvMap[uv])
                 else:
-                    indices += [len(uvs)]
+                    uvIndex = len(uvs)
+                    indices.append(uvIndex)
                     uvs.append(uv)
+                    uvMap[uv] = uvIndex
         index += len(poly.vertices)
     return (indices, uvs)
 
