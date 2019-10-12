@@ -96,7 +96,6 @@ def addObject(context, data, materials = {}, parent = None):
 
 
 def addMesh(obj, data, uvs, materials):
-    #print(data)
     # Get Geometry From Data
     counts = data['faceVertexCounts'].value
     indices = data['faceVertexIndices'].value
@@ -122,7 +121,6 @@ def addMesh(obj, data, uvs, materials):
         index += count
     # Assign the Material
     matIndex = 0
-
     matRel = None
     if 'material:binding' in data:
         matRel = data['material:binding']
@@ -132,26 +130,26 @@ def addMesh(obj, data, uvs, materials):
             matRel = geomSubset['material:binding']
     if matRel != None and matRel.value != None:
         if matRel.value.name in materials:
-            matIndex = len(obj.data.materials)
-            obj.data.materials.append(materials[matRel.value.name])
-
+            mat = materials[matRel.value.name]
+            if not mat in obj.data.materials.values():
+                matIndex = len(obj.data.materials)
+                obj.data.materials.append(materials[matRel.value.name])
+            else:
+                matIndex = obj.data.materials.values().index(mat)
     # Create BMesh from Mesh Object
     bm = bmesh.new()
     bm.from_mesh(obj.data)
-
     # Add the Vertices
     base = len(bm.verts)
     for vert in verts:
         bm.verts.new(vert)
     bm.verts.ensure_lookup_table()
-
     # Add the Faces
     index = 0
     for i, face in enumerate(faces):
         f = bm.faces.new((bm.verts[i + base] for i in face))
         f.smooth = smooth[i]
         f.material_index = matIndex
-
     # Add the UVs
     for uvName, uvs in uvMaps.items():
         uvIndex = bm.loops.layers.uv[uvName]
@@ -163,7 +161,6 @@ def addMesh(obj, data, uvs, materials):
                 else:
                     l[uvIndex].uv = (0.0, 0.0)
             index += len(f.loops)
-
     # Apply BMesh back to Mesh Object
     bm.to_mesh(obj.data)
     bm.free()
