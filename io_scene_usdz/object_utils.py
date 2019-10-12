@@ -231,7 +231,7 @@ def get_joint_token(bone):
     return name
 
 def get_joint_tokens(armature):
-    return ['"'+get_joint_token(bone)+'"' for bone in armature.data.bones]
+    return [get_joint_token(bone) for bone in armature.data.bones]
 
 def get_bind_transforms(armature):
     transforms = []

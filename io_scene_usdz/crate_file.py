@@ -1,7 +1,7 @@
 import os
 import struct
-from enum import Enum
 from io_scene_usdz.compression_utils import *
+from io_scene_usdz.value_types import *
 
 ARRAY_BIT = (1 << 63)
 INLINE_BIT = (1 << 62)
@@ -18,6 +18,10 @@ def writeFloat(file, value, byteorder='little'):
 def writeDouble(file, value, byteorder='little'):
     packStr = '<d' if byteorder.lower() == 'little' else '>d'
     file.write(struct.pack(packStr, value))
+
+def toSigned32(n):
+    n = n & 0xffffffff
+    return (n ^ 0x80000000) - 0x80000000
 
 def writeInt32Compressed(file, data):
     buffer = lz4Compress(usdInt32Compress(data))
@@ -43,142 +47,6 @@ def dataKey(data):
         return tuple(data)
     return data
 
-class SpecifierType(Enum):
-    Def = 0
-    Over = 1
-    Class = 2
-
-
-class SpecType(Enum):
-    Attribute   = 1
-    Connection  = 2
-    Expression  = 3
-    Mapper      = 4
-    MapperArg   = 5
-    Prim        = 6
-    PseudoRoot  = 7
-    Relationship = 8
-    RelationshipTarget = 9
-    Variant     = 10
-    VariantSet  = 11
-
-
-class ValueType(Enum):
-    Invalid = 0
-    bool = 1
-    uchar = 2
-    int = 3
-    uint = 4
-    int64 = 5
-    uint64 = 6
-    half = 7
-    float = 8
-    double = 9
-    string = 10
-    token = 11
-    asset = 12
-    matrix2d = 13
-    matrix3d = 14
-    matrix4d = 15
-    quatd = 16
-    quatf = 17
-    quath = 18
-    vec2d = 19
-    vec2f = 20
-    vec2h = 21
-    vec2i = 22
-    vec3d = 23
-    vec3f = 24
-    vec3h = 25
-    vec3i = 26
-    vec4d = 27
-    vec4f = 28
-    vec4h = 29
-    vec4i = 30
-    Dictionary = 31
-    TokenListOp = 32
-    StringListOp = 33
-    PathListOp = 34
-    ReferenceListOp = 35
-    IntListOp = 36
-    Int64ListOp = 37
-    UIntListOp = 38
-    UInt64ListOp = 39
-    PathVector = 40
-    TokenVector = 41
-    Specifier = 42
-    Permission = 43
-    Variability = 44
-    VariantSelectionMap = 45
-    TimeSamples = 46
-    Payload = 47
-    DoubleVector = 48
-    LayerOffsetVector = 49
-    StringVector = 50
-    ValueBlock = 51
-    Value = 52
-    UnregisteredValue = 53
-    UnregisteredValueListOp = 54
-    PayloadListOp = 55
-
-
-def getTupleValueType(value):
-    l = len(value)
-    if l > 0:
-        t = type(value[0])
-        if t == int:
-            if l == 2:
-                return ValueType.vec2i
-            if l == 3:
-                return ValueType.vec3i
-            if l == 4:
-                return ValueType.vec4i
-        elif t == float:
-            if l == 2:
-                return ValueType.vec2f
-            if l == 3:
-                return ValueType.vec3f
-            if l == 4:
-                return ValueType.vec4f
-        elif t == tuple and len(value[0]) > 0 and type(value[0][0]) == float:
-            l = len(value[0])
-            if l == 2:
-                return ValueType.matrix2d
-            if l == 3:
-                return ValueType.matrix3d
-            if l == 4:
-                return ValueType.matrix4d
-    return ValueType.Invalid
-
-def getValueType(value):
-    t = type(value)
-    if t == bool:
-        return ValueType.bool
-    if t == int:
-        return ValueType.int
-    if t == float:
-        return ValueType.float
-    if t == str:
-        if len(value) > 0 and value[0] == '@':
-            return ValueType.asset
-        return ValueType.token
-    if t == tuple:
-        return getTupleValueType(value)
-    if t == list and len(value) > 0:
-        if type(value[0]) == str:
-            return ValueType.token
-        return getValueType(value[0])
-    if t == SpecifierType:
-        return ValueType.Specifier
-    if t == dict:
-        return ValueType.Dictionary
-    return ValueType.Invalid
-
-def getValueTypeStr(typeStr):
-    typeStr = typeStr.replace('[]', '')
-    if typeStr == 'float3':
-        return ValueType.vec3f
-    return ValueType[typeStr]
 
 def writeValue(file, value, vType):
     if type(value) == list:
@@ -308,7 +176,8 @@ class CrateFile:
         if type(data) == list:
             tokens = []
             for token in data:
-                tokens.append(self.getTokenIndex(token.replace('"', '')))
+                token = token.replace('"', '')
+                tokens.append(self.getTokenIndex(token))
             ref = self.getDataRefrence(tokens, ValueType.token)
             if ref < 0:
                 ref = self.file.tell()
@@ -656,6 +525,179 @@ class CrateFile:
             writeInt(self.file, start, 8)
             writeInt(self.file, size, 8)
         self.writeBootStrap(tocStart)
+
+    def writeUsdConnection(self, usdAtt):
+        fset = []
+        pathIndex = usdAtt.value.pathIndex
+        fset.append(self.addField('typeName', usdAtt.value.valueTypeToString()))
+        for q in usdAtt.value.qualifiers:
+            if q == 'uniform':
+                fset.append(self.addField('variability', True, ValueType.Variability))
+            elif q == 'custom':
+                fset.append(self.addField('custom', True))
+        fset.append(self.addFieldPathListOp('connectionPaths', pathIndex))
+        fset.append(self.addFieldPathVector('connectionChildren', pathIndex))
+        fset = self.addFieldSet(fset)
+        usdAtt.pathIndex = self.addSpec(fset, SpecType.Attribute)
+        nameToken = self.getTokenIndex(usdAtt.name)
+        pathJump = usdAtt.getPathJump()
+        self.addPath(usdAtt.pathIndex, nameToken, pathJump, True)
+
+    def writeUsdRelationship(self, usdAtt):
+        fset = []
+        pathIndex = usdAtt.value.pathIndex
+        fset.append(self.addField('variability', True, ValueType.Variability))
+        fset.append(self.addFieldPathListOp('targetPaths', pathIndex))
+        fset.append(self.addFieldPathVector('targetChildren', pathIndex))
+        fset = self.addFieldSet(fset)
+        usdAtt.pathIndex = self.addSpec(fset, SpecType.Relationship)
+        nameToken = self.getTokenIndex(usdAtt.name)
+        pathJump = usdAtt.getPathJump()
+        self.addPath(usdAtt.pathIndex, nameToken, pathJump, True)
+
+    def writeUsdAttribute(self, usdAtt):
+        fset = []
+        fset.append(self.addField('typeName', usdAtt.valueTypeToString()))
+        for q in usdAtt.qualifiers:
+            if q == 'uniform':
+                fset.append(self.addField('variability', True, ValueType.Variability))
+            elif q == 'custom':
+                fset.append(self.addField('custom', True))
+        for name, value in usdAtt.properties.items():
+            fset.append(self.addField(name, value))
+        if usdAtt.value != None:
+            fset.append(self.addField('default', usdAtt.value, usdAtt.valueType))
+        if usdAtt.hasTimeSamples():
+            fset.append(self.addFieldTimeSamples('timeSamples', usdAtt.frames, usdAtt.valueType.name))
+        fset = self.addFieldSet(fset)
+        usdAtt.pathIndex = self.addSpec(fset, SpecType.Attribute)
+        nameToken = self.getTokenIndex(usdAtt.name)
+        pathJump = usdAtt.getPathJump()
+        self.addPath(usdAtt.pathIndex, nameToken, pathJump, True)
+
+    def writeUsdPrim(self, usdPrim):
+        # Add Prim Properties
+        fset = []
+        fset.append(self.addField('typeName', usdPrim.classType.name))
+        fset.append(self.addField('specifier', SpecifierType.Def))
+        if len(usdPrim.attributes) > 0:
+            tokens = [att.name for att in usdPrim.attributes]
+            fset.append(self.addFieldTokenVector('properties', tokens))
+        if len(usdPrim.children) > 0:
+            tokens = [child.name for child in usdPrim.children]
+            fset.append(self.addFieldTokenVector('primChildren', tokens))
+        fset = self.addFieldSet(fset)
+        usdPrim.pathIndex = self.addSpec(fset, SpecType.Prim)
+        nameToken = self.getTokenIndex(usdPrim.name)
+        pathJump = usdPrim.getPathJump()
+        # Add Prim Path
+        self.addPath(usdPrim.pathIndex, nameToken, pathJump, False)
+        # Write Prim Children
+        for child in usdPrim.children:
+            self.writeUsdPrim(child)
+        # Write Prim Attributes
+        for attribute in usdPrim.attributes:
+            if attribute.isConnection():
+                self.writeUsdConnection(attribute)
+            elif attribute.isRelationship():
+                self.writeUsdRelationship(attribute)
+            else:
+                self.writeUsdAttribute(attribute)
+
+    def writeUsd(self, usdData):
+        usdData.updatePathIndices()
+        self.writeBootStrap()
+        # Add Root Properties
+        fset = []
+        for name, value in usdData.properties.items():
+            if type(value) is float:
+                fset.append(self.addFieldDouble(name, value))
+            else:
+                fset.append(self.addField(name, value))
+        if len(usdData.children) > 0:
+            tokens = [c.name for c in usdData.children]
+            fset.append(self.addFieldTokenVector('primChildren', tokens))
+        fset = self.addFieldSet(fset)
+        usdData.pathIndex = self.addSpec(fset, SpecType.PseudoRoot)
+        # Add First Path
+        nameToken = self.getTokenIndex('')
+        pathJump = usdData.getPathJump()
+        self.addPath(usdData.pathIndex, nameToken, pathJump, False)
+        # Write the Children
+        for child in usdData.children:
+            self.writeUsdPrim(child)
+        # Finish Writing the Crate File
+        self.writeSections()
+        self.writeTableOfContents()
+
+    def getFieldSetProperties(self, fset):
+        properties = {}
+        fset = self.getFieldSet(fset)
+        for field in fset:
+            if field < len(self.reps):
+                name = self.getTokenStr(self.fields[field])
+                value = self.getRepValue(self.reps[field])
+                properties[name] = value
+        return properties
+
+
+    def readUsdItem(self, parent = None, index = 0):
+        path, token, jump = self.paths[index]
+        if not path in self.specsMap:
+            return (index + 1, -1)
+        fset, spec = self.specsMap[path]
+        specType = SpecType(spec)
+        properties = self.getFieldSetProperties(fset)
+        name = self.getTokenStr(token)
+        if specType == SpecType.Prim:
+            classType = ClassType[properties.pop('typeName')]
+            prim = parent.createChild(name, classType)
+            prim.pathIndex = path
+            index += 1
+            itemJump = jump
+            while index < len(self.paths) and itemJump != -2:
+                index, itemJump = self.readUsdItem(prim, index)
+            jump = -2 if jump == -1 else -1
+            return (index, jump)
+        elif specType == SpecType.Attribute:
+            valueTypeStr = properties.pop('typeName').replace('[]', '')
+            valueType = getValueTypeStr(valueTypeStr)
+            value = properties.pop('default') if 'default' in properties else None
+            if valueType == ValueType.asset and type(value) == str:
+                value = value.replace('@', '')
+            att = parent.createAttribute(name, value, valueType)
+            att.pathIndex = path
+            if att.valueType.name != valueTypeStr:
+                att.valueTypeStr = valueTypeStr
+            if 'variability' in properties and properties.pop('variability') == 1:
+                att.addQualifier('uniform')
+            if 'custom' in properties and properties.pop('custom') == 1:
+                att.addQualifier('custom')
+            att.properties = properties
+        elif specType == SpecType.Relationship:
+            rel = parent.createAttribute(name)
+            rel.pathIndex = path
+            rel.valueTypeStr = 'rel'
+            if 'variability' in properties and properties.pop('variability') == 1:
+                rel.addQualifier('uniform')
+            if 'custom' in properties and properties.pop('custom') == 1:
+                rel.addQualifier('custom')
+            rel.properties = properties
+        return (index + 1, jump)
+
+    def readUsd(self):
+        self.readTableOfContents()
+        path, token, jump = self.paths[0]
+        fset, spec = self.specsMap[path]
+        data = UsdData()
+        data.properties = self.getFieldSetProperties(fset)
+        if 'primChildren' in data.properties:
+            data.properties.pop('primChildren')
+        index = 1
+        while index < len(self.paths):
+            index, jump = self.readUsdItem(data, index)
+        data.resolvePaths()
+        return data
 
     def getTableItem(self, sectionName):
         for name, start, size in self.toc:
