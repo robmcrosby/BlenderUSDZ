@@ -53,9 +53,9 @@ class Material:
         self.object = object
         self.material = material
         self.usdMaterial = None
-        self.name = get_material_name(material)
-        self.outputNode = get_output_node(material)
-        self.shaderNode = get_shader_node(self.outputNode)
+        self.name = getBpyMaterialName(material)
+        self.outputNode = getBpyOutputNode(material)
+        self.shaderNode = getBpyShaderNode(self.outputNode)
         self.inputs = {}
         self.bakeImageNode = None
         self.bakeUVMapNode = None
@@ -64,15 +64,15 @@ class Material:
         self.createInputs()
 
     def createInputs(self):
-        diffuse = get_diffuse_color(self.shaderNode)
-        specular = get_specular_color(self.shaderNode)
-        emissive = get_emissive_color(self.shaderNode)
-        clearcoat = get_clearcoat_value(self.shaderNode)
-        clearcoatRoughness = get_clearcoat_roughness_value(self.shaderNode)
-        metallic = get_metallic_value(self.shaderNode)
-        roughness = get_roughness_value(self.shaderNode)
-        opacity = get_opacity_value(self.shaderNode)
-        ior = get_ior_value(self.shaderNode)
+        diffuse = getBpyDiffuseColor(self.shaderNode)
+        specular = getBpySpecularColor(self.shaderNode)
+        emissive = getBpyEmissiveColor(self.shaderNode)
+        clearcoat = getBpyClearcoatValue(self.shaderNode)
+        clearcoatRoughness = getBpyClearcoatRoughnessValue(self.shaderNode)
+        metallic = getBpyMetallicValue(self.shaderNode)
+        roughness = getBpyRoughnessValue(self.shaderNode)
+        opacity = getBpyOpacityValue(self.shaderNode)
+        ior = getBpyIorValue(self.shaderNode)
         useSpecular = 0 if metallic > 0.0 else 1
         self.inputs = {
             'clearcoat':ShaderInput('float', 'clearcoat', clearcoat),
@@ -147,7 +147,7 @@ class Material:
         return False
 
     def setupBakeDiffuse(self, asset):
-        input = get_diffuse_input(self.shaderNode)
+        input = getBpyDiffuseInput(self.shaderNode)
         if self.setupBakeColorInput(input):
             self.inputs['diffuseColor'].image = asset
             self.inputs['diffuseColor'].uvMap = self.object.bakeUVMap
@@ -155,7 +155,7 @@ class Material:
         return False
 
     def setupBakeRoughness(self, asset):
-        input = get_roughness_input(self.shaderNode)
+        input = getBpyRoughnessInput(self.shaderNode)
         if self.setupBakeFloatInput(input):
             self.inputs['roughness'].image = asset
             self.inputs['roughness'].uvMap = self.object.bakeUVMap
@@ -163,7 +163,7 @@ class Material:
         return False
 
     def setupBakeMetallic(self, asset):
-        input = get_metallic_input(self.shaderNode)
+        input = getBpyMetallicInput(self.shaderNode)
         if self.setupBakeFloatInput(input):
             self.inputs['metallic'].image = asset
             self.inputs['metallic'].uvMap = self.object.bakeUVMap
@@ -172,7 +172,7 @@ class Material:
         return False
 
     def setupBakeNormals(self, asset):
-        input = get_normal_input(self.shaderNode)
+        input = getBpyNormalInput(self.shaderNode)
         if input != None and input.is_linked:
             self.inputs['normal'].image = asset
             self.inputs['normal'].uvMap = self.object.bakeUVMap
@@ -339,7 +339,7 @@ class Object:
             mat.setBakeImage(None)
 
     def setupBakeOutputNodes(self):
-        self.bakeUVMap = get_active_uv_map(self.object)
+        self.bakeUVMap = getBpyActiveUvMap(self.object)
         for mat in self.materials:
             mat.setupBakeOutputNodes()
 

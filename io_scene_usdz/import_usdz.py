@@ -222,9 +222,9 @@ def setMaterialInput(matData, mat, tempDir, valName, inputName):
             setShaderInputValue(inputData, mat, inputName)
 
 def setShaderInputValue(data, mat, inputName):
-    outputNode = get_output_node(mat)
-    shaderNode = get_shader_node(outputNode)
-    input = get_node_input(shaderNode, inputName)
+    outputNode = getBpyOutputNode(mat)
+    shaderNode = getBpyShaderNode(outputNode)
+    input = getBpyNodeInput(shaderNode, inputName)
     if input == None:
         print('Input', inputName, 'Not found')
     else:
@@ -242,9 +242,9 @@ def setShaderInputValue(data, mat, inputName):
             print('Value Not Set:', data.printUsda())
 
 def setShaderInputTexture(data, mat, inputName, matData, tempDir):
-    outputNode = get_output_node(mat)
-    shaderNode = get_shader_node(outputNode)
-    input = get_node_input(shaderNode, inputName)
+    outputNode = getBpyOutputNode(mat)
+    shaderNode = getBpyShaderNode(outputNode)
+    input = getBpyNodeInput(shaderNode, inputName)
     if input == None:
         print('Input', inputName, 'Not found')
     else:
