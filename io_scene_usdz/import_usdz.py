@@ -63,8 +63,8 @@ def addObject(context, data, materials = {}, parent = None):
     meshes = getMeshes(data)
     if len(meshes) > 0:
         # Create A Mesh Object
-        obj = create_mesh_object(meshes[0].name, data.name)
-        add_to_collection(obj, context.scene.collection)
+        obj = createBpyMeshObject(meshes[0].name, data.name)
+        addToBpyCollection(obj, context.scene.collection)
         # Create any UV maps
         uvs = meshes[0].getAttributesOfTypeStr('texCoord2f[]')
         uvs += meshes[0].getAttributesOfTypeStr('float2[]')

@@ -281,28 +281,33 @@ class Object:
         self.clearCopies()
         self.armature = self.getArmature()
         if self.armature != None and self.scene.animated:
-            obj, arm = duplicate_skinned_object(self.object, self.armature)
+            obj, arm = duplicateBpySkinnedObject(self.object, self.armature)
             self.objectCopy = obj
-            convert_to_fk(arm, self.armature, self.scene.startFrame, self.scene.endFrame)
+            applyBpyArmatureAnimation(
+                dstArmature = arm,
+                srcArmature = self.armature,
+                startFrame = self.scene.startFrame,
+                endFrame = self.scene.endFrame
+            )
             self.armatueCopy = arm
             self.armatueCopy.data.pose_position = 'REST'
-            add_to_collection(self.armatueCopy, self.scene.collection)
-            add_to_collection(self.objectCopy, self.scene.collection)
+            addToBpyCollection(self.armatueCopy, self.scene.collection)
+            addToBpyCollection(self.objectCopy, self.scene.collection)
         else:
-            self.objectCopy = duplicate_object(self.object)
-            add_to_collection(self.objectCopy, self.scene.collection)
-        apply_object_modifers(self.objectCopy)
+            self.objectCopy = duplicateBpyObject(self.object)
+            addToBpyCollection(self.objectCopy, self.scene.collection)
+        applyBpyObjectModifers(self.objectCopy)
         self.objectCopy.hide_render = False
         self.object.hide_render = True
         if self.uvMapNeeded(self.objectCopy):
-            uv_smart_project(self.objectCopy)
+            applyBpySmartProjection(self.objectCopy)
 
     def clearCopies(self):
         if self.objectCopy != None:
-            delete_object(self.objectCopy)
+            deleteBpyObject(self.objectCopy)
             self.objectCopy = None
         if self.armatueCopy != None:
-            delete_object(self.armatueCopy)
+            deleteBpyObject(self.armatueCopy)
             self.armatueCopy = None
 
     def setAsMesh(self):
@@ -405,7 +410,7 @@ class Object:
             self.bakeToFile('AO', self.scene.exportPath+'/'+asset)
 
     def bakeTextures(self):
-        select_object(self.objectCopy)
+        selectBpyObject(self.objectCopy)
         self.setupBakeOutputNodes()
         if self.scene.bakeTextures:
             self.bakeDiffuseTexture()
@@ -419,13 +424,13 @@ class Object:
     def getTransform(self):
         if self.parent == None:
             scale = self.scene.scale
-            return root_matrix_data(self.object.matrix_world, scale)
-        return matrix_data(self.object.matrix_local)
+            return convertBpyRootMatrix(self.object.matrix_world, scale)
+        return convertBpyMatrix(self.object.matrix_local)
 
     def exportMeshUvs(self, usdMesh, material):
         mesh = self.objectCopy.data
         for layer in mesh.uv_layers:
-            indices, uvs = export_mesh_uvs(mesh, layer, material)
+            indices, uvs = exportBpyMeshUvs(mesh, layer, material)
             name = layer.name.replace('.', '_')
             usdMesh['primvars:'+name] = uvs
             usdMesh['primvars:'+name].valueTypeStr = 'texCoord2f'
@@ -435,7 +440,7 @@ class Object:
     def exportJoints(self, usdMesh, material):
         mesh = self.objectCopy.data
         if self.armatueCopy != None and self.scene.animated:
-            indices, weights, size = export_mesh_weights(self.objectCopy, material)
+            indices, weights, size = exportBpyMeshWeights(self.objectCopy, material)
             usdMesh['primvars:skel:jointIndices'] = indices
             usdMesh['primvars:skel:jointIndices']['elementSize'] = size
             usdMesh['primvars:skel:jointIndices']['interpolation'] = 'vertex'
@@ -449,16 +454,16 @@ class Object:
         if material >= 0:
             name += '_' + self.materials[material].name
         usdMesh = usdObj.createChild(name, ClassType.Mesh)
-        usdMesh['extent'] = object_extents(self.objectCopy, self.scene.scale)
-        usdMesh['faceVertexCounts'] = mesh_vertex_counts(mesh, material)
-        indices, points = export_mesh_vertices(mesh, material)
+        usdMesh['extent'] = exportBpyExtents(self.objectCopy, self.scene.scale)
+        usdMesh['faceVertexCounts'] = exportBpyMeshVertexCounts(mesh, material)
+        indices, points = exportBpyMeshVertices(mesh, material)
         usdMesh['faceVertexIndices'] = indices
         if material >= 0:
             usdMesh['material:binding'] = self.materials[material].usdMaterial
         usdMesh['points'] = points
         usdMesh['points'].valueTypeStr = 'point3f'
         self.exportMeshUvs(usdMesh, material)
-        indices, normals = export_mesh_normals(mesh, material)
+        indices, normals = exportBpyMeshNormals(mesh, material)
         usdMesh['primvars:normals'] = normals
         usdMesh['primvars:normals'].valueTypeStr = 'normal3f'
         usdMesh['primvars:normals']['interpolation'] = 'faceVarying'
@@ -488,9 +493,9 @@ class Object:
     def exportSkeleton(self, usdObj):
         usdSkeleton = None
         if self.armatueCopy != None and self.scene.animated:
-            joints = get_joint_tokens(self.armatueCopy)
-            bind = get_bind_transforms(self.armatueCopy)
-            rest = get_rest_transforms(self.armatueCopy)
+            joints = exportBpyJoints(self.armatueCopy)
+            bind = exportBpyBindTransforms(self.armatueCopy)
+            rest = exportBpyRestTransforms(self.armatueCopy)
             name = self.armature.name.replace('.', '_')
             usdSkeleton = usdObj.createChild(name, ClassType.Skeleton)
             usdSkeleton['joints'] = joints
@@ -511,7 +516,7 @@ class Object:
         usdTranslations = usdAnimation['translations']
         start = self.scene.startFrame
         end = self.scene.endFrame
-        select_object(armature)
+        selectBpyObject(armature)
         armature.data.pose_position = 'POSE'
         for frame in range(start, end+1):
             self.scene.context.scene.frame_set(frame)
@@ -546,7 +551,7 @@ class Object:
         if self.armatueCopy != None and self.scene.animated:
             self.armatueCopy.data.pose_position = 'POSE'
             usdAnimation = usdObj.createChild('Animation', ClassType.SkelAnimation)
-            usdAnimation['joints'] = get_joint_tokens(self.armatueCopy)
+            usdAnimation['joints'] = exportBpyJoints(self.armatueCopy)
             usdAnimation['joints'].addQualifier('uniform')
             self.exportArmatureAnimation(self.armatueCopy, usdAnimation)
         return usdAnimation
@@ -612,10 +617,10 @@ class Scene:
 
     def cleanup(self):
         self.clearObjects()
-        deselect_objects()
-        select_objects(self.bpyObjects)
-        set_active_object(self.bpyActive)
-        delete_collection(self.collection)
+        deselectBpyObjects()
+        selectBpyObjects(self.bpyObjects)
+        setBpyActiveObject(self.bpyActive)
+        deleteBpyCollection(self.collection)
         self.collection = None
 
     def clearObjects(self):
@@ -637,8 +642,8 @@ class Scene:
         self.loadObjects()
 
     def loadObjects(self):
-        delete_collection(self.collection)
-        self.collection = create_collection('TempCollection')
+        deleteBpyCollection(self.collection)
+        self.collection = createBpyCollection('TempCollection')
         for obj in self.bpyObjects:
             if (obj.type == 'MESH'):
                 self.addBpyObject(obj, obj.type)
