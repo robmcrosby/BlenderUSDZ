@@ -64,13 +64,15 @@ class Material:
         self.createInputs()
 
     def createInputs(self):
-        diffuse = getBpyDiffuseColor(self.shaderNode)
+        defDiffuseColor = self.material.diffuse_color[:3]
+        defRoughness = self.material.roughness
+        diffuse = getBpyDiffuseColor(self.shaderNode, defDiffuseColor)
         specular = getBpySpecularColor(self.shaderNode)
         emissive = getBpyEmissiveColor(self.shaderNode)
         clearcoat = getBpyClearcoatValue(self.shaderNode)
         clearcoatRoughness = getBpyClearcoatRoughnessValue(self.shaderNode)
         metallic = getBpyMetallicValue(self.shaderNode)
-        roughness = getBpyRoughnessValue(self.shaderNode)
+        roughness = getBpyRoughnessValue(self.shaderNode, defRoughness)
         opacity = getBpyOpacityValue(self.shaderNode)
         ior = getBpyIorValue(self.shaderNode)
         useSpecular = 0 if metallic > 0.0 else 1

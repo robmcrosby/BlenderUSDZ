@@ -5,9 +5,10 @@ def getBpyMaterialName(material):
     return material.name.replace('.', '_')
 
 def getBpyOutputNode(material):
-    for node in material.node_tree.nodes:
-        if node.type == 'OUTPUT_MATERIAL' and node.is_active_output:
-            return node
+    if material.use_nodes:
+        for node in material.node_tree.nodes:
+            if node.type == 'OUTPUT_MATERIAL' and node.is_active_output:
+                return node
     return None
 
 def getBpyShaderNode(node):
