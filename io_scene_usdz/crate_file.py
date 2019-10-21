@@ -344,7 +344,7 @@ class CrateFile:
 
     def addFieldTimeSamples(self, field, data, vType):
         field = self.getTokenIndex(field)
-        vType = getValueTypeStr(vType)
+        vType = getValueTypeFromStr(vType)
         count = len(data)
         size = 8*(count+2)
         elem = 0
@@ -661,7 +661,7 @@ class CrateFile:
             return (index, jump)
         elif specType == SpecType.Attribute:
             valueTypeStr = properties.pop('typeName').replace('[]', '')
-            valueType = getValueTypeStr(valueTypeStr)
+            valueType = getValueTypeFromStr(valueTypeStr)
             value = properties.pop('default') if 'default' in properties else None
             if valueType == ValueType.asset and type(value) == str:
                 value = value.replace('@', '')

@@ -155,8 +155,7 @@ def getValueType(value):
         return ValueType.Dictionary
     return ValueType.Invalid
 
-
-def getValueTypeStr(typeStr):
+def getValueTypeFromStr(typeStr):
     typeStr = typeStr.replace('[]', '')
     if typeStr in ('float2', 'texCoord2f'):
         return ValueType.vec2f
@@ -164,6 +163,12 @@ def getValueTypeStr(typeStr):
         return ValueType.vec3f
     if typeStr == 'float4':
         return ValueType.vec4f
+    if typeStr in ('double2', 'texCoord2d'):
+        return ValueType.vec2d
+    if typeStr in ('double3', 'color3d', 'normal3d', 'point3d'):
+        return ValueType.vec3d
+    if typeStr == 'double4':
+        return ValueType.vec4d
     return ValueType[typeStr]
 
 def valueToString(value, reduced = False):
