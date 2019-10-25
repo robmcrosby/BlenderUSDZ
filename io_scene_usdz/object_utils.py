@@ -4,33 +4,30 @@ import mathutils
 pi = 3.1415926
 epslon = 0.000001
 
-def deselect_objects():
+def deselectBpyObjects():
     bpy.ops.object.select_all(action='DESELECT')
 
-def select_object(object):
-    deselect_objects()
+def selectBpyObject(object):
+    deselectBpyObjects()
     object.select_set(True)
-    set_active_object(object)
+    setBpyActiveObject(object)
 
-def select_objects(objects):
-    deselect_objects()
+def selectBpyObjects(objects):
+    deselectBpyObjects()
     for obj in objects:
         obj.select_set(True)
 
-def active_object():
-    return bpy.context.view_layer.objects.active
-
-def set_active_object(object):
+def setBpyActiveObject(object):
     bpy.context.view_layer.objects.active = object
 
-def duplicate_object(object):
-    select_object(object)
+def duplicateBpyObject(object):
+    selectBpyObject(object)
     bpy.ops.object.duplicate()
     return bpy.context.active_object
 
-def duplicate_skinned_object(mesh, armature):
-    select_objects([mesh, armature])
-    set_active_object(armature)
+def duplicateBpySkinnedObject(mesh, armature):
+    selectBpyObjects([mesh, armature])
+    setBpyActiveObject(armature)
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.ops.object.duplicate()
     for obj in bpy.context.selected_objects:
@@ -40,57 +37,64 @@ def duplicate_skinned_object(mesh, armature):
             mesh = obj
     return (mesh, armature)
 
-def convert_to_fk(fkArmature, ikArmature, start, end):
-    select_object(fkArmature)
+def applyBpyArmatureAnimation(dstArmature, srcArmature, startFrame, endFrame):
+    selectBpyObject(dstArmature)
     # Select all the pose bones
-    for bone in fkArmature.pose.bones:
+    for bone in dstArmature.pose.bones:
             bone.bone.select = True
     bpy.ops.object.mode_set(mode='POSE')
     # Remove all pose bone contraints
-    for bone in fkArmature.pose.bones:
+    for bone in dstArmature.pose.bones:
         for constraint in bone.constraints:
             bone.constraints.remove(constraint)
     bpy.ops.object.mode_set(mode='EDIT')
     # Remove all non-deforming bones
-    for bone in bpy.data.armatures[fkArmature.data.name].edit_bones:
+    for bone in bpy.data.armatures[dstArmature.data.name].edit_bones:
         if bone.use_deform == False:
-            bpy.data.armatures[fkArmature.data.name].edit_bones.remove(bone)
+            bpy.data.armatures[dstArmature.data.name].edit_bones.remove(bone)
     bpy.ops.object.mode_set(mode='POSE')
     # Create copy transform constraints to the ik rig
     for bone in bpy.context.selected_pose_bones:
         bone.rotation_mode = 'QUATERNION'
         copyTransforms = bone.constraints.new('COPY_TRANSFORMS')
-        copyTransforms.target = ikArmature
+        copyTransforms.target = srcArmature
         copyTransforms.subtarget = bone.name
     bpy.ops.object.mode_set(mode='OBJECT')
-    bpy.ops.nla.bake(frame_start=start, frame_end=end, only_selected=True, visual_keying=True, clear_constraints=True, use_current_action=True, bake_types={'POSE'})
+    bpy.ops.nla.bake(
+        frame_start = startFrame,
+        frame_end = endFrame,
+        only_selected = True,
+        visual_keying = True,
+        clear_constraints = True,
+        use_current_action = True,
+        bake_types = {'POSE'}
+    )
 
-def apply_object_modifers(object):
+def applyBpyObjectModifers(object):
     if object != None:
-        select_object(object)
+        selectBpyObject(object)
         bpy.ops.object.make_single_user()
         bpy.ops.object.convert(target='MESH')
 
-def create_mesh_object(meshName, objName):
+def createBpyMeshObject(meshName, objName):
     mesh = bpy.data.meshes.new(meshName)
     obj = bpy.data.objects.new(objName, mesh)
     return obj
 
-def delete_object(object):
-    select_object(object)
+def deleteBpyObject(object):
+    selectBpyObject(object)
     bpy.ops.object.delete()
 
-def matrix_data(matrix):
+def convertBpyMatrix(matrix):
     matrix = mathutils.Matrix.transposed(matrix)
     return (matrix[0][:], matrix[1][:], matrix[2][:], matrix[3][:])
 
-def root_matrix_data(matrix, scale):
+def convertBpyRootMatrix(matrix, scale):
     scale = mathutils.Matrix.Scale(scale, 4)
     rotation = mathutils.Matrix.Rotation(-pi/2.0, 4, 'X')
-    return matrix_data(rotation @ scale @ matrix)
+    return convertBpyMatrix(rotation @ scale @ matrix)
 
-
-def object_extents(object, scale = 1.0):
+def exportBpyExtents(object, scale = 1.0):
     low = object.bound_box[0][:]
     high = object.bound_box[0][:]
     for v in object.bound_box:
@@ -100,11 +104,11 @@ def object_extents(object, scale = 1.0):
     high = tuple(i*scale for i in high)
     return [low, high]
 
-def uv_smart_project(mesh):
-    select_object(mesh)
+def applyBpySmartProjection(mesh):
+    selectBpyObject(mesh)
     bpy.ops.uv.smart_project()
 
-def mesh_vertex_counts(mesh, material = -1):
+def exportBpyMeshVertexCounts(mesh, material = -1):
     counts = []
     if material == -1:
         counts = [len(poly.vertices) for poly in mesh.polygons]
@@ -114,25 +118,25 @@ def mesh_vertex_counts(mesh, material = -1):
                 counts.append(len(poly.vertices))
     return counts
 
-def export_mesh_vertices(mesh, material = -1):
+def exportBpyMeshVertices(mesh, material = -1):
     indices = []
-    points = []
+    vertices = []
     if material == -1:
         for poly in mesh.polygons:
             indices += [i for i in poly.vertices]
-        points = [v.co[:] for v in mesh.vertices]
+        vertices = [v.co[:] for v in mesh.vertices]
     else:
         map = {}
         for poly in mesh.polygons:
             if poly.material_index == material:
                 for i in poly.vertices:
                     if not i in map:
-                        map[i] = len(points)
-                        points.append(mesh.vertices[i].co[:])
+                        map[i] = len(vertices)
+                        vertices.append(mesh.vertices[i].co[:])
                     indices.append(map[i])
-    return (indices, points)
+    return (indices, vertices)
 
-def export_mesh_normals(mesh, material = -1):
+def exportBpyMeshNormals(mesh, material = -1):
     indices = []
     normals = []
     normalMap = {}
@@ -159,7 +163,7 @@ def export_mesh_normals(mesh, material = -1):
                     normalMap[normal] = normalIndex
     return (indices, normals)
 
-def export_mesh_uvs(mesh, layer, material = -1):
+def exportBpyMeshUvs(mesh, layer, material = -1):
     indices = []
     uvs = []
     uvMap = {}
@@ -178,7 +182,7 @@ def export_mesh_uvs(mesh, layer, material = -1):
         index += len(poly.vertices)
     return (indices, uvs)
 
-def get_weights(index, groups):
+def exportBpyVertexWeights(index, groups):
     indices = []
     weights = []
     for group in groups:
@@ -191,25 +195,27 @@ def get_weights(index, groups):
             pass
     return (indices, weights)
 
-def get_mesh_indices(obj, material = -1):
+def exportBpyMeshIndices(obj, material = -1):
     if material == -1:
         return [i for i in range(0, len(obj.data.vertices))]
     indices = []
+    indexSet = set()
     for poly in obj.data.polygons:
         if poly.material_index == material:
             for i in poly.vertices:
-                if not i in indices:
+                if not i in indexSet:
+                    indexSet.add(i)
                     indices.append(i)
     return indices
 
-def export_mesh_weights(obj, material = -1):
+def exportBpyMeshWeights(obj, material = -1):
     groups = []
     weights = []
     size = 0
-    indices = get_mesh_indices(obj, material)
+    indices = exportBpyMeshIndices(obj, material)
     items = []
     for index in indices:
-        item = get_weights(index, obj.vertex_groups)
+        item = exportBpyVertexWeights(index, obj.vertex_groups)
         size = max(size, len(item[0]))
         items.append(item)
     for g, w in items:
@@ -217,40 +223,40 @@ def export_mesh_weights(obj, material = -1):
         weights += w + (size-len(w))*[0.0]
     return (groups, weights, size)
 
-def create_collection(name):
+def createBpyCollection(name):
     collection = bpy.data.collections.new(name)
     bpy.context.scene.collection.children.link(collection)
     return collection
 
-def delete_collection(collection):
+def deleteBpyCollection(collection):
     if collection != None:
         bpy.data.collections.remove(collection)
 
-def add_to_collection(object, collection = None):
+def addToBpyCollection(object, collection = None):
     if object != None and collection != None:
         if collection == None:
             collection = bpy.context.scene.collection
         collection.objects.link(object)
 
-def get_joint_token(bone):
+def exportBpyBoneJoint(bone):
     name = bone.name.replace('.', '_')
     if bone.parent != None:
-        return get_joint_token(bone.parent) + '/' + name
+        return exportBpyBoneJoint(bone.parent) + '/' + name
     return name
 
-def get_joint_tokens(armature):
-    return [get_joint_token(bone) for bone in armature.data.bones]
+def exportBpyJoints(armature):
+    return [exportBpyBoneJoint(bone) for bone in armature.data.bones]
 
-def get_bind_transforms(armature):
+def exportBpyBindTransforms(armature):
     transforms = []
     for bone in armature.data.bones:
         matrix = bone.matrix_local
-        transforms.append(matrix_data(matrix))
+        transforms.append(convertBpyMatrix(matrix))
     return transforms
 
-def get_rest_transforms(armature):
+def exportBpyRestTransforms(armature):
     transforms = []
     for bone in armature.data.bones:
         matrix = bone.matrix_local
-        transforms.append(matrix_data(matrix))
+        transforms.append(convertBpyMatrix(matrix))
     return transforms

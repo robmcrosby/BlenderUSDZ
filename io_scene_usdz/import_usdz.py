@@ -63,8 +63,8 @@ def addObject(context, data, materials = {}, parent = None):
     meshes = getMeshes(data)
     if len(meshes) > 0:
         # Create A Mesh Object
-        obj = create_mesh_object(meshes[0].name, data.name)
-        add_to_collection(obj, context.scene.collection)
+        obj = createBpyMeshObject(meshes[0].name, data.name)
+        addToBpyCollection(obj, context.scene.collection)
         # Create any UV maps
         uvs = meshes[0].getAttributesOfTypeStr('texCoord2f[]')
         uvs += meshes[0].getAttributesOfTypeStr('float2[]')
@@ -222,9 +222,9 @@ def setMaterialInput(matData, mat, tempDir, valName, inputName):
             setShaderInputValue(inputData, mat, inputName)
 
 def setShaderInputValue(data, mat, inputName):
-    outputNode = get_output_node(mat)
-    shaderNode = get_shader_node(outputNode)
-    input = get_node_input(shaderNode, inputName)
+    outputNode = getBpyOutputNode(mat)
+    shaderNode = getBpyShaderNode(outputNode)
+    input = getBpyNodeInput(shaderNode, inputName)
     if input == None:
         print('Input', inputName, 'Not found')
     else:
@@ -242,9 +242,9 @@ def setShaderInputValue(data, mat, inputName):
             print('Value Not Set:', data.printUsda())
 
 def setShaderInputTexture(data, mat, inputName, matData, tempDir):
-    outputNode = get_output_node(mat)
-    shaderNode = get_shader_node(outputNode)
-    input = get_node_input(shaderNode, inputName)
+    outputNode = getBpyOutputNode(mat)
+    shaderNode = getBpyShaderNode(outputNode)
+    input = getBpyNodeInput(shaderNode, inputName)
     if input == None:
         print('Input', inputName, 'Not found')
     else:
