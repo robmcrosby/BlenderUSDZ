@@ -8,6 +8,7 @@ from io_scene_usdz.value_types import *
 
 class ShaderInput:
     """Shader Input Information"""
+
     def __init__(self, type, name, default):
         self.type = type
         self.name = name
@@ -596,6 +597,7 @@ class Object:
 
 class Scene:
     """Container for Objects"""
+
     def __init__(self):
         self.context = None
         self.objects = []
@@ -615,6 +617,7 @@ class Scene:
         self.endFrame = 0
         self.curFrame = 0
         self.fps = 30
+        self.customLayerData = {'creator':'Blender USDZ Plugin'}
         self.collection = None
 
     def cleanup(self):
@@ -686,7 +689,7 @@ class Scene:
             data['startTimeCode'] = float(self.startFrame)
             data['endTimeCode'] = float(self.endFrame)
             data['timeCodesPerSecond'] = float(self.fps)
-        data['customLayerData'] = {'creator':'Blender USDZ Plugin'}
+        data['customLayerData'] = self.customLayerData
         for obj in self.objects:
             obj.exportUsd(data)
         return data
