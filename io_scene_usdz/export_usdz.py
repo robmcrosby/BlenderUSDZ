@@ -15,10 +15,21 @@ from io_scene_usdz.scene_data import *
 from io_scene_usdz.value_types import *
 from io_scene_usdz.crate_file import *
 
-def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
-                bakeTextures = False, bakeAO = False, samples = 64,
-                scale = 1.0, animated = False, useConverter = False,
-                bakeSize = 1024):
+def export_usdz(context, filePath = '', exportMaterials = True,
+                bakeTextures = False, bakeTextureSize = 1024, bakeAO = False,
+                bakeAOSamples = 64, exportAnimations = False,
+                globalScale = 1.0, useConverter = False,
+                ):
+    dirPath, fileName = os.path.split(filePath)
+    fileName, fileType = fileName.split('.')
+    if fileType == 'usda':
+        print('Export Usda')
+    elif fileType == 'usdc':
+        print('Export Usdc')
+    else:
+        print('Export Usdz')
+
+    """
     filePath, fileName = os.path.split(filepath)
     fileName, fileType = fileName.split('.')
     usdaFile = filePath+'/'+fileName+'.usda'
@@ -70,6 +81,7 @@ def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
     if tempPath != None:
         # Delete temp files
         shutil.rmtree(tempPath)
+    """
     return {'FINISHED'}
 
 
