@@ -15,62 +15,91 @@ from io_scene_usdz.scene_data import *
 from io_scene_usdz.value_types import *
 from io_scene_usdz.crate_file import *
 
-def export_usdz(context, filepath = '', materials = True, keepUSDA = False,
-                bakeTextures = False, bakeAO = False, samples = 64,
-                scale = 1.0, animated = False, useConverter = False,
-                bakeSize = 1024):
-    filePath, fileName = os.path.split(filepath)
-    fileName, fileType = fileName.split('.')
-    usdaFile = filePath+'/'+fileName+'.usda'
-    usdcFile = filePath+'/'+fileName+'.usdc'
-    usdzFile = filePath+'/'+fileName+'.usdz'
-    tempPath = None
-    if not keepUSDA:
-        tempPath = tempfile.mkdtemp()
-        filePath = tempPath
-        usdaFile = tempPath+'/'+fileName+'.usda'
-        usdcFile = tempPath+'/'+fileName+'.usdc'
+def export_usdz(context, filepath = '', exportMaterials = True,
+                bakeTextures = False, bakeTextureSize = 1024, bakeAO = False,
+                bakeAOSamples = 64, exportAnimations = False,
+                globalScale = 1.0, useConverter = False,
+                ):
+    exportDir, fileName = os.path.split(filepath)
+    fileName, fileType = fileName.split('.')[:2]
+    filePath = exportDir + '/' + fileName + '.' + fileType
+    tempDir = None
+    if not fileType in ('usda', 'usdc'):
+        tempDir = tempfile.mkdtemp()
+        exportDir = tempDir
+    usdData, texturePaths = exportUsdData(context = context,
+                                          exportMaterials = exportMaterials,
+                                          exportDir = exportDir,
+                                          bakeTextures = bakeTextures,
+                                          bakeTextureSize = bakeTextureSize,
+                                          bakeAO = bakeAO,
+                                          bakeAOSamples = bakeAOSamples,
+                                          exportAnimations = exportAnimations,
+                                          globalScale = globalScale)
+    if fileType == 'usda':
+        usdData.writeUsda(filePath)
+    elif fileType == 'usdc':
+        writeCrateFile(filePath, usdData)
+    else:
+        if useConverter:
+            # Crate text usda file and run the USDZ Converter Tool
+            usdaPath = tempDir + '/' + fileName + '.usda'
+            usdData.writeUsda(usdaPath)
+            convertToUsdz(filePath, usdaPath)
+        else:
+            # Create Binary and Manually zip to a usdz file
+            usdcPath = tempDir + '/' + fileName + '.usdc'
+            writeCrateFile(usdcPath, usdData)
+            writeUsdzFile(filePath, usdcPath, texturePaths)
+    if tempDir != None:
+        # Cleanup the Temp Directory
+        shutil.rmtree(tempDir)
+    return {'FINISHED'}
 
+
+def exportUsdData(context, exportMaterials, exportDir, bakeTextures,
+                  bakeTextureSize, bakeAO, bakeAOSamples, exportAnimations,
+                  globalScale):
     scene = Scene()
-    scene.exportMaterials = materials
-    scene.exportPath = filePath
-    scene.bakeAO = bakeAO
+    scene.exportMaterials = exportMaterials
+    scene.exportPath = exportDir
     scene.bakeTextures = bakeTextures
-    scene.bakeSamples = samples
-    scene.bakeSize = bakeSize
-    scene.scale = scale
-    scene.animated = animated
+    scene.bakeSize = bakeTextureSize
+    scene.bakeAO = bakeAO
+    scene.bakeSamples = bakeAOSamples
+    scene.animated = exportAnimations
+    scene.scale = globalScale
     scene.loadContext(context)
     # Export image files
-    if bakeTextures or bakeAO:
+    if scene.bakeTextures:
         scene.exportBakedTextures()
     # Export the USD Data
     usdData = scene.exportUsd()
+    texturePaths = scene.textureFilePaths
     # Cleanup the scene
     scene.cleanup()
-    if useConverter:
-        # Crate text usda file and run the USDZ Converter Tool
-        usdData.writeUsda(usdaFile)
-        args = ['xcrun', 'usdz_converter', usdaFile, usdzFile]
-        args += ['-v']
-        subprocess.run(args)
-    else:
-        if keepUSDA:
-            usdData.writeUsda(usdaFile)
-        # Create Binary and Manually zip to a usdz file
-        crateFile = open(usdcFile, 'wb')
-        crate = CrateFile(crateFile)
-        crate.writeUsd(usdData)
-        crateFile.close()
-        usdz = UsdzFile(usdzFile)
-        usdz.addFile(usdcFile)
-        for textureFile in scene.textureFilePaths:
-            usdz.addFile(textureFile)
-        usdz.close()
-    if tempPath != None:
-        # Delete temp files
-        shutil.rmtree(tempPath)
-    return {'FINISHED'}
+    return usdData, texturePaths
+
+
+def convertToUsdz(filePath, usdaPath):
+    args = ['xcrun', 'usdz_converter', usdaPath, filePath]
+    args += ['-v']
+    subprocess.run(args)
+
+
+def writeUsdzFile(filePath, usdcPath, texturePaths):
+    usdz = UsdzFile(filePath)
+    usdz.addFile(usdcPath)
+    for texturePath in texturePaths:
+        usdz.addFile(texturePath)
+    usdz.close()
+
+
+def writeCrateFile(filePath, usdData):
+    crateFile = open(filePath, 'wb')
+    crate = CrateFile(crateFile)
+    crate.writeUsd(usdData)
+    crateFile.close()
 
 
 def readFileContents(filePath):

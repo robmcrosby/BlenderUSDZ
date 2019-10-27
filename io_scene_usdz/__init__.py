@@ -27,13 +27,14 @@ from bpy_extras.io_utils import (
 
 class ImportUSDZ(bpy.types.Operator, ImportHelper):
     """Import a USDZ File"""
-    bl_idname       = "import.usdz"
-    bl_label        = "Import USDZ File"
-    bl_options      = {'PRESET', 'UNDO'}
 
-    filename_ext    = ".usdz"
+    bl_idname = "import.usdz"
+    bl_label = "Import USDZ File"
+    bl_options = {'PRESET', 'UNDO'}
+
+    filename_ext = ""
     filter_glob: StringProperty(
-            default="*.usdz;*.usda",
+            default="*.usdz;*.usda;*.usdc",
             options={'HIDDEN'},
             )
     materials = BoolProperty(
@@ -51,13 +52,13 @@ class ImportUSDZ(bpy.types.Operator, ImportHelper):
 class ExportUSDZ(bpy.types.Operator, ExportHelper):
     """Save a USDZ File"""
 
-    bl_idname       = "export.usdz"
-    bl_label        = "Export USDZ File"
-    bl_options      = {'PRESET'}
+    bl_idname = "export.usdz"
+    bl_label = "Export USDZ File"
+    bl_options = {'PRESET'}
 
-    filename_ext    = ".usdz"
+    filename_ext = ""
     filter_glob: StringProperty(
-            default="*.usdz;*.usda",
+            default="*.usdz;*.usda;*.usdc",
             options={'HIDDEN'},
             )
     useConverter = BoolProperty(
@@ -65,19 +66,14 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
         description="Use Apple's Converter Tool to create the Usdz file",
         default=False,
         )
-    materials = BoolProperty(
+    exportMaterials = BoolProperty(
         name="Export Materials",
         description="Export Materials from Objects",
         default=True,
         )
-    keepUSDA = BoolProperty(
-        name="Keep USDA",
-        description="Keep generated USDA and image files",
-        default=False,
-        )
-    animated = BoolProperty(
+    exportAnimations = BoolProperty(
         name="Export Animations",
-        description="Export Ridgid Body Animations",
+        description="Export Animations",
         default=False,
         )
     bakeTextures = BoolProperty(
@@ -90,21 +86,21 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
         description="Bake Ambiant Occlusion Texture",
         default=False,
         )
-    samples = IntProperty(
-        name="Samples",
+    bakeAOSamples = IntProperty(
+        name="AO Samples",
         description="Number of Samples for Ambiant Occlusion",
         min=1,
         max=1000,
         default= 64,
         )
-    bakeSize = IntProperty(
+    bakeTextureSize = IntProperty(
         name="Bake Image Size",
         description="Default Size of any Baked Images",
         min=16,
         max=4096,
         default= 1024,
         )
-    scale = FloatProperty(
+    globalScale = FloatProperty(
         name="Scale",
         min=0.01,
         max=1000.0,
@@ -149,6 +145,7 @@ def unregister():
 
     for cls in classes:
         bpy.utils.unregister_class(cls)
+
 
 if __name__ == "__main__":
     register()
