@@ -15,13 +15,14 @@ from io_scene_usdz.scene_data import *
 from io_scene_usdz.value_types import *
 from io_scene_usdz.crate_file import *
 
-def export_usdz(context, filePath = '', exportMaterials = True,
+def export_usdz(context, filepath = '', exportMaterials = True,
                 bakeTextures = False, bakeTextureSize = 1024, bakeAO = False,
                 bakeAOSamples = 64, exportAnimations = False,
                 globalScale = 1.0, useConverter = False,
                 ):
-    exportDir, fileName = os.path.split(filePath)
-    fileName, fileType = fileName.split('.')
+    exportDir, fileName = os.path.split(filepath)
+    fileName, fileType = fileName.split('.')[:2]
+    filePath = exportDir + '/' + fileName + '.' + fileType
     tempDir = None
     if not fileType in ('usda', 'usdc'):
         tempDir = tempfile.mkdtemp()
