@@ -673,6 +673,8 @@ class CrateFile:
                 att.addQualifier('uniform')
             if 'custom' in properties and properties.pop('custom') == 1:
                 att.addQualifier('custom')
+            if 'timeSamples' in properties:
+                att.frames = properties.pop('timeSamples')
             att.properties = properties
         elif specType == SpecType.Relationship:
             rel = parent.createAttribute(name)
@@ -885,6 +887,37 @@ class CrateFile:
             return [self.readMatrix(size) for i in range(count)]
         return self.readMatrix(size)
 
+    def readTimeFrames(self, ref):
+        self.file.seek(ref)
+        self.file.seek(ref + readInt(self.file, 8))
+        ref = readInt(self.file, 6) - 8
+        vType = ValueType(readInt(self.file, 1))
+        self.file.seek(ref + 8)
+        if vType == ValueType.DoubleVector:
+            return self.readDoubleVector(readInt(self.file, 8))
+        print('UnHandled frames value type:', vType.name)
+        return []
+
+    def readSampleReps(self, ref):
+        self.file.seek(ref)
+        self.file.seek(ref + readInt(self.file, 8) + 8)
+        count = readInt(self.file, readInt(self.file, 8))
+        reps = []
+        for i in range(count):
+            # Read the refrence and value type
+            payload = readInt(self.file, 6)
+            vType = readInt(self.file, 1)
+            rep = (payload & PAYLOAD_MASK) | (vType << 48)
+            # An elem value above zero indicates an array
+            if readInt(self.file, 1) > 0:
+                rep |= ARRAY_BIT
+            reps.append(rep)
+        return reps
+
+    def readTimeSamples(self, ref):
+        frames = self.readTimeFrames(ref)
+        reps = self.readSampleReps(ref)
+        return [(f, self.getRepValue(r)) for f, r in zip(frames, reps)]
 
     def getRepValue(self, rep):
         rep = decodeRep(rep)
@@ -975,6 +1008,8 @@ class CrateFile:
             return self.decodeRepMatrix(rep, 4)
         elif rep['type'] == ValueType.Dictionary:
             return self.readDictionary(rep['payload'])
+        elif rep['type'] == ValueType.TimeSamples:
+            return self.readTimeSamples(rep['payload'])
         #else:
         #    print('UnHandled Type:', rep)
         return rep
