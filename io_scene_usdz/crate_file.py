@@ -924,7 +924,8 @@ class CrateFile:
         if rep['type'] == ValueType.token:
             if not rep['inline']:
                 self.file.seek(rep['payload'])
-                numTokens = readInt(self.file, 4)
+                numBytes = 4 if self.version < 7 else 8
+                numTokens = readInt(self.file, numBytes)
                 tokens = []
                 for i in range(numTokens):
                     token = readInt(self.file, 4)
