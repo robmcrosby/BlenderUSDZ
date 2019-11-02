@@ -40,11 +40,12 @@ if not os.path.exists(exportsDir):
 
 #filepath = exportsDir + 'teapot.usdz'
 #filepath = exportsDir + 'testCopy.usdz'
-filepath = exportsDir + 'testTex.usdz'
+filepath = exportsDir + 'test.usdz'
 
 # Call the Import Function
 import_usdz(
     context = bpy.context, 
     filepath = filepath,
     materials = True,
+    animations = True,
     )

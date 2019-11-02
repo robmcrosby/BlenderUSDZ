@@ -13,7 +13,7 @@ from io_scene_usdz.material_utils import *
 from io_scene_usdz.crate_file import *
 
 
-def import_usdz(context, filepath = '', materials = True):
+def import_usdz(context, filepath = '', materials = True, animations = True):
     filePath, fileName = os.path.split(filepath)
     fileName, fileType = fileName.split('.')
     if fileType == 'usdz':
@@ -34,7 +34,7 @@ def import_usdz(context, filepath = '', materials = True):
                 file.close()
                 #print(usdData.toString(debug = True))
                 tempDir = usdcFile[:usdcFile.rfind('/')+1]
-                importData(context, usdData, tempDir, materials)
+                importData(context, usdData, tempDir, materials, animations)
             else:
                 print('No usdc file found')
             # Cleanup Temp Files
@@ -52,7 +52,14 @@ def findUsdz(dirpath):
     return ''
 
 
-def importData(context, usdData, tempDir, materials):
+def importData(context, usdData, tempDir, materials, animations):
+    if animations:
+        if 'startTimeCode' in usdData.properties:
+            context.scene.frame_start = usdData['startTimeCode']
+        if 'endTimeCode' in usdData.properties:
+            context.scene.frame_end = usdData['endTimeCode']
+        if 'timeCodesPerSecond' in usdData.properties:
+            context.scene.render.fps = usdData['timeCodesPerSecond']
     materials = importMaterials(usdData, tempDir) if materials else {}
     objects = getObjects(usdData)
     for object in objects:

@@ -42,6 +42,11 @@ class ImportUSDZ(bpy.types.Operator, ImportHelper):
         description="Import Materials and textures",
         default=True,
         )
+    animations = BoolProperty(
+        name="Import Animations",
+        description="Import Animations",
+        default=True,
+        )
 
     def execute(self, context):
         from . import import_usdz

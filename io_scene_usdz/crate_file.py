@@ -846,6 +846,10 @@ class CrateFile:
                     dic[key] = self.getStringStr(readInt(self.file, 4))
                 elif vt == ValueType.bool:
                     dic[key] = readInt(self.file, 4) > 0
+                elif vt == ValueType.float:
+                    dic[key] = struct.unpack('<f', self.file.read(4))[0]
+                elif vt == ValueType.double:
+                    dic[key] = struct.unpack('<d', self.file.read(8))[0]
                 #else:
                 #    print('Unhandled Dictionary Type:', vt.name)
             self.file.seek(loc + itemSize)
@@ -982,7 +986,7 @@ class CrateFile:
             return struct.unpack('<f', self.file.read(4))
         elif rep['type'] == ValueType.double:
             if rep['inline']:
-                return struct.unpack('<d', rep['payload'].to_bytes(8, byteorder='little'))[0]
+                return struct.unpack('<f', rep['payload'].to_bytes(4, byteorder='little'))[0]
             self.file.seek(rep['payload'])
             if rep['array']:
                 countBytes = 4 if self.version < 7 else 8
