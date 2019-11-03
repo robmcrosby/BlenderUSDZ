@@ -52,8 +52,8 @@ def findUsdz(dirpath):
     return ''
 
 
-def importData(context, usdData, tempDir, materials, animations):
-    if animations:
+def importData(context, usdData, tempDir, materials, animated):
+    if animated:
         if 'startTimeCode' in usdData.properties:
             context.scene.frame_start = usdData['startTimeCode']
         if 'endTimeCode' in usdData.properties:
@@ -63,10 +63,44 @@ def importData(context, usdData, tempDir, materials, animations):
     materials = importMaterials(usdData, tempDir) if materials else {}
     objects = getObjects(usdData)
     for object in objects:
-        addObject(context, object, materials)
+        addObject(context, object, materials, animated = animated)
+
+def applyRidgidTransforms(data, obj):
+    matrix = mathutils.Matrix()
+    if 'xformOpOrder' in data:
+        for opName in data['xformOpOrder'].value:
+            if opName == 'xformOp:transform':
+                m = mathutils.Matrix(data[opName].value)
+                m.transpose()
+                matrix = matrix @ m
+            elif opName == 'xformOp:transform:transforms':
+                m = mathutils.Matrix(data[opName].frames[0][1])
+                m.transpose()
+                matrix = matrix @ m
+    if obj.parent == None:
+        matrix = matrix @ mathutils.Matrix.Rotation(pi/2.0, 4, 'X')
+    obj.matrix_local = matrix
+
+def applyRidgidAnimation(context, data, obj):
+    transforms = data['xformOp:transform:transforms']
+    if transforms != None:
+        selectBpyObject(obj)
+        for frame, matrix in transforms.frames:
+            context.scene.frame_set(frame)
+            matrix = mathutils.Matrix(matrix)
+            matrix.transpose()
+            if obj.parent == None:
+                matrix = matrix @ mathutils.Matrix.Rotation(pi/2.0, 4, 'X')
+            obj.matrix_local = matrix
+            bpy.ops.anim.keyframe_insert_menu(type='LocRotScale')
+        context.scene.frame_set(context.scene.frame_start)
+        deselectBpyObjects()
+    else:
+        applyRidgidTransforms(data, obj)
 
 
-def addObject(context, data, materials = {}, parent = None):
+
+def addObject(context, data, materials = {}, parent = None, animated = False):
     meshes = getMeshes(data)
     if len(meshes) > 0:
         # Create A Mesh Object
@@ -85,21 +119,15 @@ def addObject(context, data, materials = {}, parent = None):
         # Set the Parent
         if parent != None:
             obj.parent = parent
-        # Apply any Transforms
-        matrix = mathutils.Matrix()
-        if 'xformOpOrder' in data:
-            for opName in data['xformOpOrder'].value:
-                if opName == 'xformOp:transform':
-                    m = mathutils.Matrix(data[opName].value)
-                    m.transpose()
-                    matrix = matrix @ m
-        if parent == None:
-            matrix = matrix @ mathutils.Matrix.Rotation(pi/2.0, 4, 'X')
-        obj.matrix_local = matrix
+        # Apply Object Transforms
+        if animated:
+            applyRidgidAnimation(context, data, obj)
+        else:
+            applyRidgidTransforms(data, obj)
         # Add the Children
         children = getObjects(data)
         for child in children:
-            addObject(context, child, materials, obj)
+            addObject(context, child, materials, obj, animated)
 
 
 def addMesh(obj, data, uvs, materials):

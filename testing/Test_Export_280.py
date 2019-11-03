@@ -41,7 +41,7 @@ if not os.path.exists(exportsDir):
 # Call the Export Function
 export_usdz(
     context = bpy.context, 
-    filePath = exportsDir + 'test.usdz',
+    filepath = exportsDir + 'test.usdz',
     exportMaterials = True,
     bakeTextures = True,
     bakeTextureSize = 512,
