@@ -99,31 +99,61 @@ def applyRidgidAnimation(context, data, obj):
         applyRidgidTransforms(data, obj)
 
 
+def addBone(arm, joint, pose):
+    stack = joint.split('/')
+    bone = arm.data.edit_bones.new(stack[-1])
+    bone.head = (0.0, 0.0, 0.0)
+    bone.tail = (0.0, 1.0, 0.0)
+    matrix = mathutils.Matrix(pose)
+    matrix.transpose()
+    bone.transform(matrix)
+    if len(stack) > 1:
+        bone.parent = arm.data.edit_bones[stack[-2]]
+
+def addBones(arm, skeleton):
+    joints = skeleton['joints'].value
+    restPose = skeleton['restTransforms'].value
+    selectBpyObject(arm)
+    bpy.ops.object.mode_set(mode='EDIT',toggle=True)
+    for joint, pose in zip(joints, restPose):
+        addBone(arm, joint, pose)
+    bpy.ops.object.mode_set(mode='OBJECT',toggle=True)
+    deselectBpyObjects()
+
+
+def addArmatureAnimation(arm, animation):
+    joints = animation['joints'].value
+    locations = animation['translations'].frames
+    rotations = animation['rotations'].frames
+    scales = animation['scales'].frames
+    selectBpyObject(arm)
+    bpy.ops.object.mode_set(mode='POSE',toggle=True)
+    for i, joint in enumerate(joints):
+        joint = joint.split('/')[-1]
+        bone = arm.pose.bones[joint]
+        for frame, location in locations:
+            bone.location = location[i]
+            bone.keyframe_insert(data_path = 'location', frame = frame, group = animation.name)
+        for frame, rotation in rotations:
+            bone.rotation_quaternion = rotation[i][3:] + rotation[i][:3]
+            bone.keyframe_insert(data_path = 'rotation_quaternion', frame = frame, group = animation.name)
+        for frame, scale in scales:
+            bone.scale = scale[i]
+            bone.keyframe_insert(data_path = 'scale', frame = frame, group = animation.name)
+    bpy.ops.object.mode_set(mode='OBJECT',toggle=True)
+    deselectBpyObjects()
+
+
 def addArmature(context, data, animated):
     skeleton = data.getChildOfType(ClassType.Skeleton)
     if skeleton != None:
-        #print('Add Skeleton:', skeleton.name)
-        joints = skeleton['joints'].value
-        restPose = skeleton['restTransforms'].value
         arm = createBpyArmatureObject(skeleton.name, skeleton.name)
         addToBpyCollection(arm, context.scene.collection)
-        selectBpyObject(arm)
-        bpy.ops.object.mode_set(mode='EDIT',toggle=True)
-        for joint, pose in zip(joints, restPose):
-            joint = joint.split('/')
-            bone = arm.data.edit_bones.new(joint[-1])
-            bone.head = (0.0, 0.0, 0.0)
-            bone.tail = (0.0, 1.0, 0.0)
-            matrix = mathutils.Matrix(pose)
-            matrix.transpose()
-            bone.transform(matrix)
-            if len(joint) > 1:
-                bone.parent = arm.data.edit_bones[joint[-2]]
-        bpy.ops.object.mode_set(mode='OBJECT',toggle=True)
-        deselectBpyObjects()
-        #animations = data.getChildrenOfType(ClassType.SkelAnimation)
-        #for animation in animations:
-        #    print('Add Animation:', animation.name)
+        addBones(arm, skeleton)
+        if animated:
+            animation = data.getChildOfType(ClassType.SkelAnimation)
+            if animation != None:
+                addArmatureAnimation(arm, animation)
         return arm
     return None
 
