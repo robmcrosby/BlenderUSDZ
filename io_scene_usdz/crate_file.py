@@ -997,13 +997,13 @@ class CrateFile:
             return self.decodeRepFloatVector(rep, 2)
         elif rep['type'] == ValueType.vec3f:
             return self.decodeRepFloatVector(rep, 3)
-        elif rep['type'] == ValueType.vec4f:
+        elif rep['type'] in (ValueType.vec4f, ValueType.quatf):
             return self.decodeRepFloatVector(rep, 4)
         elif rep['type'] == ValueType.vec2d:
             return self.decodeRepDoubleVector(rep, 2)
         elif rep['type'] == ValueType.vec3d:
             return self.decodeRepDoubleVector(rep, 3)
-        elif rep['type'] == ValueType.vec4d:
+        elif rep['type'] in (ValueType.vec4d, ValueType.quatd):
             return self.decodeRepDoubleVector(rep, 4)
         elif rep['type'] == ValueType.matrix2d:
             return self.decodeRepMatrix(rep, 2)

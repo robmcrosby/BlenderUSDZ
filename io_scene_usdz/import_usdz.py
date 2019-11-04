@@ -32,7 +32,7 @@ def import_usdz(context, filepath = '', materials = True, animations = True):
                 crate = CrateFile(file)
                 usdData = crate.readUsd()
                 file.close()
-                #print(usdData.toString(debug = True))
+                print(usdData.toString(debug = True))
                 tempDir = usdcFile[:usdcFile.rfind('/')+1]
                 importData(context, usdData, tempDir, materials, animations)
             else:
@@ -99,10 +99,40 @@ def applyRidgidAnimation(context, data, obj):
         applyRidgidTransforms(data, obj)
 
 
+def addArmature(context, data, animated):
+    skeleton = data.getChildOfType(ClassType.Skeleton)
+    if skeleton != None:
+        #print('Add Skeleton:', skeleton.name)
+        joints = skeleton['joints'].value
+        restPose = skeleton['restTransforms'].value
+        arm = createBpyArmatureObject(skeleton.name, skeleton.name)
+        addToBpyCollection(arm, context.scene.collection)
+        selectBpyObject(arm)
+        bpy.ops.object.mode_set(mode='EDIT',toggle=True)
+        for joint, pose in zip(joints, restPose):
+            joint = joint.split('/')
+            bone = arm.data.edit_bones.new(joint[-1])
+            bone.head = (0.0, 0.0, 0.0)
+            bone.tail = (0.0, 1.0, 0.0)
+            matrix = mathutils.Matrix(pose)
+            matrix.transpose()
+            bone.transform(matrix)
+            if len(joint) > 1:
+                bone.parent = arm.data.edit_bones[joint[-2]]
+        bpy.ops.object.mode_set(mode='OBJECT',toggle=True)
+        deselectBpyObjects()
+        #animations = data.getChildrenOfType(ClassType.SkelAnimation)
+        #for animation in animations:
+        #    print('Add Animation:', animation.name)
+        return arm
+    return None
+
 
 def addObject(context, data, materials = {}, parent = None, animated = False):
     meshes = getMeshes(data)
     if len(meshes) > 0:
+        # Create the Armature first if in data
+        arm = addArmature(context, data, animated)
         # Create A Mesh Object
         obj = createBpyMeshObject(meshes[0].name, data.name)
         addToBpyCollection(obj, context.scene.collection)
@@ -206,7 +236,7 @@ def getObjects(data):
     for child in data.children:
         if child.classType == ClassType.Scope:
             objects += getObjects(child)
-        elif child.classType == ClassType.Xform:
+        elif child.classType in (ClassType.Xform, ClassType.SkelRoot):
             objects.append(child)
     return objects
 

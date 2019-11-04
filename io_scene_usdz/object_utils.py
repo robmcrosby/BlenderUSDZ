@@ -81,6 +81,11 @@ def createBpyMeshObject(meshName, objName):
     obj = bpy.data.objects.new(objName, mesh)
     return obj
 
+def createBpyArmatureObject(armName, objName):
+    arm = bpy.data.armatures.new(armName)
+    obj = bpy.data.objects.new(objName, arm)
+    return obj
+
 def deleteBpyObject(object):
     selectBpyObject(object)
     bpy.ops.object.delete()
