@@ -25,6 +25,13 @@ def duplicateBpyObject(object):
     bpy.ops.object.duplicate()
     return bpy.context.active_object
 
+def parentToBpyArmature(obj, arm):
+    deselectBpyObjects()
+    obj.select_set(True)
+    arm.select_set(True)
+    bpy.ops.object.parent_set(type='ARMATURE_NAME')
+    deselectBpyObjects()
+
 def duplicateBpySkinnedObject(mesh, armature):
     selectBpyObjects([mesh, armature])
     setBpyActiveObject(armature)

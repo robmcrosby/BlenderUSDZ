@@ -131,9 +131,9 @@ def addArmatureAnimation(arm, animation):
     for i, joint in enumerate(joints):
         joint = joint.split('/')[-1]
         bone = arm.pose.bones[joint]
-        for frame, location in locations:
-            bone.location = location[i]
-            bone.keyframe_insert(data_path = 'location', frame = frame, group = animation.name)
+        #for frame, location in locations:
+        #    bone.location = location[i]
+        #    bone.keyframe_insert(data_path = 'location', frame = frame, group = animation.name)
         for frame, rotation in rotations:
             bone.rotation_quaternion = rotation[i][3:] + rotation[i][:3]
             bone.keyframe_insert(data_path = 'rotation_quaternion', frame = frame, group = animation.name)
@@ -144,16 +144,13 @@ def addArmatureAnimation(arm, animation):
     deselectBpyObjects()
 
 
-def addArmature(context, data, animated):
+def addArmature(context, obj, data):
     skeleton = data.getChildOfType(ClassType.Skeleton)
     if skeleton != None:
         arm = createBpyArmatureObject(skeleton.name, skeleton.name)
         addToBpyCollection(arm, context.scene.collection)
         addBones(arm, skeleton)
-        if animated:
-            animation = data.getChildOfType(ClassType.SkelAnimation)
-            if animation != None:
-                addArmatureAnimation(arm, animation)
+        parentToBpyArmature(obj, arm)
         return arm
     return None
 
@@ -161,11 +158,11 @@ def addArmature(context, data, animated):
 def addObject(context, data, materials = {}, parent = None, animated = False):
     meshes = getMeshes(data)
     if len(meshes) > 0:
-        # Create the Armature first if in data
-        arm = addArmature(context, data, animated)
         # Create A Mesh Object
         obj = createBpyMeshObject(meshes[0].name, data.name)
         addToBpyCollection(obj, context.scene.collection)
+        # Create the Armature if in data
+        arm = addArmature(context, obj, data)
         # Create any UV maps
         uvs = meshes[0].getAttributesOfTypeStr('texCoord2f[]')
         uvs += meshes[0].getAttributesOfTypeStr('float2[]')
@@ -179,11 +176,16 @@ def addObject(context, data, materials = {}, parent = None, animated = False):
         # Set the Parent
         if parent != None:
             obj.parent = parent
-        # Apply Object Transforms
-        if animated:
-            applyRidgidAnimation(context, data, obj)
-        else:
-            applyRidgidTransforms(data, obj)
+        if arm == None:
+            # Apply Object Transforms
+            if animated:
+                applyRidgidAnimation(context, data, obj)
+            else:
+                applyRidgidTransforms(data, obj)
+        elif animated:
+            animation = data.getChildOfType(ClassType.SkelAnimation)
+            if animation != None:
+                addArmatureAnimation(arm, animation)
         # Add the Children
         children = getObjects(data)
         for child in children:
@@ -259,6 +261,16 @@ def addMesh(obj, data, uvs, materials):
     # Apply BMesh back to Mesh Object
     bm.to_mesh(obj.data)
     bm.free()
+    if 'primvars:skel:jointIndices' in data and 'primvars:skel:jointWeights' in data:
+        # Apply Mesh weights
+        jointIndices = data['primvars:skel:jointIndices']
+        jointWeights = data['primvars:skel:jointWeights']
+        elementSize = jointWeights['elementSize']
+        for i, weight in enumerate(zip(jointIndices.value, jointWeights.value)):
+            bone, weight = weight
+            if weight > 0.0:
+                index = i//elementSize
+                obj.vertex_groups[bone].add([index], weight, 'REPLACE')
 
 
 def getObjects(data):
