@@ -172,6 +172,7 @@ def addObject(context, data, materials = {}, parent = None, animated = False):
         # Add the Geometry
         for mesh in meshes:
             addMesh(obj, mesh, uvs, materials)
+            applyBoneWeights(obj, mesh)
         obj.data.update()
         # Set the Parent
         if parent != None:
@@ -261,15 +262,18 @@ def addMesh(obj, data, uvs, materials):
     # Apply BMesh back to Mesh Object
     bm.to_mesh(obj.data)
     bm.free()
-    if 'primvars:skel:jointIndices' in data and 'primvars:skel:jointWeights' in data:
-        # Apply Mesh weights
-        jointIndices = data['primvars:skel:jointIndices']
-        jointWeights = data['primvars:skel:jointWeights']
+
+
+def applyBoneWeights(obj, data):
+    jointIndices = data['primvars:skel:jointIndices']
+    jointWeights = data['primvars:skel:jointWeights']
+    if jointIndices != None and jointWeights != None:
         elementSize = jointWeights['elementSize']
+        base = len(obj.data.vertices) - int(len(jointIndices.value)/elementSize)
         for i, weight in enumerate(zip(jointIndices.value, jointWeights.value)):
             bone, weight = weight
             if weight > 0.0:
-                index = i//elementSize
+                index = base + i//elementSize
                 obj.vertex_groups[bone].add([index], weight, 'REPLACE')
 
 
