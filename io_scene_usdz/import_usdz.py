@@ -65,6 +65,7 @@ def importData(context, usdData, tempDir, materials, animated):
     for object in objects:
         addObject(context, object, materials, animated = animated)
 
+
 def applyRidgidTransforms(data, obj):
     matrix = mathutils.Matrix()
     if 'xformOpOrder' in data:
@@ -80,6 +81,7 @@ def applyRidgidTransforms(data, obj):
     if obj.parent == None:
         matrix = matrix @ mathutils.Matrix.Rotation(pi/2.0, 4, 'X')
     obj.matrix_local = matrix
+
 
 def applyRidgidAnimation(context, data, obj):
     transforms = data['xformOp:transform:transforms']
@@ -109,6 +111,7 @@ def addBone(arm, joint, pose):
     bone.transform(matrix)
     if len(stack) > 1:
         bone.parent = arm.data.edit_bones[stack[-2]]
+
 
 def addBones(arm, skeleton):
     joints = skeleton['joints'].value
@@ -265,12 +268,12 @@ def addMesh(obj, data, uvs, materials):
 
 
 def applyBoneWeights(obj, data):
-    jointIndices = data['primvars:skel:jointIndices']
-    jointWeights = data['primvars:skel:jointWeights']
-    if jointIndices != None and jointWeights != None:
-        elementSize = jointWeights['elementSize']
-        base = len(obj.data.vertices) - int(len(jointIndices.value)/elementSize)
-        for i, weight in enumerate(zip(jointIndices.value, jointWeights.value)):
+    indices = data['primvars:skel:jointIndices']
+    weights = data['primvars:skel:jointWeights']
+    if indices != None and weights != None:
+        elementSize = weights['elementSize']
+        base = len(obj.data.vertices) - int(len(indices.value)/elementSize)
+        for i, weight in enumerate(zip(indices.value, weights.value)):
             bone, weight = weight
             if weight > 0.0:
                 index = base + i//elementSize
@@ -304,6 +307,7 @@ def importMaterials(data, tempDir):
         materialMap[matData.name] = mat
     return materialMap
 
+
 def createMaterial(data, tempDir):
     mat = bpy.data.materials.new(data.name)
     mat.use_nodes = True
@@ -320,8 +324,10 @@ def createMaterial(data, tempDir):
     setMaterialInput(data, mat, tempDir, 'specularColor', 'Specular')
     return mat
 
+
 def getSurfaceShaderData(materialData):
     return materialData['outputs:surface'].value.parent
+
 
 def setMaterialInput(matData, mat, tempDir, valName, inputName):
     shaderData = getSurfaceShaderData(matData)
@@ -331,6 +337,7 @@ def setMaterialInput(matData, mat, tempDir, valName, inputName):
             setShaderInputTexture(inputData, mat, inputName, matData, tempDir)
         else:
             setShaderInputValue(inputData, mat, inputName)
+
 
 def setShaderInputValue(data, mat, inputName):
     outputNode = getBpyOutputNode(mat)
@@ -351,6 +358,7 @@ def setShaderInputValue(data, mat, inputName):
             input.default_value = (0.0, 0.0, 1.0)
         else:
             print('Value Not Set:', data.printUsda())
+
 
 def setShaderInputTexture(data, mat, inputName, matData, tempDir):
     outputNode = getBpyOutputNode(mat)
