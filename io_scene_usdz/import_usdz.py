@@ -134,9 +134,10 @@ def addArmatureAnimation(arm, animation):
     for i, joint in enumerate(joints):
         joint = joint.split('/')[-1]
         bone = arm.pose.bones[joint]
-        #for frame, location in locations:
-        #    bone.location = location[i]
-        #    bone.keyframe_insert(data_path = 'location', frame = frame, group = animation.name)
+        head = arm.data.bones[joint].head
+        for frame, location in locations:
+            #bone.location = mathutils.Vector(location[i]) - head
+            bone.keyframe_insert(data_path = 'location', frame = frame, group = animation.name)
         for frame, rotation in rotations:
             bone.rotation_quaternion = rotation[i][3:] + rotation[i][:3]
             bone.keyframe_insert(data_path = 'rotation_quaternion', frame = frame, group = animation.name)

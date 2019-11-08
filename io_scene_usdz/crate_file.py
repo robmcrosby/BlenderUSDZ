@@ -860,7 +860,7 @@ class CrateFile:
 
     def decodeRepFloatVector(self, rep, size):
         if rep['inline']:
-            #data = rep['payload'].to_bytes(12, byteorder='big')
+            #data = rep['payload'].to_bytes(4, byteorder='little')
             #print('inline float:', data)
             #vec = struct.unpack('>%df'%size, data)
             #print('inline float:', data, vec)
@@ -874,7 +874,6 @@ class CrateFile:
 
     def decodeRepDoubleVector(self, rep, size):
         if rep['inline']:
-            print('inline Double Vec')
             return size*(0.0,)
         self.file.seek(rep['payload'])
         if rep['array']:
@@ -912,9 +911,12 @@ class CrateFile:
             payload = readInt(self.file, 6)
             vType = readInt(self.file, 1)
             rep = (payload & PAYLOAD_MASK) | (vType << 48)
-            # An elem value above zero indicates an array
-            if readInt(self.file, 1) > 0:
-                rep |= ARRAY_BIT
+            elem = readInt(self.file, 1)
+            if elem > 0:
+                if elem == 64:
+                    rep |= INLINE_BIT
+                else:
+                    rep |= ARRAY_BIT
             reps.append(rep)
         return reps
 
