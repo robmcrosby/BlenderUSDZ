@@ -6,6 +6,7 @@ import shutil
 import zipfile
 import bmesh
 import mathutils
+import math
 
 from io_scene_usdz.scene_data import *
 from io_scene_usdz.object_utils import *
@@ -79,7 +80,7 @@ def applyRidgidTransforms(data, obj):
                 m.transpose()
                 matrix = matrix @ m
     if obj.parent == None:
-        matrix = matrix @ mathutils.Matrix.Rotation(pi/2.0, 4, 'X')
+        matrix = matrix @ mathutils.Matrix.Rotation(math.pi/2.0, 4, 'X')
     obj.matrix_local = matrix
 
 
@@ -92,7 +93,7 @@ def applyRidgidAnimation(context, data, obj):
             matrix = mathutils.Matrix(matrix)
             matrix.transpose()
             if obj.parent == None:
-                matrix = matrix @ mathutils.Matrix.Rotation(pi/2.0, 4, 'X')
+                matrix = matrix @ mathutils.Matrix.Rotation(math.pi/2.0, 4, 'X')
             obj.matrix_local = matrix
             bpy.ops.anim.keyframe_insert_menu(type='LocRotScale')
         context.scene.frame_set(context.scene.frame_start)
