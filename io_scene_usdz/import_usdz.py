@@ -32,7 +32,7 @@ def import_usdz(context, filepath = '', materials = True, animations = True):
                 crate = CrateFile(file)
                 usdData = crate.readUsd()
                 file.close()
-                print(usdData.toString(debug = True))
+                #print(usdData.toString(debug = True))
                 tempDir = usdcFile[:usdcFile.rfind('/')+1]
                 importData(context, usdData, tempDir, materials, animations)
             else:
@@ -160,10 +160,18 @@ def addArmature(context, obj, data):
 
 
 def addObject(context, data, materials = {}, parent = None, animated = False):
+    obj = None
+    arm = None
     meshes = getMeshes(data)
-    if len(meshes) > 0:
+    if len(meshes) == 0:
+        # Create An Empty Object
+        obj = createBpyEmptyObject(data.name)
+        # Add to the Default Collection
+        addToBpyCollection(obj, context.scene.collection)
+    else:
         # Create A Mesh Object
         obj = createBpyMeshObject(meshes[0].name, data.name)
+        # Add to the Default Collection
         addToBpyCollection(obj, context.scene.collection)
         # Create the Armature if in data
         arm = addArmature(context, obj, data)
@@ -178,23 +186,24 @@ def addObject(context, data, materials = {}, parent = None, animated = False):
             addMesh(obj, mesh, uvs, materials)
             applyBoneWeights(obj, mesh)
         obj.data.update()
-        # Set the Parent
-        if parent != None:
-            obj.parent = parent
-        if arm == None:
-            # Apply Object Transforms
-            if animated:
-                applyRidgidAnimation(context, data, obj)
-            else:
-                applyRidgidTransforms(data, obj)
-        elif animated:
-            animation = data.getChildOfType(ClassType.SkelAnimation)
-            if animation != None:
-                addArmatureAnimation(arm, animation)
-        # Add the Children
-        children = getObjects(data)
-        for child in children:
-            addObject(context, child, materials, obj, animated)
+    # Set the Parent
+    if parent != None:
+        obj.parent = parent
+    if arm == None:
+        # Apply Object Transforms
+        if animated:
+            applyRidgidAnimation(context, data, obj)
+        else:
+            applyRidgidTransforms(data, obj)
+    elif animated:
+        # Apply Armature Animation
+        animation = data.getChildOfType(ClassType.SkelAnimation)
+        if animation != None:
+            addArmatureAnimation(arm, animation)
+    # Add the Children
+    children = getObjects(data)
+    for child in children:
+        addObject(context, child, materials, obj, animated)
 
 
 def addMesh(obj, data, uvs, materials):
