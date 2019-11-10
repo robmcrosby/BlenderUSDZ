@@ -33,7 +33,7 @@ def import_usdz(context, filepath = '', materials = True, animations = True):
                 crate = CrateFile(file)
                 usdData = crate.readUsd()
                 file.close()
-                #print(usdData.toString(debug = True))
+                print(usdData.toString(debug = True))
                 tempDir = usdcFile[:usdcFile.rfind('/')+1]
                 importData(context, usdData, tempDir, materials, animations)
             else:
@@ -67,18 +67,39 @@ def importData(context, usdData, tempDir, materials, animated):
         addObject(context, object, materials, animated = animated)
 
 
+def getOpMatrix(data, opName):
+    invert = '!invert!' in opName
+    opName = opName.replace('!invert!', '')
+    data = data[opName]
+    matrix = mathutils.Matrix()
+    if data != None:
+        value = data.value if data.value != None else data.frames[0][1]
+        #print(opName, value)
+        if opName in ('xformOp:transform', 'xformOp:transform:transforms'):
+            matrix = mathutils.Matrix(value)
+            matrix.transpose()
+        elif opName == 'xformOp:rotateXYZ':
+            rotX = mathutils.Matrix.Rotation(math.radians(value[0]), 4, 'X')
+            rotY = mathutils.Matrix.Rotation(math.radians(value[1]), 4, 'Y')
+            rotZ = mathutils.Matrix.Rotation(math.radians(value[2]), 4, 'Z')
+            matrix = rotZ @ rotY @ rotX
+        elif opName in ('xformOp:translate', 'xformOp:translate:pivot'):
+            matrix = mathutils.Matrix.Translation(value)
+        elif opName == 'xformOp:scale':
+            mathutils.Matrix.Diagonal(value + (1.0,))
+        else:
+            print('Unused Op:', opName)
+    if invert:
+        print('Invert')
+        matrix.invert()
+    return matrix
+
+
 def applyRidgidTransforms(data, obj):
     matrix = mathutils.Matrix()
     if 'xformOpOrder' in data:
-        for opName in data['xformOpOrder'].value:
-            if opName == 'xformOp:transform':
-                m = mathutils.Matrix(data[opName].value)
-                m.transpose()
-                matrix = matrix @ m
-            elif opName == 'xformOp:transform:transforms':
-                m = mathutils.Matrix(data[opName].frames[0][1])
-                m.transpose()
-                matrix = matrix @ m
+        for opName in reversed(data['xformOpOrder'].value):
+            matrix = getOpMatrix(data, opName) @ matrix
     if obj.parent == None:
         matrix = matrix @ mathutils.Matrix.Rotation(math.pi/2.0, 4, 'X')
     obj.matrix_local = matrix

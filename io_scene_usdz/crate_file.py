@@ -860,11 +860,8 @@ class CrateFile:
 
     def decodeRepFloatVector(self, rep, size):
         if rep['inline']:
-            #data = rep['payload'].to_bytes(4, byteorder='little')
-            #print('inline float:', data)
-            #vec = struct.unpack('>%df'%size, data)
-            #print('inline float:', data, vec)
-            return size*(0.0,)
+            data = rep['payload'].to_bytes(8, byteorder='little')
+            return tuple(float(data[i]) for i in range(size))
         self.file.seek(rep['payload'])
         if rep['array']:
             countBytes = 4 if self.version < 7 else 8
@@ -874,7 +871,8 @@ class CrateFile:
 
     def decodeRepDoubleVector(self, rep, size):
         if rep['inline']:
-            return size*(0.0,)
+            data = rep['payload'].to_bytes(8, byteorder='little')
+            return tuple(float(data[i]) for i in range(size))
         self.file.seek(rep['payload'])
         if rep['array']:
             countBytes = 4 if self.version < 7 else 8
