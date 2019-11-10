@@ -512,7 +512,6 @@ class Object:
     def exportArmatureAnimation(self, armature, usdAnimation):
         usdAnimation['rotations'] = ValueType.quatf
         usdRotations = usdAnimation['rotations']
-        #usdRotations.valueTypeStr = 'quatf'
         usdAnimation['scales'] = ValueType.vec3f
         usdScales = usdAnimation['scales']
         usdAnimation['translations'] = ValueType.vec3f

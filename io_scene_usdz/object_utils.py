@@ -1,29 +1,43 @@
 import bpy
+import math
 import mathutils
 
-pi = 3.1415926
 epslon = 0.000001
+
 
 def deselectBpyObjects():
     bpy.ops.object.select_all(action='DESELECT')
+
 
 def selectBpyObject(object):
     deselectBpyObjects()
     object.select_set(True)
     setBpyActiveObject(object)
 
+
 def selectBpyObjects(objects):
     deselectBpyObjects()
     for obj in objects:
         obj.select_set(True)
 
+
 def setBpyActiveObject(object):
     bpy.context.view_layer.objects.active = object
+
 
 def duplicateBpyObject(object):
     selectBpyObject(object)
     bpy.ops.object.duplicate()
     return bpy.context.active_object
+
+
+def parentToBpyArmature(obj, arm):
+    deselectBpyObjects()
+    obj.select_set(True)
+    arm.select_set(True)
+    bpy.ops.object.parent_set(type='ARMATURE_NAME')
+    deselectBpyObjects()
+
 
 def duplicateBpySkinnedObject(mesh, armature):
     selectBpyObjects([mesh, armature])
@@ -36,6 +50,7 @@ def duplicateBpySkinnedObject(mesh, armature):
         else:
             mesh = obj
     return (mesh, armature)
+
 
 def applyBpyArmatureAnimation(dstArmature, srcArmature, startFrame, endFrame):
     selectBpyObject(dstArmature)
@@ -70,29 +85,44 @@ def applyBpyArmatureAnimation(dstArmature, srcArmature, startFrame, endFrame):
         bake_types = {'POSE'}
     )
 
+
 def applyBpyObjectModifers(object):
     if object != None:
         selectBpyObject(object)
         bpy.ops.object.make_single_user()
         bpy.ops.object.convert(target='MESH')
 
+
+def createBpyEmptyObject(emptyName):
+    return bpy.data.objects.new(emptyName, None)
+
+
 def createBpyMeshObject(meshName, objName):
     mesh = bpy.data.meshes.new(meshName)
     obj = bpy.data.objects.new(objName, mesh)
+    return obj
+
+
+def createBpyArmatureObject(armName, objName):
+    arm = bpy.data.armatures.new(armName)
+    obj = bpy.data.objects.new(objName, arm)
     return obj
 
 def deleteBpyObject(object):
     selectBpyObject(object)
     bpy.ops.object.delete()
 
+
 def convertBpyMatrix(matrix):
     matrix = mathutils.Matrix.transposed(matrix)
     return (matrix[0][:], matrix[1][:], matrix[2][:], matrix[3][:])
 
+
 def convertBpyRootMatrix(matrix, scale):
     scale = mathutils.Matrix.Scale(scale, 4)
-    rotation = mathutils.Matrix.Rotation(-pi/2.0, 4, 'X')
+    rotation = mathutils.Matrix.Rotation(-math.pi/2.0, 4, 'X')
     return convertBpyMatrix(rotation @ scale @ matrix)
+
 
 def exportBpyExtents(object, scale = 1.0):
     low = object.bound_box[0][:]
@@ -104,9 +134,11 @@ def exportBpyExtents(object, scale = 1.0):
     high = tuple(i*scale for i in high)
     return [low, high]
 
+
 def applyBpySmartProjection(mesh):
     selectBpyObject(mesh)
     bpy.ops.uv.smart_project()
+
 
 def exportBpyMeshVertexCounts(mesh, material = -1):
     counts = []
@@ -117,6 +149,7 @@ def exportBpyMeshVertexCounts(mesh, material = -1):
             if poly.material_index == material:
                 counts.append(len(poly.vertices))
     return counts
+
 
 def exportBpyMeshVertices(mesh, material = -1):
     indices = []
@@ -135,6 +168,7 @@ def exportBpyMeshVertices(mesh, material = -1):
                         vertices.append(mesh.vertices[i].co[:])
                     indices.append(map[i])
     return (indices, vertices)
+
 
 def exportBpyMeshNormals(mesh, material = -1):
     indices = []
@@ -163,6 +197,7 @@ def exportBpyMeshNormals(mesh, material = -1):
                     normalMap[normal] = normalIndex
     return (indices, normals)
 
+
 def exportBpyMeshUvs(mesh, layer, material = -1):
     indices = []
     uvs = []
@@ -182,6 +217,7 @@ def exportBpyMeshUvs(mesh, layer, material = -1):
         index += len(poly.vertices)
     return (indices, uvs)
 
+
 def exportBpyVertexWeights(index, groups):
     indices = []
     weights = []
@@ -195,6 +231,7 @@ def exportBpyVertexWeights(index, groups):
             pass
     return (indices, weights)
 
+
 def exportBpyMeshIndices(obj, material = -1):
     if material == -1:
         return [i for i in range(0, len(obj.data.vertices))]
@@ -207,6 +244,7 @@ def exportBpyMeshIndices(obj, material = -1):
                     indexSet.add(i)
                     indices.append(i)
     return indices
+
 
 def exportBpyMeshWeights(obj, material = -1):
     groups = []
@@ -223,14 +261,17 @@ def exportBpyMeshWeights(obj, material = -1):
         weights += w + (size-len(w))*[0.0]
     return (groups, weights, size)
 
+
 def createBpyCollection(name):
     collection = bpy.data.collections.new(name)
     bpy.context.scene.collection.children.link(collection)
     return collection
 
+
 def deleteBpyCollection(collection):
     if collection != None:
         bpy.data.collections.remove(collection)
+
 
 def addToBpyCollection(object, collection = None):
     if object != None and collection != None:
@@ -238,14 +279,17 @@ def addToBpyCollection(object, collection = None):
             collection = bpy.context.scene.collection
         collection.objects.link(object)
 
+
 def exportBpyBoneJoint(bone):
     name = bone.name.replace('.', '_')
     if bone.parent != None:
         return exportBpyBoneJoint(bone.parent) + '/' + name
     return name
 
+
 def exportBpyJoints(armature):
     return [exportBpyBoneJoint(bone) for bone in armature.data.bones]
+
 
 def exportBpyBindTransforms(armature):
     transforms = []
@@ -253,6 +297,7 @@ def exportBpyBindTransforms(armature):
         matrix = bone.matrix_local
         transforms.append(convertBpyMatrix(matrix))
     return transforms
+
 
 def exportBpyRestTransforms(armature):
     transforms = []

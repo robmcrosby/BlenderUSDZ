@@ -6,6 +6,7 @@ import shutil
 import zipfile
 import bmesh
 import mathutils
+import math
 
 from io_scene_usdz.scene_data import *
 from io_scene_usdz.object_utils import *
@@ -13,7 +14,7 @@ from io_scene_usdz.material_utils import *
 from io_scene_usdz.crate_file import *
 
 
-def import_usdz(context, filepath = '', materials = True):
+def import_usdz(context, filepath = '', materials = True, animations = True):
     filePath, fileName = os.path.split(filepath)
     fileName, fileType = fileName.split('.')
     if fileType == 'usdz':
@@ -32,9 +33,9 @@ def import_usdz(context, filepath = '', materials = True):
                 crate = CrateFile(file)
                 usdData = crate.readUsd()
                 file.close()
-                #print(usdData.toString(debug = True))
+                print(usdData.toString(debug = True))
                 tempDir = usdcFile[:usdcFile.rfind('/')+1]
-                importData(context, usdData, tempDir, materials)
+                importData(context, usdData, tempDir, materials, animations)
             else:
                 print('No usdc file found')
             # Cleanup Temp Files
@@ -52,19 +53,150 @@ def findUsdz(dirpath):
     return ''
 
 
-def importData(context, usdData, tempDir, materials):
+def importData(context, usdData, tempDir, materials, animated):
+    if animated:
+        if 'startTimeCode' in usdData.properties:
+            context.scene.frame_start = usdData['startTimeCode']
+        if 'endTimeCode' in usdData.properties:
+            context.scene.frame_end = usdData['endTimeCode']
+        if 'timeCodesPerSecond' in usdData.properties:
+            context.scene.render.fps = usdData['timeCodesPerSecond']
     materials = importMaterials(usdData, tempDir) if materials else {}
     objects = getObjects(usdData)
     for object in objects:
-        addObject(context, object, materials)
+        addObject(context, object, materials, animated = animated)
 
 
-def addObject(context, data, materials = {}, parent = None):
+def getOpMatrix(data, opName):
+    invert = '!invert!' in opName
+    opName = opName.replace('!invert!', '')
+    data = data[opName]
+    matrix = mathutils.Matrix()
+    if data != None:
+        value = data.value if data.value != None else data.frames[0][1]
+        #print(opName, value)
+        if opName in ('xformOp:transform', 'xformOp:transform:transforms'):
+            matrix = mathutils.Matrix(value)
+            matrix.transpose()
+        elif opName == 'xformOp:rotateXYZ':
+            rotX = mathutils.Matrix.Rotation(math.radians(value[0]), 4, 'X')
+            rotY = mathutils.Matrix.Rotation(math.radians(value[1]), 4, 'Y')
+            rotZ = mathutils.Matrix.Rotation(math.radians(value[2]), 4, 'Z')
+            matrix = rotZ @ rotY @ rotX
+        elif opName in ('xformOp:translate', 'xformOp:translate:pivot'):
+            matrix = mathutils.Matrix.Translation(value)
+        elif opName == 'xformOp:scale':
+            mathutils.Matrix.Diagonal(value + (1.0,))
+        else:
+            print('Unused Op:', opName)
+    if invert:
+        print('Invert')
+        matrix.invert()
+    return matrix
+
+
+def applyRidgidTransforms(data, obj):
+    matrix = mathutils.Matrix()
+    if 'xformOpOrder' in data:
+        for opName in reversed(data['xformOpOrder'].value):
+            matrix = getOpMatrix(data, opName) @ matrix
+    if obj.parent == None:
+        matrix = matrix @ mathutils.Matrix.Rotation(math.pi/2.0, 4, 'X')
+    obj.matrix_local = matrix
+
+
+def applyRidgidAnimation(context, data, obj):
+    transforms = data['xformOp:transform:transforms']
+    if transforms != None:
+        selectBpyObject(obj)
+        for frame, matrix in transforms.frames:
+            context.scene.frame_set(frame)
+            matrix = mathutils.Matrix(matrix)
+            matrix.transpose()
+            if obj.parent == None:
+                matrix = matrix @ mathutils.Matrix.Rotation(math.pi/2.0, 4, 'X')
+            obj.matrix_local = matrix
+            bpy.ops.anim.keyframe_insert_menu(type='LocRotScale')
+        context.scene.frame_set(context.scene.frame_start)
+        deselectBpyObjects()
+    else:
+        applyRidgidTransforms(data, obj)
+
+
+def addBone(arm, joint, pose):
+    stack = joint.split('/')
+    bone = arm.data.edit_bones.new(stack[-1])
+    bone.head = (0.0, 0.0, 0.0)
+    bone.tail = (0.0, 1.0, 0.0)
+    matrix = mathutils.Matrix(pose)
+    matrix.transpose()
+    bone.transform(matrix)
+    if len(stack) > 1:
+        bone.parent = arm.data.edit_bones[stack[-2]]
+
+
+def addBones(arm, skeleton):
+    joints = skeleton['joints'].value
+    restPose = skeleton['restTransforms'].value
+    selectBpyObject(arm)
+    bpy.ops.object.mode_set(mode='EDIT',toggle=True)
+    for joint, pose in zip(joints, restPose):
+        addBone(arm, joint, pose)
+    bpy.ops.object.mode_set(mode='OBJECT',toggle=True)
+    deselectBpyObjects()
+
+
+def addArmatureAnimation(arm, animation):
+    joints = animation['joints'].value
+    locations = animation['translations'].frames
+    rotations = animation['rotations'].frames
+    scales = animation['scales'].frames
+    selectBpyObject(arm)
+    bpy.ops.object.mode_set(mode='POSE',toggle=True)
+    for i, joint in enumerate(joints):
+        joint = joint.split('/')[-1]
+        bone = arm.pose.bones[joint]
+        head = arm.data.bones[joint].head
+        for frame, location in locations:
+            #bone.location = mathutils.Vector(location[i]) - head
+            bone.keyframe_insert(data_path = 'location', frame = frame, group = animation.name)
+        for frame, rotation in rotations:
+            bone.rotation_quaternion = rotation[i][3:] + rotation[i][:3]
+            bone.keyframe_insert(data_path = 'rotation_quaternion', frame = frame, group = animation.name)
+        for frame, scale in scales:
+            bone.scale = scale[i]
+            bone.keyframe_insert(data_path = 'scale', frame = frame, group = animation.name)
+    bpy.ops.object.mode_set(mode='OBJECT',toggle=True)
+    deselectBpyObjects()
+
+
+def addArmature(context, obj, data):
+    skeleton = data.getChildOfType(ClassType.Skeleton)
+    if skeleton != None:
+        arm = createBpyArmatureObject(skeleton.name, skeleton.name)
+        addToBpyCollection(arm, context.scene.collection)
+        addBones(arm, skeleton)
+        parentToBpyArmature(obj, arm)
+        return arm
+    return None
+
+
+def addObject(context, data, materials = {}, parent = None, animated = False):
+    obj = None
+    arm = None
     meshes = getMeshes(data)
-    if len(meshes) > 0:
+    if len(meshes) == 0:
+        # Create An Empty Object
+        obj = createBpyEmptyObject(data.name)
+        # Add to the Default Collection
+        addToBpyCollection(obj, context.scene.collection)
+    else:
         # Create A Mesh Object
         obj = createBpyMeshObject(meshes[0].name, data.name)
+        # Add to the Default Collection
         addToBpyCollection(obj, context.scene.collection)
+        # Create the Armature if in data
+        arm = addArmature(context, obj, data)
         # Create any UV maps
         uvs = meshes[0].getAttributesOfTypeStr('texCoord2f[]')
         uvs += meshes[0].getAttributesOfTypeStr('float2[]')
@@ -74,25 +206,26 @@ def addObject(context, data, materials = {}, parent = None):
         # Add the Geometry
         for mesh in meshes:
             addMesh(obj, mesh, uvs, materials)
+            applyBoneWeights(obj, mesh)
         obj.data.update()
-        # Set the Parent
-        if parent != None:
-            obj.parent = parent
-        # Apply any Transforms
-        matrix = mathutils.Matrix()
-        if 'xformOpOrder' in data:
-            for opName in data['xformOpOrder'].value:
-                if opName == 'xformOp:transform':
-                    m = mathutils.Matrix(data[opName].value)
-                    m.transpose()
-                    matrix = matrix @ m
-        if parent == None:
-            matrix = matrix @ mathutils.Matrix.Rotation(pi/2.0, 4, 'X')
-        obj.matrix_local = matrix
-        # Add the Children
-        children = getObjects(data)
-        for child in children:
-            addObject(context, child, materials, obj)
+    # Set the Parent
+    if parent != None:
+        obj.parent = parent
+    if arm == None:
+        # Apply Object Transforms
+        if animated:
+            applyRidgidAnimation(context, data, obj)
+        else:
+            applyRidgidTransforms(data, obj)
+    elif animated:
+        # Apply Armature Animation
+        animation = data.getChildOfType(ClassType.SkelAnimation)
+        if animation != None:
+            addArmatureAnimation(arm, animation)
+    # Add the Children
+    children = getObjects(data)
+    for child in children:
+        addObject(context, child, materials, obj, animated)
 
 
 def addMesh(obj, data, uvs, materials):
@@ -166,22 +299,37 @@ def addMesh(obj, data, uvs, materials):
     bm.free()
 
 
+def applyBoneWeights(obj, data):
+    indices = data['primvars:skel:jointIndices']
+    weights = data['primvars:skel:jointWeights']
+    if indices != None and weights != None:
+        elementSize = weights['elementSize']
+        base = len(obj.data.vertices) - int(len(indices.value)/elementSize)
+        for i, weight in enumerate(zip(indices.value, weights.value)):
+            bone, weight = weight
+            if weight > 0.0:
+                index = base + i//elementSize
+                obj.vertex_groups[bone].add([index], weight, 'REPLACE')
+
+
 def getObjects(data):
     objects = []
     for child in data.children:
         if child.classType == ClassType.Scope:
             objects += getObjects(child)
-        elif child.classType == ClassType.Xform:
+        elif child.classType in (ClassType.Xform, ClassType.SkelRoot):
+            objects.append(child)
+        elif child.classType == ClassType.Mesh and 'xformOpOrder' in child:
             objects.append(child)
     return objects
 
 
 def getMeshes(data):
+    if data.classType == ClassType.Mesh:
+        return [data]
     meshes = []
     for child in data.children:
-        if child.classType == ClassType.Scope:
-            meshes += getObjects(child)
-        elif child.classType == ClassType.Mesh:
+        if child.classType == ClassType.Mesh and not 'xformOpOrder' in child:
             meshes.append(child)
     return meshes
 
@@ -192,6 +340,7 @@ def importMaterials(data, tempDir):
         mat = createMaterial(matData, tempDir)
         materialMap[matData.name] = mat
     return materialMap
+
 
 def createMaterial(data, tempDir):
     mat = bpy.data.materials.new(data.name)
@@ -209,8 +358,10 @@ def createMaterial(data, tempDir):
     setMaterialInput(data, mat, tempDir, 'specularColor', 'Specular')
     return mat
 
+
 def getSurfaceShaderData(materialData):
     return materialData['outputs:surface'].value.parent
+
 
 def setMaterialInput(matData, mat, tempDir, valName, inputName):
     shaderData = getSurfaceShaderData(matData)
@@ -220,6 +371,7 @@ def setMaterialInput(matData, mat, tempDir, valName, inputName):
             setShaderInputTexture(inputData, mat, inputName, matData, tempDir)
         else:
             setShaderInputValue(inputData, mat, inputName)
+
 
 def setShaderInputValue(data, mat, inputName):
     outputNode = getBpyOutputNode(mat)
@@ -240,6 +392,7 @@ def setShaderInputValue(data, mat, inputName):
             input.default_value = (0.0, 0.0, 1.0)
         else:
             print('Value Not Set:', data.printUsda())
+
 
 def setShaderInputTexture(data, mat, inputName, matData, tempDir):
     outputNode = getBpyOutputNode(mat)

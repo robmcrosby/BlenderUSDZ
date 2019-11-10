@@ -2,7 +2,7 @@
 bl_info = {
     "name":        "USDZ Export",
     "author":      "Robert Crosby",
-    "version":     (0, 0, 3),
+    "version":     (0, 0, 4),
     "blender":     (2, 80, 0),
     "location":    "File > Import-Export",
     "description": "Import/Export USDZ Files",
@@ -40,6 +40,11 @@ class ImportUSDZ(bpy.types.Operator, ImportHelper):
     materials = BoolProperty(
         name="Import Materials",
         description="Import Materials and textures",
+        default=True,
+        )
+    animations = BoolProperty(
+        name="Import Animations",
+        description="Import Animations",
         default=True,
         )
 

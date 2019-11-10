@@ -673,6 +673,8 @@ class CrateFile:
                 att.addQualifier('uniform')
             if 'custom' in properties and properties.pop('custom') == 1:
                 att.addQualifier('custom')
+            if 'timeSamples' in properties:
+                att.frames = properties.pop('timeSamples')
             att.properties = properties
         elif specType == SpecType.Relationship:
             rel = parent.createAttribute(name)
@@ -844,6 +846,10 @@ class CrateFile:
                     dic[key] = self.getStringStr(readInt(self.file, 4))
                 elif vt == ValueType.bool:
                     dic[key] = readInt(self.file, 4) > 0
+                elif vt == ValueType.float:
+                    dic[key] = struct.unpack('<f', self.file.read(4))[0]
+                elif vt == ValueType.double:
+                    dic[key] = struct.unpack('<d', self.file.read(8))[0]
                 #else:
                 #    print('Unhandled Dictionary Type:', vt.name)
             self.file.seek(loc + itemSize)
@@ -854,11 +860,8 @@ class CrateFile:
 
     def decodeRepFloatVector(self, rep, size):
         if rep['inline']:
-            #data = rep['payload'].to_bytes(12, byteorder='big')
-            #print('inline float:', data)
-            #vec = struct.unpack('>%df'%size, data)
-            #print('inline float:', data, vec)
-            return size*(0.0,)
+            data = rep['payload'].to_bytes(8, byteorder='little')
+            return tuple(float(data[i]) for i in range(size))
         self.file.seek(rep['payload'])
         if rep['array']:
             countBytes = 4 if self.version < 7 else 8
@@ -868,8 +871,8 @@ class CrateFile:
 
     def decodeRepDoubleVector(self, rep, size):
         if rep['inline']:
-            print('inline Double Vec')
-            return size*(0.0,)
+            data = rep['payload'].to_bytes(8, byteorder='little')
+            return tuple(float(data[i]) for i in range(size))
         self.file.seek(rep['payload'])
         if rep['array']:
             countBytes = 4 if self.version < 7 else 8
@@ -885,13 +888,48 @@ class CrateFile:
             return [self.readMatrix(size) for i in range(count)]
         return self.readMatrix(size)
 
+    def readTimeFrames(self, ref):
+        self.file.seek(ref)
+        self.file.seek(ref + readInt(self.file, 8))
+        ref = readInt(self.file, 6) - 8
+        vType = ValueType(readInt(self.file, 1))
+        self.file.seek(ref + 8)
+        if vType == ValueType.DoubleVector:
+            return self.readDoubleVector(readInt(self.file, 8))
+        print('UnHandled frames value type:', vType.name)
+        return []
+
+    def readSampleReps(self, ref):
+        self.file.seek(ref)
+        self.file.seek(ref + readInt(self.file, 8) + 8)
+        count = readInt(self.file, readInt(self.file, 8))
+        reps = []
+        for i in range(count):
+            # Read the refrence and value type
+            payload = readInt(self.file, 6)
+            vType = readInt(self.file, 1)
+            rep = (payload & PAYLOAD_MASK) | (vType << 48)
+            elem = readInt(self.file, 1)
+            if elem > 0:
+                if elem == 64:
+                    rep |= INLINE_BIT
+                else:
+                    rep |= ARRAY_BIT
+            reps.append(rep)
+        return reps
+
+    def readTimeSamples(self, ref):
+        frames = self.readTimeFrames(ref)
+        reps = self.readSampleReps(ref)
+        return [(f, self.getRepValue(r)) for f, r in zip(frames, reps)]
 
     def getRepValue(self, rep):
         rep = decodeRep(rep)
         if rep['type'] == ValueType.token:
             if not rep['inline']:
                 self.file.seek(rep['payload'])
-                numTokens = readInt(self.file, 4)
+                numBytes = 4 if self.version < 7 else 8
+                numTokens = readInt(self.file, numBytes)
                 tokens = []
                 for i in range(numTokens):
                     token = readInt(self.file, 4)
@@ -948,7 +986,7 @@ class CrateFile:
             return struct.unpack('<f', self.file.read(4))
         elif rep['type'] == ValueType.double:
             if rep['inline']:
-                return struct.unpack('<d', rep['payload'].to_bytes(8, byteorder='little'))[0]
+                return struct.unpack('<f', rep['payload'].to_bytes(4, byteorder='little'))[0]
             self.file.seek(rep['payload'])
             if rep['array']:
                 countBytes = 4 if self.version < 7 else 8
@@ -959,13 +997,13 @@ class CrateFile:
             return self.decodeRepFloatVector(rep, 2)
         elif rep['type'] == ValueType.vec3f:
             return self.decodeRepFloatVector(rep, 3)
-        elif rep['type'] == ValueType.vec4f:
+        elif rep['type'] in (ValueType.vec4f, ValueType.quatf):
             return self.decodeRepFloatVector(rep, 4)
         elif rep['type'] == ValueType.vec2d:
             return self.decodeRepDoubleVector(rep, 2)
         elif rep['type'] == ValueType.vec3d:
             return self.decodeRepDoubleVector(rep, 3)
-        elif rep['type'] == ValueType.vec4d:
+        elif rep['type'] in (ValueType.vec4d, ValueType.quatd):
             return self.decodeRepDoubleVector(rep, 4)
         elif rep['type'] == ValueType.matrix2d:
             return self.decodeRepMatrix(rep, 2)
@@ -975,6 +1013,8 @@ class CrateFile:
             return self.decodeRepMatrix(rep, 4)
         elif rep['type'] == ValueType.Dictionary:
             return self.readDictionary(rep['payload'])
+        elif rep['type'] == ValueType.TimeSamples:
+            return self.readTimeSamples(rep['payload'])
         #else:
         #    print('UnHandled Type:', rep)
         return rep
