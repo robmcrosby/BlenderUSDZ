@@ -319,15 +319,17 @@ def getObjects(data):
             objects += getObjects(child)
         elif child.classType in (ClassType.Xform, ClassType.SkelRoot):
             objects.append(child)
+        elif child.classType == ClassType.Mesh and 'xformOpOrder' in child:
+            objects.append(child)
     return objects
 
 
 def getMeshes(data):
+    if data.classType == ClassType.Mesh:
+        return [data]
     meshes = []
     for child in data.children:
-        if child.classType == ClassType.Scope:
-            meshes += getObjects(child)
-        elif child.classType == ClassType.Mesh:
+        if child.classType == ClassType.Mesh and not 'xformOpOrder' in child:
             meshes.append(child)
     return meshes
 

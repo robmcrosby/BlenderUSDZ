@@ -1,4 +1,5 @@
 import bpy
+import math
 import mathutils
 
 epslon = 0.000001
@@ -119,7 +120,7 @@ def convertBpyMatrix(matrix):
 
 def convertBpyRootMatrix(matrix, scale):
     scale = mathutils.Matrix.Scale(scale, 4)
-    rotation = mathutils.Matrix.Rotation(-pi/2.0, 4, 'X')
+    rotation = mathutils.Matrix.Rotation(-math.pi/2.0, 4, 'X')
     return convertBpyMatrix(rotation @ scale @ matrix)
 
 

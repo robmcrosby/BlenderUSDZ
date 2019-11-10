@@ -2,7 +2,7 @@
 bl_info = {
     "name":        "USDZ Export",
     "author":      "Robert Crosby",
-    "version":     (0, 0, 3),
+    "version":     (0, 0, 4),
     "blender":     (2, 80, 0),
     "location":    "File > Import-Export",
     "description": "Import/Export USDZ Files",
