@@ -228,6 +228,16 @@ def addObject(context, data, materials = {}, parent = None, animated = False):
         addObject(context, child, materials, obj, animated)
 
 
+def addMaterial(obj, rel, materials):
+    matName = rel.value.name
+    if matName in materials:
+        mat = materials[matName]
+        if not mat.name in obj.data.materials:
+            obj.data.materials.append(mat)
+        return obj.data.materials.find(mat.name)
+    return 0
+
+
 def addMesh(obj, data, uvs, materials):
     # Get Geometry From Data
     counts = data['faceVertexCounts'].value
@@ -254,35 +264,40 @@ def addMesh(obj, data, uvs, materials):
         index += count
     # Assign the Material
     matIndex = 0
-    matRel = None
     if 'material:binding' in data:
-        matRel = data['material:binding']
-    else:
-        geomSubset = data.getChildOfType(ClassType.GeomSubset)
-        if geomSubset != None:
-            matRel = geomSubset['material:binding']
-    if matRel != None and matRel.value != None:
-        if matRel.value.name in materials:
-            mat = materials[matRel.value.name]
-            if not mat in obj.data.materials.values():
-                matIndex = len(obj.data.materials)
-                obj.data.materials.append(materials[matRel.value.name])
-            else:
-                matIndex = obj.data.materials.values().index(mat)
+        matIndex = addMaterial(obj, data['material:binding'], materials)
+    # Get Material Sub Sets
+    matSubsets = []
+    for geomSubset in data.getChildrenOfType(ClassType.GeomSubset):
+        type = geomSubset['familyName']
+        if type != None and type.value == 'materialBind':
+            rel = geomSubset['material:binding']
+            indices = geomSubset['indices']
+            if rel != None and indices != None:
+                index = addMaterial(obj, rel, materials)
+                matSubsets.append((index, indices.value))
     # Create BMesh from Mesh Object
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     # Add the Vertices
-    base = len(bm.verts)
+    vBase = len(bm.verts)
+    fBase = len(bm.faces)
     for vert in verts:
         bm.verts.new(vert)
     bm.verts.ensure_lookup_table()
     # Add the Faces
     index = 0
     for i, face in enumerate(faces):
-        f = bm.faces.new((bm.verts[i + base] for i in face))
+        f = bm.faces.new((bm.verts[i + vBase] for i in face))
         f.smooth = smooth[i]
         f.material_index = matIndex
+    # Assign Aditional Materials
+    bm.faces.ensure_lookup_table()
+    for matIndex, indices in matSubsets:
+        for i in indices:
+            fIndex = i + fBase
+            if fIndex < len(bm.faces):
+                bm.faces[fIndex].material_index = matIndex
     # Add the UVs
     for uvName, uvs in uvMaps.items():
         uvIndex = bm.loops.layers.uv[uvName]
