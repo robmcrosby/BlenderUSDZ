@@ -95,6 +95,21 @@ def getOpMatrix(data, opName):
     return matrix
 
 
+def getFrameMatrix(opName, values, frame):
+    invert = '!invert!' in opName
+    opName = opName.replace('!invert!', '')
+    matrix = mathutils.Matrix()
+    if opName in ('xformOp:transform', 'xformOp:transform:transforms'):
+        if type(values) is dict:
+            if frame in values:
+                matrix = mathutils.Matrix(values[frame])
+                matrix.transpose()
+        else:
+            matrix = mathutils.Matrix(values)
+            matrix.transpose()
+    return matrix
+
+
 def applyRidgidTransforms(data, obj):
     matrix = mathutils.Matrix()
     if 'xformOpOrder' in data:
@@ -106,6 +121,50 @@ def applyRidgidTransforms(data, obj):
 
 
 def applyRidgidAnimation(context, data, obj):
+    keyFrames = set()
+    keyValues = []
+    if 'xformOpOrder' in data:
+        for opName in reversed(data['xformOpOrder'].value):
+            keyData = data[opName]
+            if keyData != None:
+                if keyData.frames != None:
+                    values = {}
+                    for frame, value in keyData.frames:
+                        keyFrames.add(frame)
+                        values[frame] = value
+                    keyValues.append((opName, values))
+                elif keyData.value != None:
+                    keyValues.append((opName, keyData.value))
+    if len(keyFrames) > 0:
+        selectBpyObject(obj)
+        for frame in keyFrames:
+            context.scene.frame_set(frame)
+            matrix = mathutils.Matrix()
+            for opName, values in keyValues:
+                matrix = getFrameMatrix(opName, values, frame) @ matrix
+            if obj.parent == None:
+                matrix = matrix @ mathutils.Matrix.Rotation(math.pi/2.0, 4, 'X')
+            obj.matrix_local = matrix
+            bpy.ops.anim.keyframe_insert_menu(type='LocRotScale')
+        deselectBpyObjects()
+    else:
+        applyRidgidTransforms(data, obj)
+    """
+    selectBpyObject(obj)
+    for frame in range(context.scene.frame_start, context.scene.frame_end+1):
+        context.scene.frame_set(frame)
+        matrix = mathutils.Matrix()
+        if 'xformOpOrder' in data:
+            for opName in reversed(data['xformOpOrder'].value):
+                matrix = getOpMatrixFrame(data, opName, frame) @ matrix
+        if obj.parent == None:
+            matrix = matrix @ mathutils.Matrix.Rotation(math.pi/2.0, 4, 'X')
+        obj.matrix_local = matrix
+        bpy.ops.anim.keyframe_insert_menu(type='LocRotScale')
+    deselectBpyObjects()
+    """
+
+    """
     transforms = data['xformOp:transform:transforms']
     if transforms != None:
         selectBpyObject(obj)
@@ -121,6 +180,7 @@ def applyRidgidAnimation(context, data, obj):
         deselectBpyObjects()
     else:
         applyRidgidTransforms(data, obj)
+    """
 
 
 def addBone(arm, joint, pose):
@@ -347,6 +407,7 @@ def getMeshes(data):
         if child.classType == ClassType.Mesh and not 'xformOpOrder' in child:
             meshes.append(child)
     return meshes
+
 
 def importMaterials(data, tempDir):
     materialMap = {}
