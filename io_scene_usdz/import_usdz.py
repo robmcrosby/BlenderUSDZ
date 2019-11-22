@@ -95,6 +95,21 @@ def getOpMatrix(data, opName):
     return matrix
 
 
+def getFrameMatrix(opName, values, frame):
+    invert = '!invert!' in opName
+    opName = opName.replace('!invert!', '')
+    matrix = mathutils.Matrix()
+    if opName in ('xformOp:transform', 'xformOp:transform:transforms'):
+        if type(values) is dict:
+            if frame in values:
+                matrix = mathutils.Matrix(values[frame])
+                matrix.transpose()
+        else:
+            matrix = mathutils.Matrix(values)
+            matrix.transpose()
+    return matrix
+
+
 def applyRidgidTransforms(data, obj):
     matrix = mathutils.Matrix()
     if 'xformOpOrder' in data:
@@ -106,6 +121,50 @@ def applyRidgidTransforms(data, obj):
 
 
 def applyRidgidAnimation(context, data, obj):
+    keyFrames = set()
+    keyValues = []
+    if 'xformOpOrder' in data:
+        for opName in reversed(data['xformOpOrder'].value):
+            keyData = data[opName]
+            if keyData != None:
+                if keyData.frames != None:
+                    values = {}
+                    for frame, value in keyData.frames:
+                        keyFrames.add(frame)
+                        values[frame] = value
+                    keyValues.append((opName, values))
+                elif keyData.value != None:
+                    keyValues.append((opName, keyData.value))
+    if len(keyFrames) > 0:
+        selectBpyObject(obj)
+        for frame in keyFrames:
+            context.scene.frame_set(frame)
+            matrix = mathutils.Matrix()
+            for opName, values in keyValues:
+                matrix = getFrameMatrix(opName, values, frame) @ matrix
+            if obj.parent == None:
+                matrix = matrix @ mathutils.Matrix.Rotation(math.pi/2.0, 4, 'X')
+            obj.matrix_local = matrix
+            bpy.ops.anim.keyframe_insert_menu(type='LocRotScale')
+        deselectBpyObjects()
+    else:
+        applyRidgidTransforms(data, obj)
+    """
+    selectBpyObject(obj)
+    for frame in range(context.scene.frame_start, context.scene.frame_end+1):
+        context.scene.frame_set(frame)
+        matrix = mathutils.Matrix()
+        if 'xformOpOrder' in data:
+            for opName in reversed(data['xformOpOrder'].value):
+                matrix = getOpMatrixFrame(data, opName, frame) @ matrix
+        if obj.parent == None:
+            matrix = matrix @ mathutils.Matrix.Rotation(math.pi/2.0, 4, 'X')
+        obj.matrix_local = matrix
+        bpy.ops.anim.keyframe_insert_menu(type='LocRotScale')
+    deselectBpyObjects()
+    """
+
+    """
     transforms = data['xformOp:transform:transforms']
     if transforms != None:
         selectBpyObject(obj)
@@ -121,6 +180,7 @@ def applyRidgidAnimation(context, data, obj):
         deselectBpyObjects()
     else:
         applyRidgidTransforms(data, obj)
+    """
 
 
 def addBone(arm, joint, pose):
@@ -228,6 +288,16 @@ def addObject(context, data, materials = {}, parent = None, animated = False):
         addObject(context, child, materials, obj, animated)
 
 
+def addMaterial(obj, rel, materials):
+    matName = rel.value.name
+    if matName in materials:
+        mat = materials[matName]
+        if not mat.name in obj.data.materials:
+            obj.data.materials.append(mat)
+        return obj.data.materials.find(mat.name)
+    return 0
+
+
 def addMesh(obj, data, uvs, materials):
     # Get Geometry From Data
     counts = data['faceVertexCounts'].value
@@ -254,35 +324,40 @@ def addMesh(obj, data, uvs, materials):
         index += count
     # Assign the Material
     matIndex = 0
-    matRel = None
     if 'material:binding' in data:
-        matRel = data['material:binding']
-    else:
-        geomSubset = data.getChildOfType(ClassType.GeomSubset)
-        if geomSubset != None:
-            matRel = geomSubset['material:binding']
-    if matRel != None and matRel.value != None:
-        if matRel.value.name in materials:
-            mat = materials[matRel.value.name]
-            if not mat in obj.data.materials.values():
-                matIndex = len(obj.data.materials)
-                obj.data.materials.append(materials[matRel.value.name])
-            else:
-                matIndex = obj.data.materials.values().index(mat)
+        matIndex = addMaterial(obj, data['material:binding'], materials)
+    # Get Material Sub Sets
+    matSubsets = []
+    for geomSubset in data.getChildrenOfType(ClassType.GeomSubset):
+        type = geomSubset['familyName']
+        if type != None and type.value == 'materialBind':
+            rel = geomSubset['material:binding']
+            indices = geomSubset['indices']
+            if rel != None and indices != None:
+                index = addMaterial(obj, rel, materials)
+                matSubsets.append((index, indices.value))
     # Create BMesh from Mesh Object
     bm = bmesh.new()
     bm.from_mesh(obj.data)
     # Add the Vertices
-    base = len(bm.verts)
+    vBase = len(bm.verts)
+    fBase = len(bm.faces)
     for vert in verts:
         bm.verts.new(vert)
     bm.verts.ensure_lookup_table()
     # Add the Faces
     index = 0
     for i, face in enumerate(faces):
-        f = bm.faces.new((bm.verts[i + base] for i in face))
+        f = bm.faces.new((bm.verts[i + vBase] for i in face))
         f.smooth = smooth[i]
         f.material_index = matIndex
+    # Assign Aditional Materials
+    bm.faces.ensure_lookup_table()
+    for matIndex, indices in matSubsets:
+        for i in indices:
+            fIndex = i + fBase
+            if fIndex < len(bm.faces):
+                bm.faces[fIndex].material_index = matIndex
     # Add the UVs
     for uvName, uvs in uvMaps.items():
         uvIndex = bm.loops.layers.uv[uvName]
@@ -332,6 +407,7 @@ def getMeshes(data):
         if child.classType == ClassType.Mesh and not 'xformOpOrder' in child:
             meshes.append(child)
     return meshes
+
 
 def importMaterials(data, tempDir):
     materialMap = {}
@@ -408,17 +484,16 @@ def setShaderInputTexture(data, mat, inputName, matData, tempDir):
         texNode = mat.node_tree.nodes.new('ShaderNodeTexImage')
         texNode.image = bpy.data.images.load(filePath)
         texNode.image.pack()
-        valueType = data.valueTypeToString()
-        if valueType == 'color3f':
+        if input.type == 'RGBA':
             # Connect to the Color Input
-            mat.node_tree.links.new(input, texNode.outputs[0])
-        elif valueType == 'float':
+            mat.node_tree.links.new(input, texNode.outputs['Color'])
+        elif input.type == 'VALUE':
             # Add and link a Seperate Color Node
             texNode.image.colorspace_settings.name = 'Non-Color'
             sepNode = mat.node_tree.nodes.new('ShaderNodeSeparateRGB')
             mat.node_tree.links.new(sepNode.inputs[0], texNode.outputs[0])
             mat.node_tree.links.new(input, sepNode.outputs[0])
-        elif valueType == 'normal3f':
+        elif input.type == 'VECTOR':
             # Add and link a Normal Map Node
             texNode.image.colorspace_settings.name = 'Non-Color'
             mapNode = mat.node_tree.nodes.new('ShaderNodeNormalMap')
