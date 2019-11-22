@@ -105,3 +105,4 @@ venv.bak/
 *.blend1
 exports/
 testing/.DS_Store
+.DS_Store
