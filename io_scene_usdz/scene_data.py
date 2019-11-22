@@ -675,7 +675,7 @@ class Scene:
         self.context.scene.cycles.samples = self.bakeSamples
         # Bake textures for each Object
         for obj in self.objMap.values():
-            if obj.type:
+            if obj.type == 'MESH':
                 obj.bakeTextures()
         # Restore the previous Render Engine and Samples
         self.context.scene.cycles.samples = samples
