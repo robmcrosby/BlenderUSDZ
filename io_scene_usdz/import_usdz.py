@@ -484,17 +484,16 @@ def setShaderInputTexture(data, mat, inputName, matData, tempDir):
         texNode = mat.node_tree.nodes.new('ShaderNodeTexImage')
         texNode.image = bpy.data.images.load(filePath)
         texNode.image.pack()
-        valueType = data.valueTypeToString()
-        if valueType == 'color3f':
+        if input.type == 'RGBA':
             # Connect to the Color Input
-            mat.node_tree.links.new(input, texNode.outputs[0])
-        elif valueType == 'float':
+            mat.node_tree.links.new(input, texNode.outputs['Color'])
+        elif input.type == 'VALUE':
             # Add and link a Seperate Color Node
             texNode.image.colorspace_settings.name = 'Non-Color'
             sepNode = mat.node_tree.nodes.new('ShaderNodeSeparateRGB')
             mat.node_tree.links.new(sepNode.inputs[0], texNode.outputs[0])
             mat.node_tree.links.new(input, sepNode.outputs[0])
-        elif valueType == 'normal3f':
+        elif input.type == 'VECTOR':
             # Add and link a Normal Map Node
             texNode.image.colorspace_settings.name = 'Non-Color'
             mapNode = mat.node_tree.nodes.new('ShaderNodeNormalMap')

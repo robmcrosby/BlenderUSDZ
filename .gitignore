@@ -104,3 +104,4 @@ venv.bak/
 .mypy_cache/
 *.blend1
 exports/
+testing/.DS_Store
