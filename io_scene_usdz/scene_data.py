@@ -17,6 +17,7 @@ class ShaderInput:
         self.uvMap = None
         self.usdAtt = None
 
+
     def exportShaderInput(self, material, usdShader):
         if self.usdAtt != None:
             usdShader['inputs:'+self.name] = self.usdAtt
@@ -24,6 +25,7 @@ class ShaderInput:
             usdShader['inputs:'+self.name] = self.value
             if usdShader['inputs:'+self.name].valueType.name != self.type:
                 usdShader['inputs:'+self.name].valueTypeStr = self.type
+
 
     def exportShader(self, material, usdMaterial):
         if self.image != None and self.uvMap != None:
@@ -64,6 +66,7 @@ class Material:
         self.bakeNodes = []
         self.createInputs()
 
+
     def createInputs(self):
         defDiffuseColor = self.material.diffuse_color[:3]
         defRoughness = self.material.roughness
@@ -93,6 +96,7 @@ class Material:
             'useSpecularWorkflow':ShaderInput('int', 'useSpecularWorkflow', useSpecular),
         }
 
+
     def setupBakeOutputNodes(self):
         nodes = self.material.node_tree.nodes
         self.activeNode = nodes.active
@@ -105,6 +109,7 @@ class Material:
         links = self.material.node_tree.links
         links.new(self.bakeImageNode.inputs[0], self.bakeUVMapNode.outputs[0])
 
+
     def cleanupBakeOutputNodes(self):
         self.cleanupBakeNodes()
         nodes = self.material.node_tree.nodes
@@ -115,6 +120,7 @@ class Material:
         if self.bakeUVMapNode != None:
             nodes.remove(self.bakeUVMapNode)
             self.bakeUVMapNode = None
+
 
     def setupBakeColorOutput(self, output):
         if output != None:
@@ -127,10 +133,12 @@ class Material:
             return True
         return False
 
+
     def setupBakeColorInput(self, input):
         if input != None and input.is_linked:
             return self.setupBakeColorOutput(input.links[0].from_socket)
         return False
+
 
     def setupBakeFloatOutput(self, output):
         if output != None:
@@ -144,10 +152,12 @@ class Material:
             return self.setupBakeColorOutput(convertNode.outputs[0])
         return False
 
+
     def setupBakeFloatInput(self, input):
         if input != None and input.is_linked:
             return self.setupBakeFloatOutput(input.links[0].from_socket)
         return False
+
 
     def setupBakeDiffuse(self, asset):
         input = getBpyDiffuseInput(self.shaderNode)
@@ -157,6 +167,7 @@ class Material:
             return True
         return False
 
+
     def setupBakeRoughness(self, asset):
         input = getBpyRoughnessInput(self.shaderNode)
         if self.setupBakeFloatInput(input):
@@ -164,6 +175,7 @@ class Material:
             self.inputs['roughness'].uvMap = self.object.bakeUVMap
             return True
         return False
+
 
     def setupBakeMetallic(self, asset):
         input = getBpyMetallicInput(self.shaderNode)
@@ -174,6 +186,7 @@ class Material:
             return True
         return False
 
+
     def setupBakeNormals(self, asset):
         input = getBpyNormalInput(self.shaderNode)
         if input != None and input.is_linked:
@@ -181,6 +194,7 @@ class Material:
             self.inputs['normal'].uvMap = self.object.bakeUVMap
             return True
         return False
+
 
     def cleanupBakeNodes(self):
         if len(self.bakeNodes) > 0:
@@ -191,9 +205,11 @@ class Material:
             links = self.material.node_tree.links
             links.new(self.outputNode.inputs[0], self.shaderNode.outputs[0])
 
+
     def setBakeImage(self, image):
         if self.bakeImageNode != None:
             self.bakeImageNode.image = image
+
 
     def getUVMaps(self):
         uvMaps = set()
@@ -202,8 +218,10 @@ class Material:
                 uvMaps.add(input.uvMap)
         return list(uvMaps)
 
+
     def getPath(self):
         return self.object.getPath()+'/'+self.name
+
 
     def exportPrimvar(self, usdMaterial):
         uvMaps = self.getUVMaps()
@@ -216,9 +234,11 @@ class Material:
             usdShader['inputs:varname'] = usdMaterial['inputs:frame:stPrimvar_' + map]
             usdShader['outputs:result'] = ValueType.vec2f
 
+
     def exportInputs(self, usdMaterial):
         for input in self.inputs.values():
             input.exportShader(self, usdMaterial)
+
 
     def exportPbrShader(self, usdMaterial):
         usdShader = usdMaterial.createChild('pbr', ClassType.Shader)
@@ -228,6 +248,7 @@ class Material:
         usdShader['outputs:displacement'] = ValueType.token
         usdShader['outputs:surface'] = ValueType.token
         return usdShader
+
 
     def exportUsd(self, parent):
         self.usdMaterial = parent.createChild(self.name, ClassType.Material)
@@ -256,17 +277,21 @@ class Object:
         self.bakeImage = None
         self.hidden = object.hide_render
 
+
     def __del__(self):
         self.cleanup()
+
 
     def cleanup(self):
         self.clearCopies()
         self.materials = []
         self.object.hide_render = self.hidden
 
+
     def hasParent(self):
         parent = self.object.parent
         return parent != None and parent.type != 'ARMATURE'
+
 
     def getArmature(self):
         parent = self.object.parent
@@ -274,11 +299,13 @@ class Object:
             return parent
         return None
 
+
     def createMaterials(self):
         self.materials = []
         if self.scene.exportMaterials:
             for slot in self.object.material_slots:
                 self.materials.append(Material(self, slot.material))
+
 
     def createCopies(self):
         self.clearCopies()
@@ -305,6 +332,7 @@ class Object:
         if self.uvMapNeeded(self.objectCopy):
             applyBpySmartProjection(self.objectCopy)
 
+
     def clearCopies(self):
         if self.objectCopy != None:
             deleteBpyObject(self.objectCopy)
@@ -313,21 +341,25 @@ class Object:
             deleteBpyObject(self.armatueCopy)
             self.armatueCopy = None
 
+
     def setAsMesh(self):
         if self.type != 'MESH' and self.object.type == 'MESH':
             self.type = 'MESH'
             self.createMaterials()
             self.createCopies()
 
+
     def uvMapNeeded(self, mesh):
         if self.scene.bakeTextures or self.scene.bakeAO:
             return len(mesh.data.uv_layers) == 0
         return False
 
+
     def getPath(self):
         if self.parent == None:
             return '/'+self.name
         return self.parent.getPath()+'/'+self.name
+
 
     def setupBakeImage(self, file):
         self.cleanupBakeImage()
@@ -338,6 +370,7 @@ class Object:
         for mat in self.materials:
             mat.setBakeImage(self.bakeImage)
 
+
     def cleanupBakeImage(self):
         if self.bakeImage != None:
             images = bpy.data.images
@@ -346,18 +379,22 @@ class Object:
         for mat in self.materials:
             mat.setBakeImage(None)
 
+
     def setupBakeOutputNodes(self):
         self.bakeUVMap = getBpyActiveUvMap(self.object)
         for mat in self.materials:
             mat.setupBakeOutputNodes()
 
+
     def cleanupBakeOutputNodes(self):
         for mat in self.materials:
             mat.cleanupBakeOutputNodes()
 
+
     def cleanupBakeNodes(self):
         for mat in self.materials:
             mat.cleanupBakeNodes()
+
 
     def bakeToFile(self, type, file):
         self.setupBakeImage(file)
@@ -365,6 +402,7 @@ class Object:
         self.bakeImage.save()
         self.scene.textureFilePaths.append(file)
         self.cleanupBakeImage()
+
 
     def bakeDiffuseTexture(self):
         asset = self.name+'_diffuse.png'
@@ -375,6 +413,7 @@ class Object:
             self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
 
+
     def bakeRoughnessTexture(self):
         asset = self.name+'_roughness.png'
         bake = False
@@ -383,6 +422,7 @@ class Object:
         if bake:
             self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
+
 
     def bakeMetallicTexture(self):
         asset = self.name+'_metallic.png'
@@ -393,6 +433,7 @@ class Object:
             self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
 
+
     def bakeNormalTexture(self):
         asset = self.name+'_normal.png'
         bake = False
@@ -401,6 +442,7 @@ class Object:
         if bake:
             self.bakeToFile('NORMAL', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
+
 
     def bakeOcclusionTexture(self):
         asset = self.name+'_occlusion.png'
@@ -411,6 +453,7 @@ class Object:
             bake = True
         if bake:
             self.bakeToFile('AO', self.scene.exportPath+'/'+asset)
+
 
     def bakeTextures(self):
         selectBpyObject(self.objectCopy)
@@ -424,26 +467,29 @@ class Object:
             self.bakeOcclusionTexture()
         self.cleanupBakeOutputNodes()
 
+
     def getTransform(self):
         if self.parent == None:
             scale = self.scene.scale
             return convertBpyRootMatrix(self.object.matrix_world, scale)
         return convertBpyMatrix(self.object.matrix_local)
 
-    def exportMeshUvs(self, usdMesh, material):
+
+    def exportMeshUvs(self, usdMesh):
         mesh = self.objectCopy.data
         for layer in mesh.uv_layers:
-            indices, uvs = exportBpyMeshUvs(mesh, layer, material)
+            indices, uvs = exportBpyMeshUvs(mesh, layer)
             name = layer.name.replace('.', '_')
             usdMesh['primvars:'+name] = uvs
             usdMesh['primvars:'+name].valueTypeStr = 'texCoord2f'
             usdMesh['primvars:'+name]['interpolation'] = 'faceVarying'
             usdMesh['primvars:'+name+':indices'] = indices
 
-    def exportJoints(self, usdMesh, material):
+
+    def exportJoints(self, usdMesh):
         mesh = self.objectCopy.data
         if self.armatueCopy != None and self.scene.animated:
-            indices, weights, size = exportBpyMeshWeights(self.objectCopy, material)
+            indices, weights, size = exportBpyMeshWeights(self.objectCopy)
             usdMesh['primvars:skel:jointIndices'] = indices
             usdMesh['primvars:skel:jointIndices']['elementSize'] = size
             usdMesh['primvars:skel:jointIndices']['interpolation'] = 'vertex'
@@ -451,47 +497,58 @@ class Object:
             usdMesh['primvars:skel:jointWeights']['elementSize'] = size
             usdMesh['primvars:skel:jointWeights']['interpolation'] = 'vertex'
 
-    def exportMesh(self, usdObj, usdSkeleton, usdAnimation, material = -1):
+
+    def exportMaterialSubsets(self, usdMesh):
+        if len(self.materials) == 1:
+            usdMesh['material:binding'] = self.materials[0].usdMaterial
+        elif len(self.materials) > 1:
+            for i, mat in enumerate(self.materials):
+                mesh = self.objectCopy.data
+                subset = usdMesh.createChild(mat.name, ClassType.GeomSubset)
+                subset['elementType'] = 'face'
+                subset['elementType'].addQualifier('uniform')
+                subset['familyName'] = 'materialBind'
+                subset['familyName'].addQualifier('uniform')
+                subset['indices'] = exportBpyFaceIndices(mesh, i)
+                subset['material:binding'] = mat.usdMaterial
+                #subset['material:binding'].addQualifier('uniform')
+
+
+    def exportMesh(self, usdObj):
+        usdSkeleton = self.exportSkeleton(usdObj)
+        usdAnimation = self.exportAnimation(usdObj)
         mesh = self.objectCopy.data
         name = self.object.data.name.replace('.', '_')
-        if material >= 0:
-            name += '_' + self.materials[material].name
         usdMesh = usdObj.createChild(name, ClassType.Mesh)
         usdMesh['extent'] = exportBpyExtents(self.objectCopy, self.scene.scale)
-        usdMesh['faceVertexCounts'] = exportBpyMeshVertexCounts(mesh, material)
-        indices, points = exportBpyMeshVertices(mesh, material)
+        usdMesh['faceVertexCounts'] = exportBpyMeshVertexCounts(mesh)
+        indices, points = exportBpyMeshVertices(mesh)
         usdMesh['faceVertexIndices'] = indices
-        if material >= 0:
-            usdMesh['material:binding'] = self.materials[material].usdMaterial
         usdMesh['points'] = points
         usdMesh['points'].valueTypeStr = 'point3f'
-        self.exportMeshUvs(usdMesh, material)
-        indices, normals = exportBpyMeshNormals(mesh, material)
+        self.exportMeshUvs(usdMesh)
+        indices, normals = exportBpyMeshNormals(mesh)
         usdMesh['primvars:normals'] = normals
         usdMesh['primvars:normals'].valueTypeStr = 'normal3f'
         usdMesh['primvars:normals']['interpolation'] = 'faceVarying'
         usdMesh['primvars:normals:indices'] = indices
         if usdSkeleton != None and usdAnimation != None:
-            self.exportJoints(usdMesh, material)
+            self.exportJoints(usdMesh)
             usdMesh['skel:animationSource'] = usdAnimation
             usdMesh['skel:animationSource'].addQualifier('prepend')
             usdMesh['skel:skeleton'] = usdSkeleton
             usdMesh['skel:skeleton'].addQualifier('prepend')
         usdMesh['subdivisionScheme'] = 'none'
         usdMesh['subdivisionScheme'].addQualifier('uniform')
+        self.exportMaterialSubsets(usdMesh)
 
-    def exportMeshs(self, usdObj):
-        usdSkeleton = self.exportSkeleton(usdObj)
-        usdAnimation = self.exportAnimation(usdObj)
-        if len(self.materials) > 0:
-            for mat in range(0, len(self.materials)):
-                self.exportMesh(usdObj, usdSkeleton, usdAnimation, mat)
-        else:
-            self.exportMesh(usdObj, usdSkeleton, usdAnimation)
 
     def exportMaterials(self, usdObj):
-        for mat in self.materials:
-            mat.exportUsd(usdObj)
+        if len(self.materials) > 0:
+            looks = usdObj.createChild('Looks', ClassType.Scope)
+            for mat in self.materials:
+                mat.exportUsd(looks)
+
 
     def exportSkeleton(self, usdObj):
         usdSkeleton = None
@@ -508,6 +565,7 @@ class Object:
             usdSkeleton['restTransforms'] = rest
             usdSkeleton['restTransforms'].addQualifier('uniform')
         return usdSkeleton
+
 
     def exportArmatureAnimation(self, armature, usdAnimation):
         usdAnimation['rotations'] = ValueType.quatf
@@ -548,6 +606,7 @@ class Object:
         self.scene.context.scene.frame_set(self.scene.curFrame)
         bpy.ops.object.mode_set(mode='OBJECT')
 
+
     def exportAnimation(self, usdObj):
         usdAnimation = None
         if self.armatueCopy != None and self.scene.animated:
@@ -558,6 +617,7 @@ class Object:
             self.exportArmatureAnimation(self.armatueCopy, usdAnimation)
         return usdAnimation
 
+
     def exportTimeSamples(self, item):
         item['xformOp:transform:transforms'] = ValueType.matrix4d
         item = item['xformOp:transform:transforms']
@@ -567,6 +627,7 @@ class Object:
             self.scene.context.scene.frame_set(frame)
             item.addTimeSample(frame, self.getTransform())
         self.scene.context.scene.frame_set(self.scene.curFrame)
+
 
     def exportUsd(self, parent):
         usdObj = None
@@ -588,7 +649,7 @@ class Object:
         # Add Meshes if Mesh Object
         if self.type == 'MESH':
             self.exportMaterials(usdObj)
-            self.exportMeshs(usdObj)
+            self.exportMesh(usdObj)
         # Add Children
         for child in self.children:
             child.exportUsd(usdObj)
@@ -619,6 +680,7 @@ class Scene:
         self.customLayerData = {'creator':'Blender USDZ Plugin'}
         self.collection = None
 
+
     def cleanup(self):
         self.clearObjects()
         deselectBpyObjects()
@@ -627,16 +689,23 @@ class Scene:
         deleteBpyCollection(self.collection)
         self.collection = None
 
+
     def clearObjects(self):
         for obj in self.objMap.values():
             obj.cleanup()
         self.objects = []
         self.objMap = {}
 
+
     def loadContext(self, context):
+        if context == None:
+            context = bpy.context
         bpy.ops.object.mode_set(mode='OBJECT')
         self.context = context
-        self.bpyObjects = context.selected_objects.copy()
+        if len(context.selected_objects) > 0:
+            self.bpyObjects = context.selected_objects.copy()
+        else:
+            self.bpyObjects = context.visible_objects.copy()
         self.bpyActive = context.view_layer.objects.active
         self.startFrame = context.scene.frame_start
         self.endFrame = context.scene.frame_end
@@ -644,6 +713,7 @@ class Scene:
         self.fps = context.scene.render.fps
         self.renderEngine = context.scene.render.engine
         self.loadObjects()
+
 
     def loadObjects(self):
         deleteBpyCollection(self.collection)
@@ -667,6 +737,7 @@ class Scene:
             obj.setAsMesh()
         return obj
 
+
     def exportBakedTextures(self):
         # Set the Render Engine to Cycles and set Samples
         renderEngine = self.context.scene.render.engine
@@ -680,6 +751,7 @@ class Scene:
         # Restore the previous Render Engine and Samples
         self.context.scene.cycles.samples = samples
         self.context.scene.render.engine = renderEngine
+
 
     def exportUsd(self):
         data = UsdData()

@@ -151,6 +151,14 @@ def exportBpyMeshVertexCounts(mesh, material = -1):
     return counts
 
 
+def exportBpyFaceIndices(mesh, material = -1):
+    indices = []
+    for poly in mesh.polygons:
+        if poly.material_index == material or material == -1:
+            indices.append(poly.index)
+    return indices
+
+
 def exportBpyMeshVertices(mesh, material = -1):
     indices = []
     vertices = []
