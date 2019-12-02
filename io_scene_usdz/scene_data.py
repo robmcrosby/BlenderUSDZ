@@ -712,6 +712,7 @@ class Scene:
         self.curFrame = context.scene.frame_current
         self.fps = context.scene.render.fps
         self.renderEngine = context.scene.render.engine
+        self.scale *= self.getSceneScale()
         self.loadObjects()
 
 
@@ -721,6 +722,34 @@ class Scene:
         for obj in self.bpyObjects:
             if (obj.type == 'MESH'):
                 self.addBpyObject(obj, obj.type)
+
+    def getSceneScale(self):
+        settings = self.context.scene.unit_settings
+        scale = 1.0
+        if settings.system == 'METRIC':
+            if settings.length_unit == 'KILOMETERS':
+                scale = 100000.0
+            elif settings.length_unit == 'METERS':
+                scale = 100.0
+            elif settings.length_unit == 'CENTIMETERS':
+                scale = 1.0
+            elif settings.length_unit == 'MILLIMETERS':
+                scale = 0.1
+            elif settings.length_unit == 'MILLIMETERS':
+                scale = 0.0001
+        elif settings.system == 'IMPERIAL':
+            scale = 2.54
+            if settings.length_unit == 'MILES':
+                scale = 160934.0
+            elif settings.length_unit == 'FEET':
+                scale = 30.48
+            elif settings.length_unit == 'INCHES':
+                scale = 2.54
+            elif settings.length_unit == 'THOU':
+                scale = 0.00254
+        else:
+            scale = 10.0
+        return scale * settings.scale_length
 
     def addBpyObject(self, object, type = 'EMPTY'):
         obj = Object(object, self)
