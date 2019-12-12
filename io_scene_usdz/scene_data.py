@@ -712,7 +712,7 @@ class Scene:
         self.curFrame = context.scene.frame_current
         self.fps = context.scene.render.fps
         self.renderEngine = context.scene.render.engine
-        self.scale *= self.getSceneScale()
+        self.scale *= self.getUnitScale()
         self.loadObjects()
 
 
@@ -722,6 +722,14 @@ class Scene:
         for obj in self.bpyObjects:
             if (obj.type == 'MESH'):
                 self.addBpyObject(obj, obj.type)
+
+
+    def getUnitScale(self):
+        settings = self.context.scene.unit_settings
+        if settings.system == 'NONE':
+            return 10.0
+        return 100.0 * settings.scale_length
+
 
     def getSceneScale(self):
         settings = self.context.scene.unit_settings
