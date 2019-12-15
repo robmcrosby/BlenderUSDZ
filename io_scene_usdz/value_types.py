@@ -221,7 +221,7 @@ class UsdAttribute:
         self.value = value
         self.frames = []
         self.qualifiers = []
-        self.properties = {}
+        self.metadata = {}
         self.valueType = type
         self.valueTypeStr = None
         self.parent = None
@@ -236,10 +236,10 @@ class UsdAttribute:
         return self.toString()
 
     def __setitem__(self, key, item):
-        self.properties[key] = item
+        self.metadata[key] = item
 
     def __getitem__(self, key):
-        return self.properties[key]
+        return self.metadata[key]
 
     def toString(self, space = '', debug = False):
         ret = space
@@ -257,14 +257,14 @@ class UsdAttribute:
         else:
             if self.value != None:
                 ret += ' = ' + self.valueToString(debug)
-                if len(self.properties) > 0:
-                    ret += self.propertiesToString(space)
+                if len(self.metadata) > 0:
+                    ret += self.metadataToString(space)
         return ret + '\n'
 
-    def propertiesToString(self, space):
+    def metadataToString(self, space):
         indent = space + TAB
         ret = ' (\n'
-        for k, v in self.properties.items():
+        for k, v in self.metadata.items():
             ret += indent + k + ' = ' + propertyToString(v, indent) + '\n'
         return ret + space + ')'
 
@@ -432,17 +432,17 @@ class UsdClass:
 
     def resolvePaths(self, root):
         for att in self.attributes:
-            if 'connectionChildren' in att.properties:
-                pathIndex = att.properties.pop('connectionChildren')
+            if 'connectionChildren' in att.metadata:
+                pathIndex = att.metadata.pop('connectionChildren')
                 att.value = root.getItemAtPathIndex(pathIndex)
-            if 'connectionPaths' in att.properties:
-                paths = att.properties.pop('connectionPaths')
+            if 'connectionPaths' in att.metadata:
+                paths = att.metadata.pop('connectionPaths')
                 att.value = root.getItemAtPathIndex(paths['path'])
-            if 'targetChildren' in att.properties:
-                pathIndex = att.properties.pop('targetChildren')
+            if 'targetChildren' in att.metadata:
+                pathIndex = att.metadata.pop('targetChildren')
                 att.value = root.getItemAtPathIndex(pathIndex)
-            if 'targetPaths' in att.properties:
-                paths = att.properties.pop('targetPaths')
+            if 'targetPaths' in att.metadata:
+                paths = att.metadata.pop('targetPaths')
                 att.value = root.getItemAtPathIndex(paths['path'])
         for child in self.children:
             child.resolvePaths(root)
@@ -480,7 +480,7 @@ class UsdClass:
 
 class UsdData:
     def __init__(self):
-        self.properties = {}
+        self.metadata = {}
         self.children = []
         self.attributes = []
         self.pathIndex = 0
@@ -490,23 +490,23 @@ class UsdData:
         return self.toString()
 
     def __setitem__(self, key, item):
-        self.properties[key] = item
+        self.metadata[key] = item
 
     def __getitem__(self, key):
-        return self.properties[key]
+        return self.metadata[key]
 
     def toString(self, debug = False):
         ret = '#usda 1.0\n'
-        ret += self.propertiesToString()
+        ret += self.metadataToString()
         ret += '\n'
         return ret + ''.join(c.toString('', debug) for c in self.children)
 
     def getPathStr(self):
         return ''
 
-    def propertiesToString(self):
+    def metadataToString(self):
         ret = '(\n'
-        for k, v in self.properties.items():
+        for k, v in self.metadata.items():
             ret += TAB + k + ' = ' + propertyToString(v, TAB) + '\n'
         return ret + ')\n'
 

@@ -563,7 +563,7 @@ class CrateFile:
                 fset.append(self.addField('variability', True, ValueType.Variability))
             elif q == 'custom':
                 fset.append(self.addField('custom', True))
-        for name, value in usdAtt.properties.items():
+        for name, value in usdAtt.metadata.items():
             fset.append(self.addField(name, value))
         if usdAtt.value != None:
             fset.append(self.addField('default', usdAtt.value, usdAtt.valueType))
@@ -607,9 +607,9 @@ class CrateFile:
     def writeUsd(self, usdData):
         usdData.updatePathIndices()
         self.writeBootStrap()
-        # Add Root Properties
+        # Add Root Metadata
         fset = []
-        for name, value in usdData.properties.items():
+        for name, value in usdData.metadata.items():
             if type(value) is float:
                 fset.append(self.addFieldDouble(name, value))
             else:
@@ -675,7 +675,7 @@ class CrateFile:
                 att.addQualifier('custom')
             if 'timeSamples' in properties:
                 att.frames = properties.pop('timeSamples')
-            att.properties = properties
+            att.metadata = properties
         elif specType == SpecType.Relationship:
             rel = parent.createAttribute(name)
             rel.pathIndex = path
@@ -684,7 +684,7 @@ class CrateFile:
                 rel.addQualifier('uniform')
             if 'custom' in properties and properties.pop('custom') == 1:
                 rel.addQualifier('custom')
-            rel.properties = properties
+            rel.metadata = properties
         return (index + 1, jump)
 
     def readUsd(self):
@@ -692,9 +692,9 @@ class CrateFile:
         path, token, jump = self.paths[0]
         fset, spec = self.specsMap[path]
         data = UsdData()
-        data.properties = self.getFieldSetProperties(fset)
-        if 'primChildren' in data.properties:
-            data.properties.pop('primChildren')
+        data.metadata = self.getFieldSetProperties(fset)
+        if 'primChildren' in data.metadata:
+            data.metadata.pop('primChildren')
         index = 1
         while index < len(self.paths):
             index, jump = self.readUsdItem(data, index)

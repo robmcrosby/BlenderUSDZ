@@ -55,11 +55,11 @@ def findUsdz(dirpath):
 
 def importData(context, usdData, tempDir, materials, animated):
     if animated:
-        if 'startTimeCode' in usdData.properties:
+        if 'startTimeCode' in usdData.metadata:
             context.scene.frame_start = usdData['startTimeCode']
-        if 'endTimeCode' in usdData.properties:
+        if 'endTimeCode' in usdData.metadata:
             context.scene.frame_end = usdData['endTimeCode']
-        if 'timeCodesPerSecond' in usdData.properties:
+        if 'timeCodesPerSecond' in usdData.metadata:
             context.scene.render.fps = usdData['timeCodesPerSecond']
     materials = importMaterials(usdData, tempDir) if materials else {}
     objects = getObjects(usdData)
