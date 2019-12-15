@@ -630,15 +630,15 @@ class CrateFile:
         self.writeSections()
         self.writeTableOfContents()
 
-    def getFieldSetProperties(self, fset):
-        properties = {}
+    def getFieldSetMetadata(self, fset):
+        metadata = {}
         fset = self.getFieldSet(fset)
         for field in fset:
             if field < len(self.reps):
                 name = self.getTokenStr(self.fields[field])
                 value = self.getRepValue(self.reps[field])
-                properties[name] = value
-        return properties
+                metadata[name] = value
+        return metadata
 
 
     def readUsdItem(self, parent = None, index = 0):
@@ -647,11 +647,20 @@ class CrateFile:
             return (index + 1, -1)
         fset, spec = self.specsMap[path]
         specType = SpecType(spec)
-        properties = self.getFieldSetProperties(fset)
+        metadata = self.getFieldSetMetadata(fset)
         name = self.getTokenStr(token)
         if specType == SpecType.Prim:
-            classType = ClassType[properties.pop('typeName')]
+            classType = None
+            if 'typeName' in metadata:
+                classType = ClassType[metadata.pop('typeName')]
             prim = parent.createChild(name, classType)
+            if 'specifier' in metadata:
+                metadata.pop('specifier')
+            if 'properties' in metadata:
+                metadata.pop('properties')
+            if 'primChildren' in metadata:
+                metadata.pop('primChildren')
+            prim.metadata = metadata
             prim.pathIndex = path
             index += 1
             itemJump = jump
@@ -660,31 +669,31 @@ class CrateFile:
             jump = -2 if jump == -1 else -1
             return (index, jump)
         elif specType == SpecType.Attribute:
-            valueTypeStr = properties.pop('typeName').replace('[]', '')
+            valueTypeStr = metadata.pop('typeName').replace('[]', '')
             valueType = getValueTypeFromStr(valueTypeStr)
-            value = properties.pop('default') if 'default' in properties else None
+            value = metadata.pop('default') if 'default' in metadata else None
             if valueType == ValueType.asset and type(value) == str:
                 value = value.replace('@', '')
             att = parent.createAttribute(name, value, valueType)
             att.pathIndex = path
             if att.valueType.name != valueTypeStr:
                 att.valueTypeStr = valueTypeStr
-            if 'variability' in properties and properties.pop('variability') == 1:
+            if 'variability' in metadata and metadata.pop('variability') == 1:
                 att.addQualifier('uniform')
-            if 'custom' in properties and properties.pop('custom') == 1:
+            if 'custom' in metadata and metadata.pop('custom') == 1:
                 att.addQualifier('custom')
-            if 'timeSamples' in properties:
-                att.frames = properties.pop('timeSamples')
-            att.metadata = properties
+            if 'timeSamples' in metadata:
+                att.frames = metadata.pop('timeSamples')
+            att.metadata = metadata
         elif specType == SpecType.Relationship:
             rel = parent.createAttribute(name)
             rel.pathIndex = path
             rel.valueTypeStr = 'rel'
-            if 'variability' in properties and properties.pop('variability') == 1:
+            if 'variability' in metadata and metadata.pop('variability') == 1:
                 rel.addQualifier('uniform')
-            if 'custom' in properties and properties.pop('custom') == 1:
+            if 'custom' in metadata and metadata.pop('custom') == 1:
                 rel.addQualifier('custom')
-            rel.metadata = properties
+            rel.metadata = metadata
         return (index + 1, jump)
 
     def readUsd(self):
@@ -692,7 +701,7 @@ class CrateFile:
         path, token, jump = self.paths[0]
         fset, spec = self.specsMap[path]
         data = UsdData()
-        data.metadata = self.getFieldSetProperties(fset)
+        data.metadata = self.getFieldSetMetadata(fset)
         if 'primChildren' in data.metadata:
             data.metadata.pop('primChildren')
         index = 1

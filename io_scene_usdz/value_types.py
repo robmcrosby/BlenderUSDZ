@@ -34,6 +34,7 @@ class ClassType(Enum):
     Shader = 7
     GeomSubset = 8
 
+
 class ValueType(Enum):
     Invalid = 0
     bool = 1
@@ -346,6 +347,7 @@ class UsdClass:
     def __init__(self, name = '', type = ClassType.Scope):
         self.name = name
         self.classType = type
+        self.metadata = {}
         self.attributes = []
         self.children = []
         self.parent = None
@@ -370,12 +372,21 @@ class UsdClass:
     def toString(self, space = '', debug = False):
         indent = space + TAB
         line = indent + '\n'
-        ret = space + 'def ' + self.classType.name + ' "' + self.name + '"\n'
+        ret = space + 'def '
+        if self.classType != None:
+            ret += self.classType.name + ' '
+        ret += '"' + self.name + '"\n'
         ret += space + '{\n'
         ret += ''.join(att.toString(indent, debug) for att in self.attributes)
         ret += line if len(self.children) > 0 else ''
         ret += line.join(c.toString(indent, debug) for c in self.children)
         return ret + space + '}\n'
+
+    def metadataToString(self):
+        ret = '(\n'
+        for k, v in self.metadata.items():
+            ret += TAB + k + ' = ' + propertyToString(v, TAB) + '\n'
+        return ret + ')\n'
 
     def addAttribute(self, attribute):
         attribute.parent = self
