@@ -34,7 +34,7 @@ class ShaderInput:
             usdShader = usdMaterial.createChild(self.name+'_map', ClassType.Shader)
             usdShader['info:id'] = 'UsdUVTexture'
             usdShader['info:id'].addQualifier('uniform')
-            usdShader['inputs:default'] = default
+            usdShader['inputs:fallback'] = default
             usdShader['inputs:file'] = self.image
             usdShader['inputs:file'].valueType = ValueType.asset
             primUsdShader = usdMaterial.getChild('primvar_'+self.uvMap)
@@ -43,10 +43,14 @@ class ShaderInput:
             usdShader['inputs:wrapS'] = 'repeat'
             usdShader['inputs:wrapT'] = 'repeat'
             if self.type == 'float':
-                usdShader['outputs:r'] = ValueType.vec3f
+                usdShader['outputs:r'] = ValueType.float
+                if usdShader['outputs:r'].valueType.name != self.type:
+                    usdShader['outputs:r'].valueTypeStr = self.type
                 self.usdAtt = usdShader['outputs:r']
             else:
                 usdShader['outputs:rgb'] = ValueType.vec3f
+                if usdShader['outputs:rgb'].valueType.name != self.type:
+                    usdShader['outputs:rgb'].valueTypeStr = self.type
                 self.usdAtt = usdShader['outputs:rgb']
 
 
@@ -230,7 +234,7 @@ class Material:
             usdShader = usdMaterial.createChild('primvar_'+map, ClassType.Shader)
             usdShader['info:id'] = 'UsdPrimvarReader_float2'
             usdShader['info:id'].addQualifier('uniform')
-            usdShader['inputs:default'] = (0.0, 0.0)
+            usdShader['inputs:fallback'] = (0.0, 0.0)
             usdShader['inputs:varname'] = usdMaterial['inputs:frame:stPrimvar_' + map]
             usdShader['outputs:result'] = ValueType.vec2f
 
