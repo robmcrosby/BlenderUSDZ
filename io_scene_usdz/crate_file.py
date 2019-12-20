@@ -829,10 +829,18 @@ class CrateFile:
         return ''
 
     def readFloatVector(self, size):
-        return struct.unpack('<%df'%size, self.file.read(4*size))
+        buffer = self.file.read(4*size)
+        if len(buffer) < 4*size:
+            return (0.0,)*size
+        return struct.unpack('<%df'%size, buffer)
+        #return struct.unpack('<%df'%size, self.file.read(4*size))
 
     def readDoubleVector(self, size):
-        return struct.unpack('<%dd'%size, self.file.read(8*size))
+        buffer = self.file.read(8*size)
+        if len(buffer) < 8*size:
+            return (0.0,)*size
+        return struct.unpack('<%dd'%size, buffer)
+        #return struct.unpack('<%dd'%size, self.file.read(8*size))
 
     def readMatrix(self, size):
         return tuple(self.readDoubleVector(size) for i in range(size))
@@ -966,13 +974,23 @@ class CrateFile:
             listOp['path'] = readInt(self.file, 4)
             return listOp
         elif rep['type'] == ValueType.Variability or rep['type'] == ValueType.bool:
-            return rep['payload']
+            #print('Boolean:', rep)
+            return True if rep['payload'] > 0 else False
         elif rep['type'] == ValueType.PathVector:
             self.file.seek(rep['payload'])
             numPaths = readInt(self.file, 8)
             path = readInt(self.file, 4)
             #print('numPaths', numPaths, 'path', path)
             return path
+        elif rep['type'] == ValueType.ReferenceListOp:
+            self.file.seek(rep['payload'])
+            print(self.file.read(32))
+            self.file.seek(rep['payload'] + 1)
+            #ref = readInt(self.file, 8)
+            numRefs = readInt(self.file, 8)
+            ref = readInt(self.file, 4)
+            print('numRefs:', numRefs, 'ref:', ref)
+            return ref
         elif rep['type'] == ValueType.int:
             if rep['inline']:
                 return rep['payload']

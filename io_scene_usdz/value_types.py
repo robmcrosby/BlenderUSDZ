@@ -162,7 +162,7 @@ def getValueTypeFromStr(typeStr):
         return ValueType.vec2f
     if typeStr in ('float3', 'color3f', 'normal3f', 'point3f'):
         return ValueType.vec3f
-    if typeStr == 'float4':
+    if typeStr in ('float4', 'color4f'):
         return ValueType.vec4f
     if typeStr in ('double2', 'texCoord2d'):
         return ValueType.vec2d
@@ -179,6 +179,8 @@ def valueToString(value, reduced = False):
         return '%d' % value
     if type(value) is float:
         return '%.6g' % round(value, 6)
+    if type(value) is bool:
+        return 'true' if value else 'false'
     if type(value) is list:
         if reduced and len(value) > 3:
             return '[' + ', '.join(valueToString(item) for item in value[:3]) + ', ...]'
@@ -211,6 +213,10 @@ def propertyToString(prop, space):
         return '"' + prop + '"'
     if type(prop) is dict:
         return dictionaryToString(prop, space)
+    if type(prop) is UsdAttribute:
+        return '<' + prop.getPathStr() + '>'
+    if type(prop) is UsdClass:
+        return '<' + prop.getPathStr() + '>'
     return valueToString(prop)
 
 def interleaveLists(lists):
@@ -375,18 +381,22 @@ class UsdClass:
         ret = space + 'def '
         if self.classType != None:
             ret += self.classType.name + ' '
-        ret += '"' + self.name + '"\n'
+        ret += '"' + self.name + '"'
+        if len(self.metadata) > 0:
+            ret += self.metadataToString(space)
+        else:
+            ret += '\n'
         ret += space + '{\n'
         ret += ''.join(att.toString(indent, debug) for att in self.attributes)
         ret += line if len(self.children) > 0 else ''
         ret += line.join(c.toString(indent, debug) for c in self.children)
         return ret + space + '}\n'
 
-    def metadataToString(self):
-        ret = '(\n'
+    def metadataToString(self, space):
+        ret = ' (\n'
         for k, v in self.metadata.items():
-            ret += TAB + k + ' = ' + propertyToString(v, TAB) + '\n'
-        return ret + ')\n'
+            ret += space + TAB + k + ' = ' + propertyToString(v, TAB) + '\n'
+        return ret + space + ')\n'
 
     def addAttribute(self, attribute):
         attribute.parent = self
@@ -442,6 +452,9 @@ class UsdClass:
         return None
 
     def resolvePaths(self, root):
+        if 'references' in self.metadata:
+            pathIndex = self.metadata['references']
+            self.metadata['references'] = root.getItemAtPathIndex(pathIndex)
         for att in self.attributes:
             if 'connectionChildren' in att.metadata:
                 pathIndex = att.metadata.pop('connectionChildren')
