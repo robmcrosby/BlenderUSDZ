@@ -2,7 +2,7 @@
 bl_info = {
     "name":        "USDZ Export",
     "author":      "Robert Crosby",
-    "version":     (0, 0, 4),
+    "version":     (0, 0, 5),
     "blender":     (2, 80, 0),
     "location":    "File > Import-Export",
     "description": "Import/Export USDZ Files",
@@ -66,11 +66,6 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
             default="*.usdz;*.usda;*.usdc",
             options={'HIDDEN'},
             )
-    useConverter = BoolProperty(
-        name="Use Usdz Converter Tool",
-        description="Use Apple's Converter Tool to create the Usdz file",
-        default=False,
-        )
     exportMaterials = BoolProperty(
         name="Export Materials",
         description="Export Materials from Objects",
@@ -110,6 +105,11 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
         min=0.01,
         max=1000.0,
         default=1.0,
+        )
+    useConverter = BoolProperty(
+        name="Use Usdz Converter Tool",
+        description="Use Apple's Converter Tool to create the Usdz file",
+        default=False,
         )
 
     def execute(self, context):

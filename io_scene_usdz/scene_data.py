@@ -34,7 +34,7 @@ class ShaderInput:
             usdShader = usdMaterial.createChild(self.name+'_map', ClassType.Shader)
             usdShader['info:id'] = 'UsdUVTexture'
             usdShader['info:id'].addQualifier('uniform')
-            usdShader['inputs:default'] = default
+            usdShader['inputs:fallback'] = default
             usdShader['inputs:file'] = self.image
             usdShader['inputs:file'].valueType = ValueType.asset
             primUsdShader = usdMaterial.getChild('primvar_'+self.uvMap)
@@ -43,10 +43,14 @@ class ShaderInput:
             usdShader['inputs:wrapS'] = 'repeat'
             usdShader['inputs:wrapT'] = 'repeat'
             if self.type == 'float':
-                usdShader['outputs:r'] = ValueType.vec3f
+                usdShader['outputs:r'] = ValueType.float
+                if usdShader['outputs:r'].valueType.name != self.type:
+                    usdShader['outputs:r'].valueTypeStr = self.type
                 self.usdAtt = usdShader['outputs:r']
             else:
                 usdShader['outputs:rgb'] = ValueType.vec3f
+                if usdShader['outputs:rgb'].valueType.name != self.type:
+                    usdShader['outputs:rgb'].valueTypeStr = self.type
                 self.usdAtt = usdShader['outputs:rgb']
 
 
@@ -230,7 +234,7 @@ class Material:
             usdShader = usdMaterial.createChild('primvar_'+map, ClassType.Shader)
             usdShader['info:id'] = 'UsdPrimvarReader_float2'
             usdShader['info:id'].addQualifier('uniform')
-            usdShader['inputs:default'] = (0.0, 0.0)
+            usdShader['inputs:fallback'] = (0.0, 0.0)
             usdShader['inputs:varname'] = usdMaterial['inputs:frame:stPrimvar_' + map]
             usdShader['outputs:result'] = ValueType.vec2f
 
@@ -712,6 +716,7 @@ class Scene:
         self.curFrame = context.scene.frame_current
         self.fps = context.scene.render.fps
         self.renderEngine = context.scene.render.engine
+        self.scale *= self.getUnitScale()
         self.loadObjects()
 
 
@@ -721,6 +726,42 @@ class Scene:
         for obj in self.bpyObjects:
             if (obj.type == 'MESH'):
                 self.addBpyObject(obj, obj.type)
+
+
+    def getUnitScale(self):
+        settings = self.context.scene.unit_settings
+        if settings.system == 'NONE':
+            return 10.0
+        return 100.0 * settings.scale_length
+
+
+    def getSceneScale(self):
+        settings = self.context.scene.unit_settings
+        scale = 1.0
+        if settings.system == 'METRIC':
+            if settings.length_unit == 'KILOMETERS':
+                scale = 100000.0
+            elif settings.length_unit == 'METERS':
+                scale = 100.0
+            elif settings.length_unit == 'CENTIMETERS':
+                scale = 1.0
+            elif settings.length_unit == 'MILLIMETERS':
+                scale = 0.1
+            elif settings.length_unit == 'MILLIMETERS':
+                scale = 0.0001
+        elif settings.system == 'IMPERIAL':
+            scale = 2.54
+            if settings.length_unit == 'MILES':
+                scale = 160934.0
+            elif settings.length_unit == 'FEET':
+                scale = 30.48
+            elif settings.length_unit == 'INCHES':
+                scale = 2.54
+            elif settings.length_unit == 'THOU':
+                scale = 0.00254
+        else:
+            scale = 10.0
+        return scale * settings.scale_length
 
     def addBpyObject(self, object, type = 'EMPTY'):
         obj = Object(object, self)

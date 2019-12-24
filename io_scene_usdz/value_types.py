@@ -34,6 +34,7 @@ class ClassType(Enum):
     Shader = 7
     GeomSubset = 8
 
+
 class ValueType(Enum):
     Invalid = 0
     bool = 1
@@ -161,7 +162,7 @@ def getValueTypeFromStr(typeStr):
         return ValueType.vec2f
     if typeStr in ('float3', 'color3f', 'normal3f', 'point3f'):
         return ValueType.vec3f
-    if typeStr == 'float4':
+    if typeStr in ('float4', 'color4f'):
         return ValueType.vec4f
     if typeStr in ('double2', 'texCoord2d'):
         return ValueType.vec2d
@@ -178,6 +179,8 @@ def valueToString(value, reduced = False):
         return '%d' % value
     if type(value) is float:
         return '%.6g' % round(value, 6)
+    if type(value) is bool:
+        return 'true' if value else 'false'
     if type(value) is list:
         if reduced and len(value) > 3:
             return '[' + ', '.join(valueToString(item) for item in value[:3]) + ', ...]'
@@ -210,6 +213,10 @@ def propertyToString(prop, space):
         return '"' + prop + '"'
     if type(prop) is dict:
         return dictionaryToString(prop, space)
+    if type(prop) is UsdAttribute:
+        return '<' + prop.getPathStr() + '>'
+    if type(prop) is UsdClass:
+        return '<' + prop.getPathStr() + '>'
     return valueToString(prop)
 
 def interleaveLists(lists):
@@ -221,7 +228,7 @@ class UsdAttribute:
         self.value = value
         self.frames = []
         self.qualifiers = []
-        self.properties = {}
+        self.metadata = {}
         self.valueType = type
         self.valueTypeStr = None
         self.parent = None
@@ -236,10 +243,10 @@ class UsdAttribute:
         return self.toString()
 
     def __setitem__(self, key, item):
-        self.properties[key] = item
+        self.metadata[key] = item
 
     def __getitem__(self, key):
-        return self.properties[key]
+        return self.metadata[key]
 
     def toString(self, space = '', debug = False):
         ret = space
@@ -257,14 +264,14 @@ class UsdAttribute:
         else:
             if self.value != None:
                 ret += ' = ' + self.valueToString(debug)
-                if len(self.properties) > 0:
-                    ret += self.propertiesToString(space)
+                if len(self.metadata) > 0:
+                    ret += self.metadataToString(space)
         return ret + '\n'
 
-    def propertiesToString(self, space):
+    def metadataToString(self, space):
         indent = space + TAB
         ret = ' (\n'
-        for k, v in self.properties.items():
+        for k, v in self.metadata.items():
             ret += indent + k + ' = ' + propertyToString(v, indent) + '\n'
         return ret + space + ')'
 
@@ -346,6 +353,7 @@ class UsdClass:
     def __init__(self, name = '', type = ClassType.Scope):
         self.name = name
         self.classType = type
+        self.metadata = {}
         self.attributes = []
         self.children = []
         self.parent = None
@@ -370,12 +378,25 @@ class UsdClass:
     def toString(self, space = '', debug = False):
         indent = space + TAB
         line = indent + '\n'
-        ret = space + 'def ' + self.classType.name + ' "' + self.name + '"\n'
+        ret = space + 'def '
+        if self.classType != None:
+            ret += self.classType.name + ' '
+        ret += '"' + self.name + '"'
+        if len(self.metadata) > 0:
+            ret += self.metadataToString(space)
+        else:
+            ret += '\n'
         ret += space + '{\n'
         ret += ''.join(att.toString(indent, debug) for att in self.attributes)
         ret += line if len(self.children) > 0 else ''
         ret += line.join(c.toString(indent, debug) for c in self.children)
         return ret + space + '}\n'
+
+    def metadataToString(self, space):
+        ret = ' (\n'
+        for k, v in self.metadata.items():
+            ret += space + TAB + k + ' = ' + propertyToString(v, TAB) + '\n'
+        return ret + space + ')\n'
 
     def addAttribute(self, attribute):
         attribute.parent = self
@@ -431,18 +452,21 @@ class UsdClass:
         return None
 
     def resolvePaths(self, root):
+        if 'references' in self.metadata:
+            pathIndex = self.metadata['references']
+            self.metadata['references'] = root.getItemAtPathIndex(pathIndex)
         for att in self.attributes:
-            if 'connectionChildren' in att.properties:
-                pathIndex = att.properties.pop('connectionChildren')
+            if 'connectionChildren' in att.metadata:
+                pathIndex = att.metadata.pop('connectionChildren')
                 att.value = root.getItemAtPathIndex(pathIndex)
-            if 'connectionPaths' in att.properties:
-                paths = att.properties.pop('connectionPaths')
+            if 'connectionPaths' in att.metadata:
+                paths = att.metadata.pop('connectionPaths')
                 att.value = root.getItemAtPathIndex(paths['path'])
-            if 'targetChildren' in att.properties:
-                pathIndex = att.properties.pop('targetChildren')
+            if 'targetChildren' in att.metadata:
+                pathIndex = att.metadata.pop('targetChildren')
                 att.value = root.getItemAtPathIndex(pathIndex)
-            if 'targetPaths' in att.properties:
-                paths = att.properties.pop('targetPaths')
+            if 'targetPaths' in att.metadata:
+                paths = att.metadata.pop('targetPaths')
                 att.value = root.getItemAtPathIndex(paths['path'])
         for child in self.children:
             child.resolvePaths(root)
@@ -480,7 +504,7 @@ class UsdClass:
 
 class UsdData:
     def __init__(self):
-        self.properties = {}
+        self.metadata = {}
         self.children = []
         self.attributes = []
         self.pathIndex = 0
@@ -490,23 +514,23 @@ class UsdData:
         return self.toString()
 
     def __setitem__(self, key, item):
-        self.properties[key] = item
+        self.metadata[key] = item
 
     def __getitem__(self, key):
-        return self.properties[key]
+        return self.metadata[key]
 
     def toString(self, debug = False):
         ret = '#usda 1.0\n'
-        ret += self.propertiesToString()
+        ret += self.metadataToString()
         ret += '\n'
         return ret + ''.join(c.toString('', debug) for c in self.children)
 
     def getPathStr(self):
         return ''
 
-    def propertiesToString(self):
+    def metadataToString(self):
         ret = '(\n'
-        for k, v in self.properties.items():
+        for k, v in self.metadata.items():
             ret += TAB + k + ' = ' + propertyToString(v, TAB) + '\n'
         return ret + ')\n'
 
