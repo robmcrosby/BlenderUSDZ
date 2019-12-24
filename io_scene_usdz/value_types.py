@@ -523,7 +523,7 @@ class UsdData:
         ret = '#usda 1.0\n'
         ret += self.metadataToString()
         ret += '\n'
-        return ret + ''.join(c.toString('', debug) for c in self.children)
+        return ret + '\n'.join(c.toString('', debug) for c in self.children)
 
     def getPathStr(self):
         return ''

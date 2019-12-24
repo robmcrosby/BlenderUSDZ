@@ -56,8 +56,7 @@ class ShaderInput:
 
 class Material:
     """Wraper for Blender Material"""
-    def __init__(self, object, material):
-        self.object = object
+    def __init__(self, material):
         self.material = material
         self.usdMaterial = None
         self.name = getBpyMaterialName(material)
@@ -101,7 +100,7 @@ class Material:
         }
 
 
-    def setupBakeOutputNodes(self):
+    def setupBakeOutputNodes(self, object):
         nodes = self.material.node_tree.nodes
         self.activeNode = nodes.active
         if self.bakeImageNode == None:
@@ -109,7 +108,7 @@ class Material:
             nodes.active = self.bakeImageNode
         if self.bakeUVMapNode == None:
             self.bakeUVMapNode = nodes.new('ShaderNodeUVMap')
-            self.bakeUVMapNode.uv_map = self.object.bakeUVMap
+            self.bakeUVMapNode.uv_map = object.bakeUVMap
         links = self.material.node_tree.links
         links.new(self.bakeImageNode.inputs[0], self.bakeUVMapNode.outputs[0])
 
@@ -163,39 +162,39 @@ class Material:
         return False
 
 
-    def setupBakeDiffuse(self, asset):
+    def setupBakeDiffuse(self, asset, object):
         input = getBpyDiffuseInput(self.shaderNode)
         if self.setupBakeColorInput(input):
             self.inputs['diffuseColor'].image = asset
-            self.inputs['diffuseColor'].uvMap = self.object.bakeUVMap
+            self.inputs['diffuseColor'].uvMap = object.bakeUVMap
             return True
         return False
 
 
-    def setupBakeRoughness(self, asset):
+    def setupBakeRoughness(self, asset, object):
         input = getBpyRoughnessInput(self.shaderNode)
         if self.setupBakeFloatInput(input):
             self.inputs['roughness'].image = asset
-            self.inputs['roughness'].uvMap = self.object.bakeUVMap
+            self.inputs['roughness'].uvMap = object.bakeUVMap
             return True
         return False
 
 
-    def setupBakeMetallic(self, asset):
+    def setupBakeMetallic(self, asset, object):
         input = getBpyMetallicInput(self.shaderNode)
         if self.setupBakeFloatInput(input):
             self.inputs['metallic'].image = asset
-            self.inputs['metallic'].uvMap = self.object.bakeUVMap
+            self.inputs['metallic'].uvMap = object.bakeUVMap
             self.inputs['useSpecularWorkflow'].value = 0
             return True
         return False
 
 
-    def setupBakeNormals(self, asset):
+    def setupBakeNormals(self, asset, object):
         input = getBpyNormalInput(self.shaderNode)
         if input != None and input.is_linked:
             self.inputs['normal'].image = asset
-            self.inputs['normal'].uvMap = self.object.bakeUVMap
+            self.inputs['normal'].uvMap = object.bakeUVMap
             return True
         return False
 
@@ -221,10 +220,6 @@ class Material:
             if input.uvMap != None:
                 uvMaps.add(input.uvMap)
         return list(uvMaps)
-
-
-    def getPath(self):
-        return self.object.getPath()+'/'+self.name
 
 
     def exportPrimvar(self, usdMaterial):
@@ -308,7 +303,13 @@ class Object:
         self.materials = []
         if self.scene.exportMaterials:
             for slot in self.object.material_slots:
-                self.materials.append(Material(self, slot.material))
+                material = None
+                if slot.material.name in self.scene.materials:
+                    material = self.scene.materials[slot.material.name]
+                else:
+                    material = Material(slot.material)
+                    self.scene.materials[slot.material.name] = material
+                self.materials.append(material)
 
 
     def createCopies(self):
@@ -387,7 +388,7 @@ class Object:
     def setupBakeOutputNodes(self):
         self.bakeUVMap = getBpyActiveUvMap(self.object)
         for mat in self.materials:
-            mat.setupBakeOutputNodes()
+            mat.setupBakeOutputNodes(self)
 
 
     def cleanupBakeOutputNodes(self):
@@ -412,7 +413,7 @@ class Object:
         asset = self.name+'_diffuse.png'
         bake = False
         for mat in self.materials:
-            bake = mat.setupBakeDiffuse(asset) or bake
+            bake = mat.setupBakeDiffuse(asset, self) or bake
         if bake:
             self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
@@ -422,7 +423,7 @@ class Object:
         asset = self.name+'_roughness.png'
         bake = False
         for mat in self.materials:
-            bake = mat.setupBakeRoughness(asset) or bake
+            bake = mat.setupBakeRoughness(asset, self) or bake
         if bake:
             self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
@@ -432,7 +433,7 @@ class Object:
         asset = self.name+'_metallic.png'
         bake = False
         for mat in self.materials:
-            bake = mat.setupBakeMetallic(asset) or bake
+            bake = mat.setupBakeMetallic(asset, self) or bake
         if bake:
             self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
@@ -442,7 +443,7 @@ class Object:
         asset = self.name+'_normal.png'
         bake = False
         for mat in self.materials:
-            bake = mat.setupBakeNormals(asset) or bake
+            bake = mat.setupBakeNormals(asset, self) or bake
         if bake:
             self.bakeToFile('NORMAL', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
@@ -547,13 +548,6 @@ class Object:
         self.exportMaterialSubsets(usdMesh)
 
 
-    def exportMaterials(self, usdObj):
-        if len(self.materials) > 0:
-            looks = usdObj.createChild('Looks', ClassType.Scope)
-            for mat in self.materials:
-                mat.exportUsd(looks)
-
-
     def exportSkeleton(self, usdObj):
         usdSkeleton = None
         if self.armatueCopy != None and self.scene.animated:
@@ -652,7 +646,6 @@ class Object:
                 usdObj['xformOpOrder'].addQualifier('uniform')
         # Add Meshes if Mesh Object
         if self.type == 'MESH':
-            self.exportMaterials(usdObj)
             self.exportMesh(usdObj)
         # Add Children
         for child in self.children:
@@ -669,6 +662,7 @@ class Scene:
         self.bpyObjects = []
         self.bpyActive = None
         self.exportMaterials = False
+        self.materials = {}
         self.exportPath = ''
         self.bakeAO = False
         self.bakeTextures = False
@@ -794,6 +788,13 @@ class Scene:
         self.context.scene.render.engine = renderEngine
 
 
+    def exportMaterialsUsd(self, data):
+        if len(self.materials) > 0:
+            looks = data.createChild('Looks', ClassType.Scope)
+            for mat in self.materials.values():
+                mat.exportUsd(looks)
+
+
     def exportUsd(self):
         data = UsdData()
         data['upAxis'] = 'Y'
@@ -802,6 +803,8 @@ class Scene:
             data['endTimeCode'] = float(self.endFrame)
             data['timeCodesPerSecond'] = float(self.fps)
         data['customLayerData'] = self.customLayerData
+        if self.exportMaterials:
+            self.exportMaterialsUsd(data)
         for obj in self.objects:
             obj.exportUsd(data)
         return data
