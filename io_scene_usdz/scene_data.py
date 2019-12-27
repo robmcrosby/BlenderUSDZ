@@ -361,7 +361,8 @@ class Mesh:
 
 
     def exportShared(self, usdMeshes):
-        self.usdMesh = self.exportToObject(usdMeshes, ClassType.over)
+        self.usdMesh = self.exportToObject(usdMeshes, None)
+        self.usdMesh.specifierType = SpecifierType.Over
         self.usdMesh.metadata['instanceable'] = True
 
 

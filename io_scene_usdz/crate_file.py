@@ -594,11 +594,9 @@ class CrateFile:
     def writeUsdPrim(self, usdPrim):
         # Add Prim Properties
         fset = []
-        if usdPrim.classType == ClassType.over:
-            fset.append(self.addField('specifier', SpecifierType.Over))
-        else:
+        fset.append(self.addField('specifier', usdPrim.specifierType))
+        if usdPrim.classType != None:
             fset.append(self.addField('typeName', usdPrim.classType.name))
-            fset.append(self.addField('specifier', SpecifierType.Def))
         for name, value in usdPrim.metadata.items():
             fset.append(self.addField(name, value))
         if len(usdPrim.attributes) > 0:
@@ -674,11 +672,15 @@ class CrateFile:
             classType = None
             if 'typeName' in metadata:
                 classType = ClassType[metadata.pop('typeName')]
-            else:
-                classType = ClassType.over
             prim = parent.createChild(name, classType)
             if 'specifier' in metadata:
-                metadata.pop('specifier')
+                specifier = metadata.pop('specifier')['payload']
+                if specifier == 0:
+                    prim.specifierType = SpecifierType.Def
+                elif specifier == 1:
+                    prim.specifierType = SpecifierType.Over
+                else:
+                    prim.specifierType = SpecifierType.Class
             if 'properties' in metadata:
                 metadata.pop('properties')
             if 'primChildren' in metadata:
