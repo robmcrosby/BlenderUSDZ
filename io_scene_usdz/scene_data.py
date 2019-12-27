@@ -343,9 +343,24 @@ class Mesh:
             usdMesh['primvars:skel:jointWeights']['interpolation'] = 'vertex'
 
 
+    def exportSkeleton(self, usdObj):
+        usdSkeleton = None
+        if self.armatueCopy != None and self.scene.animated:
+            joints = exportBpyJoints(self.armatueCopy)
+            bind = exportBpyBindTransforms(self.armatueCopy)
+            rest = exportBpyRestTransforms(self.armatueCopy)
+            name = self.armature.name.replace('.', '_')
+            usdSkeleton = usdObj.createChild(name, ClassType.Skeleton)
+            usdSkeleton['joints'] = joints
+            usdSkeleton['joints'].addQualifier('uniform')
+            usdSkeleton['bindTransforms'] = bind
+            usdSkeleton['bindTransforms'].addQualifier('uniform')
+            usdSkeleton['restTransforms'] = rest
+            usdSkeleton['restTransforms'].addQualifier('uniform')
+        return usdSkeleton
+
+
     def exportToObject(self, usdObj):
-        #usdSkeleton = self.exportSkeleton(usdObj)
-        #usdAnimation = self.exportAnimation(usdObj)
         mesh = self.objectCopy.data
         name = self.object.data.name.replace('.', '_')
         usdMesh = usdObj.createChild(name, ClassType.Mesh)
@@ -361,17 +376,8 @@ class Mesh:
         usdMesh['primvars:normals'].valueTypeStr = 'normal3f'
         usdMesh['primvars:normals']['interpolation'] = 'faceVarying'
         usdMesh['primvars:normals:indices'] = indices
-        """
-        if usdSkeleton != None and usdAnimation != None:
-            self.exportJoints(usdMesh)
-            usdMesh['skel:animationSource'] = usdAnimation
-            usdMesh['skel:animationSource'].addQualifier('prepend')
-            usdMesh['skel:skeleton'] = usdSkeleton
-            usdMesh['skel:skeleton'].addQualifier('prepend')
-        """
         usdMesh['subdivisionScheme'] = 'none'
         usdMesh['subdivisionScheme'].addQualifier('uniform')
-        #self.exportMaterialSubsets(usdMesh)
         return usdMesh
 
 
@@ -392,8 +398,6 @@ class Object:
         self.mesh = None
         self.parent = None
         self.children = []
-        #self.objectCopy = None
-        #self.armatueCopy = None
         self.materials = []
         self.bakeUVMap = ''
         self.bakeWidth = scene.bakeSize
@@ -407,7 +411,6 @@ class Object:
 
 
     def cleanup(self):
-        #self.clearCopies()
         if self.mesh != None:
             self.mesh.cleanup()
             self.mesn = None
@@ -591,51 +594,14 @@ class Object:
         if self.mesh != None:
             usdMesh = self.mesh.exportToObject(usdObj)
             self.exportMaterialSubsets(usdMesh)
-        """
-        usdSkeleton = self.exportSkeleton(usdObj)
-        usdAnimation = self.exportAnimation(usdObj)
-        mesh = self.objectCopy.data
-        name = self.object.data.name.replace('.', '_')
-        usdMesh = usdObj.createChild(name, ClassType.Mesh)
-        usdMesh['extent'] = exportBpyExtents(self.objectCopy, self.scene.scale)
-        usdMesh['faceVertexCounts'] = exportBpyMeshVertexCounts(mesh)
-        indices, points = exportBpyMeshVertices(mesh)
-        usdMesh['faceVertexIndices'] = indices
-        usdMesh['points'] = points
-        usdMesh['points'].valueTypeStr = 'point3f'
-        self.exportMeshUvs(usdMesh)
-        indices, normals = exportBpyMeshNormals(mesh)
-        usdMesh['primvars:normals'] = normals
-        usdMesh['primvars:normals'].valueTypeStr = 'normal3f'
-        usdMesh['primvars:normals']['interpolation'] = 'faceVarying'
-        usdMesh['primvars:normals:indices'] = indices
-        if usdSkeleton != None and usdAnimation != None:
-            self.exportJoints(usdMesh)
-            usdMesh['skel:animationSource'] = usdAnimation
-            usdMesh['skel:animationSource'].addQualifier('prepend')
-            usdMesh['skel:skeleton'] = usdSkeleton
-            usdMesh['skel:skeleton'].addQualifier('prepend')
-        usdMesh['subdivisionScheme'] = 'none'
-        usdMesh['subdivisionScheme'].addQualifier('uniform')
-        self.exportMaterialSubsets(usdMesh)
-        """
-
-    """
-    def exportSkeleton(self, usdObj):
-        usdSkeleton = None
-        if self.armatueCopy != None and self.scene.animated:
-            joints = exportBpyJoints(self.armatueCopy)
-            bind = exportBpyBindTransforms(self.armatueCopy)
-            rest = exportBpyRestTransforms(self.armatueCopy)
-            name = self.armature.name.replace('.', '_')
-            usdSkeleton = usdObj.createChild(name, ClassType.Skeleton)
-            usdSkeleton['joints'] = joints
-            usdSkeleton['joints'].addQualifier('uniform')
-            usdSkeleton['bindTransforms'] = bind
-            usdSkeleton['bindTransforms'].addQualifier('uniform')
-            usdSkeleton['restTransforms'] = rest
-            usdSkeleton['restTransforms'].addQualifier('uniform')
-        return usdSkeleton
+            usdSkeleton = self.mesh.exportSkeleton(usdObj)
+            usdAnimation = self.exportAnimation(usdObj)
+            if usdSkeleton != None and usdAnimation != None:
+                self.mesh.exportJoints(usdMesh)
+                usdMesh['skel:animationSource'] = usdAnimation
+                usdMesh['skel:animationSource'].addQualifier('prepend')
+                usdMesh['skel:skeleton'] = usdSkeleton
+                usdMesh['skel:skeleton'].addQualifier('prepend')
 
 
     def exportArmatureAnimation(self, armature, usdAnimation):
@@ -680,14 +646,14 @@ class Object:
 
     def exportAnimation(self, usdObj):
         usdAnimation = None
-        if self.armatueCopy != None and self.scene.animated:
-            self.armatueCopy.data.pose_position = 'POSE'
+        if self.mesh.armatueCopy != None and self.scene.animated:
+            self.mesh.armatueCopy.data.pose_position = 'POSE'
             usdAnimation = usdObj.createChild('Animation', ClassType.SkelAnimation)
-            usdAnimation['joints'] = exportBpyJoints(self.armatueCopy)
+            usdAnimation['joints'] = exportBpyJoints(self.mesh.armatueCopy)
             usdAnimation['joints'].addQualifier('uniform')
-            self.exportArmatureAnimation(self.armatueCopy, usdAnimation)
+            self.exportArmatureAnimation(self.mesh.armatueCopy, usdAnimation)
         return usdAnimation
-    """
+
 
     def exportTimeSamples(self, item):
         item['xformOp:transform:transforms'] = ValueType.matrix4d
