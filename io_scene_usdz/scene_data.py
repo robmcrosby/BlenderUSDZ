@@ -267,6 +267,7 @@ class Mesh:
         self.objectCopy = None
         self.armatueCopy = None
         self.shared = False
+        self.usdMesh = None
         self.createCopies()
 
 
@@ -305,7 +306,6 @@ class Mesh:
 
     def clearCopies(self):
         if self.objectCopy != None:
-            print('Clear Object!')
             deleteBpyObject(self.objectCopy)
             self.objectCopy = None
         if self.armatueCopy != None:
@@ -360,10 +360,15 @@ class Mesh:
         return usdSkeleton
 
 
-    def exportToObject(self, usdObj):
+    def exportShared(self, usdMeshes):
+        self.usdMesh = self.exportToObject(usdMeshes, ClassType.over)
+        self.usdMesh.metadata['instanceable'] = True
+
+
+    def exportToObject(self, usdObj, classType = ClassType.Mesh):
         mesh = self.objectCopy.data
         name = self.object.data.name.replace('.', '_')
-        usdMesh = usdObj.createChild(name, ClassType.Mesh)
+        usdMesh = usdObj.createChild(name, classType)
         usdMesh['extent'] = exportBpyExtents(self.objectCopy, self.scene.scale)
         usdMesh['faceVertexCounts'] = exportBpyMeshVertexCounts(mesh)
         indices, points = exportBpyMeshVertices(mesh)
@@ -592,16 +597,22 @@ class Object:
 
     def exportMesh(self, usdObj):
         if self.mesh != None:
-            usdMesh = self.mesh.exportToObject(usdObj)
-            self.exportMaterialSubsets(usdMesh)
-            usdSkeleton = self.mesh.exportSkeleton(usdObj)
-            usdAnimation = self.exportAnimation(usdObj)
-            if usdSkeleton != None and usdAnimation != None:
-                self.mesh.exportJoints(usdMesh)
-                usdMesh['skel:animationSource'] = usdAnimation
-                usdMesh['skel:animationSource'].addQualifier('prepend')
-                usdMesh['skel:skeleton'] = usdSkeleton
-                usdMesh['skel:skeleton'].addQualifier('prepend')
+            if self.mesh.usdMesh != None:
+                usdMesh = usdObj.createChild(self.mesh.name, ClassType.Mesh)
+                usdMesh.metadata['references'] = self.mesh.usdMesh
+                #usdMesh.metadata['specifier'] = ValueType.Specifier
+                self.exportMaterialSubsets(usdMesh)
+            else:
+                usdMesh = self.mesh.exportToObject(usdObj)
+                self.exportMaterialSubsets(usdMesh)
+                usdSkeleton = self.mesh.exportSkeleton(usdObj)
+                usdAnimation = self.exportAnimation(usdObj)
+                if usdSkeleton != None and usdAnimation != None:
+                    self.mesh.exportJoints(usdMesh)
+                    usdMesh['skel:animationSource'] = usdAnimation
+                    usdMesh['skel:animationSource'].addQualifier('prepend')
+                    usdMesh['skel:skeleton'] = usdSkeleton
+                    usdMesh['skel:skeleton'].addQualifier('prepend')
 
 
     def exportArmatureAnimation(self, armature, usdAnimation):
@@ -709,6 +720,7 @@ class Scene:
         self.textureFilePaths = []
         self.bakeSamples = 8
         self.bakeSize = 1024
+        self.sharedMeshes = True
         self.scale = 1.0
         self.animated = False
         self.startFrame = 0
@@ -828,11 +840,22 @@ class Scene:
         self.context.scene.render.engine = renderEngine
 
 
-    def exportMaterialsUsd(self, data):
+    def exportSharedMaterials(self, data):
         if len(self.materials) > 0:
             looks = data.createChild('Looks', ClassType.Scope)
             for mat in self.materials.values():
                 mat.exportUsd(looks)
+
+
+    def exportSharedMeshes(self, data):
+        meshList = []
+        for mesh in self.meshes.values():
+            if mesh.shared:
+                meshList.append(mesh)
+        if len(meshList) > 0:
+            meshes = data.createChild('Meshes', ClassType.Scope)
+            for mesh in meshList:
+                mesh.exportShared(meshes)
 
 
     def exportUsd(self):
@@ -844,7 +867,9 @@ class Scene:
             data['timeCodesPerSecond'] = float(self.fps)
         data['customLayerData'] = self.customLayerData
         if self.exportMaterials:
-            self.exportMaterialsUsd(data)
+            self.exportSharedMaterials(data)
+        if self.sharedMeshes:
+            self.exportSharedMeshes(data)
         for obj in self.objects:
             obj.exportUsd(data)
         return data
