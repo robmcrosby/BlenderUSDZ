@@ -402,7 +402,7 @@ class CrateFile:
         return self.addFieldItem(field, ValueType.TimeSamples, False, False, False, reference)
 
     def addField(self, field, value, vType = ValueType.UnregisteredValue):
-        if type(value) is UsdClass:
+        if type(value) is UsdPrim:
             return self.addReferenceListOp(field, value.pathIndex)
         if vType == ValueType.UnregisteredValue:
             vType = getValueType(value)

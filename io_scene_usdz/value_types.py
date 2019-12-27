@@ -215,7 +215,7 @@ def propertyToString(prop, space):
         return dictionaryToString(prop, space)
     if type(prop) is UsdAttribute:
         return '<' + prop.getPathStr() + '>'
-    if type(prop) is UsdClass:
+    if type(prop) is UsdPrim:
         return '<' + prop.getPathStr() + '>'
     return valueToString(prop)
 
@@ -322,7 +322,7 @@ class UsdAttribute:
         return type(self.value) is UsdAttribute
 
     def isRelationship(self):
-        return type(self.value) is UsdClass
+        return type(self.value) is UsdPrim
 
     def hasTimeSamples(self):
         return len(self.frames) > 0
@@ -349,7 +349,7 @@ class UsdAttribute:
         return getValueType(self.value)
 
 
-class UsdClass:
+class UsdPrim:
     def __init__(self, name = '', type = ClassType.Scope):
         self.name = name
         self.specifierType = SpecifierType.Def
@@ -418,10 +418,10 @@ class UsdClass:
         return child
 
     def createChild(self, name, type):
-        return self.addChild(UsdClass(name, type))
+        return self.addChild(UsdPrim(name, type))
 
     def createChildFront(self, name, type):
-        return self.addChildFront(UsdClass(name, type))
+        return self.addChildFront(UsdPrim(name, type))
 
     def getAttributesOfTypeStr(self, typeStr):
         return [a for a in self.attributes if a.valueTypeToString() == typeStr]
@@ -541,7 +541,7 @@ class UsdData:
         return child
 
     def createChild(self, name, type):
-        return self.addChild(UsdClass(name, type))
+        return self.addChild(UsdPrim(name, type))
 
     def getChildrenOfType(self, type):
         children = []
