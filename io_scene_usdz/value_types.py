@@ -33,6 +33,7 @@ class ClassType(Enum):
     Material = 6
     Shader = 7
     GeomSubset = 8
+    over = 9
 
 
 class ValueType(Enum):
@@ -378,9 +379,12 @@ class UsdClass:
     def toString(self, space = '', debug = False):
         indent = space + TAB
         line = indent + '\n'
-        ret = space + 'def '
+        ret = space
         if self.classType != None:
-            ret += self.classType.name + ' '
+            if self.classType == ClassType.over:
+                ret += self.classType.name + ' '
+            else:
+                ret += 'def ' + self.classType.name + ' '
         ret += '"' + self.name + '"'
         if len(self.metadata) > 0:
             ret += self.metadataToString(space)

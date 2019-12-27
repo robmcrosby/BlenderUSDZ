@@ -653,6 +653,9 @@ class CrateFile:
             classType = None
             if 'typeName' in metadata:
                 classType = ClassType[metadata.pop('typeName')]
+            elif 'specifier' in metadata:
+                metadata.pop('specifier')
+                classType = ClassType.over
             prim = parent.createChild(name, classType)
             if 'specifier' in metadata:
                 metadata.pop('specifier')
