@@ -144,9 +144,10 @@ class CrateFile:
         return self.tokenMap[token]
 
     def getStringIndex(self, str):
-        strIndex = len(self.strings)
-        self.strings.append(self.getTokenIndex(str))
-        return strIndex
+        tokenIndex = self.getTokenIndex(str)
+        if not tokenIndex in self.strings:
+            self.strings.append(tokenIndex)
+        return self.strings.index(tokenIndex)
 
     def addFieldSet(self, fset):
         index = len(self.fsets)
@@ -226,18 +227,18 @@ class CrateFile:
         writeInt(self.file, pathIndex, 4)
         return self.addFieldItem(field, ValueType.PathVector, False, False, False, ref)
 
-    def addReferenceListOp(self, field, pathIndex):
-        print('addReferenceListOp:', pathIndex)
+    def addReferenceListOp(self, field, item):
         field = self.getTokenIndex(field)
+        strIndex = self.getStringIndex('')
+        pathIndex = item.pathIndex
         ref = self.file.tell()
-        writeInt(self.file, 3, 1) #03
-        writeInt(self.file, 1, 8) #0100000000000000
-        writeInt(self.file, 2, 4) #02000000
-        writeInt(self.file, pathIndex, 8) #0300000000000000
-        writeInt(self.file, 0, 8) #0000000000000000
-        writeInt(self.file, 0, 2) #0000
-        self.file.write(b'\xf0\x3f') #f03f
-        writeInt(self.file, 0, 8) #0000000000000000
+        writeInt(self.file, 3, 1) # ListOp Type Flags (Explicit | Explicit Items)
+        writeInt(self.file, 1, 8) # Vector Size (size of 1)
+        writeInt(self.file, strIndex, 4) # Index to empty string for now
+        writeInt(self.file, pathIndex, 8) # Path Index
+        writeInt(self.file, 0, 10) # Write rest of SdfRefrence
+        self.file.write(b'\xf0\x3f')
+        writeInt(self.file, 0, 8)
         return self.addFieldItem(field, ValueType.ReferenceListOp, False, False, False, ref)
 
     def addFieldSpecifier(self, field, spec):
@@ -403,7 +404,7 @@ class CrateFile:
 
     def addField(self, field, value, vType = ValueType.UnregisteredValue):
         if type(value) is UsdPrim:
-            return self.addReferenceListOp(field, value.pathIndex)
+            return self.addReferenceListOp(field, value)
         if vType == ValueType.UnregisteredValue:
             vType = getValueType(value)
         if vType == ValueType.token:
@@ -1008,15 +1009,11 @@ class CrateFile:
             #print('numPaths', numPaths, 'path', path)
             return path
         elif rep['type'] == ValueType.ReferenceListOp:
-            print('rep:', rep)
-            #self.file.seek(rep['payload'])
-            #print(self.file.read(128).hex())
             self.file.seek(rep['payload'] + 1)
-            #ref = readInt(self.file, 8)
             numRefs = readInt(self.file, 8)
-            ref = readInt(self.file, 4)
-            print('numRefs:', numRefs, 'ref:', ref)
-            return ref
+            strIndex = readInt(self.file, 4)
+            pathIndex = readInt(self.file, 8)
+            return pathIndex
         elif rep['type'] == ValueType.int:
             if rep['inline']:
                 return rep['payload']
