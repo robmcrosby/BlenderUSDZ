@@ -363,6 +363,7 @@ class Mesh:
     def exportShared(self, usdMeshes):
         self.usdMesh = self.exportToObject(usdMeshes, ClassType.Mesh)
         self.usdMesh.specifierType = SpecifierType.Class
+        return self.usdMesh
 
 
     def exportToObject(self, usdObj, classType = ClassType.Mesh):
@@ -444,12 +445,12 @@ class Object:
 
     def createMesh(self):
         if self.mesh == None:
-            if self.object.data.name in self.scene.meshes:
-                self.mesh = self.scene.meshes[self.object.data.name]
+            if self.object.data.name in self.scene.meshObjs:
+                self.mesh = self.scene.meshObjs[self.object.data.name].mesh
                 self.mesh.shared = True
             else:
                 self.mesh = Mesh(self.object, self.scene)
-                self.scene.meshes[self.object.data.name] = self.mesh
+                self.scene.meshObjs[self.object.data.name] = self
 
 
     def setAsMesh(self):
@@ -738,7 +739,7 @@ class Scene:
         self.context = None
         self.objects = []
         self.objMap = {}
-        self.meshes = {}
+        self.meshObjs = {}
         self.collections = {}
         self.hiddenCollections = set()
         self.usdCollections = {}
@@ -914,14 +915,15 @@ class Scene:
 
 
     def exportSharedMeshes(self, data):
-        meshList = []
-        for mesh in self.meshes.values():
-            if mesh.shared:
-                meshList.append(mesh)
-        if len(meshList) > 0:
+        objs = []
+        for meshObj in self.meshObjs.values():
+            if meshObj.mesh.shared:
+                objs.append(meshObj)
+        if len(objs) > 0:
             meshes = data.createChild('Meshes', ClassType.Scope)
-            for mesh in meshList:
-                mesh.exportShared(meshes)
+            for meshObj in objs:
+                usdMesh = meshObj.mesh.exportShared(meshes)
+                meshObj.exportMaterialSubsets(usdMesh)
 
 
     def exportCollections(self, data):
