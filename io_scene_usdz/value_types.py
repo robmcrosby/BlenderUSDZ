@@ -456,6 +456,9 @@ class UsdPrim:
         if 'references' in self.metadata:
             pathIndex = self.metadata['references']
             self.metadata['references'] = root.getItemAtPathIndex(pathIndex)
+        if 'inheritPaths' in self.metadata:
+            paths = self.metadata.pop('inheritPaths')
+            self.metadata['inherits'] = root.getItemAtPathIndex(paths['path'])
         for att in self.attributes:
             if 'connectionChildren' in att.metadata:
                 pathIndex = att.metadata.pop('connectionChildren')

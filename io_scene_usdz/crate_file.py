@@ -404,6 +404,8 @@ class CrateFile:
 
     def addField(self, field, value, vType = ValueType.UnregisteredValue):
         if type(value) is UsdPrim:
+            if field == 'inherits':
+                return self.addFieldPathListOp('inheritPaths', value.pathIndex)
             return self.addReferenceListOp(field, value)
         if vType == ValueType.UnregisteredValue:
             vType = getValueType(value)

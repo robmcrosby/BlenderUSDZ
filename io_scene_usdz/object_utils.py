@@ -324,8 +324,6 @@ def setBpyCollectionVisibility(collection, visible):
                 bpy.ops.object.hide_collection(context, collection_index=index, toggle=hidden)
 
 
-
-
 def exportBpyBoneJoint(bone):
     name = bone.name.replace('.', '_')
     if bone.parent != None:

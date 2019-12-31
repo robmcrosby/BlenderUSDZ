@@ -361,9 +361,8 @@ class Mesh:
 
 
     def exportShared(self, usdMeshes):
-        self.usdMesh = self.exportToObject(usdMeshes, None)
-        self.usdMesh.specifierType = SpecifierType.Over
-        self.usdMesh.metadata['instanceable'] = True
+        self.usdMesh = self.exportToObject(usdMeshes, ClassType.Mesh)
+        self.usdMesh.specifierType = SpecifierType.Class
 
 
     def exportToObject(self, usdObj, classType = ClassType.Mesh):
@@ -605,9 +604,10 @@ class Object:
         if self.mesh != None:
             if self.mesh.usdMesh != None:
                 usdMesh = usdObj.createChild(self.mesh.name, ClassType.Mesh)
-                usdMesh.metadata['references'] = self.mesh.usdMesh
+                usdMesh.metadata['inherits'] = self.mesh.usdMesh
+                usdMesh.metadata['instanceable'] = True
                 #usdMesh.metadata['specifier'] = ValueType.Specifier
-                self.exportMaterialSubsets(usdMesh)
+                #self.exportMaterialSubsets(usdMesh)
             else:
                 usdMesh = self.mesh.exportToObject(usdObj)
                 self.exportMaterialSubsets(usdMesh)
@@ -707,7 +707,8 @@ class Object:
         for child in self.children:
             child.exportUsd(usdObj)
         if self.collection != None and self.collection in self.scene.usdCollections:
-            usdObj.metadata['references'] = self.scene.usdCollections[self.collection]
+            usdObj.metadata['inherits'] = self.scene.usdCollections[self.collection]
+            usdObj.metadata['instanceable'] = True
 
 
     def exportInstanced(self, parent):
@@ -927,9 +928,8 @@ class Scene:
         if len(self.collections) > 0:
             collections = data.createChild('Collections', ClassType.Scope)
             for name, objs in self.collections.items():
-                collection = collections.createChild(name, None)
-                collection.specifierType = SpecifierType.Over
-                collection.metadata['instanceable'] = True
+                collection = collections.createChild(name, ClassType.Xform)
+                collection.specifierType = SpecifierType.Class
                 for obj in objs:
                     obj.exportInstanced(collection)
                 self.usdCollections[name] = collection
