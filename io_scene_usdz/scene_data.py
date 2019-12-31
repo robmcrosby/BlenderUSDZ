@@ -410,6 +410,7 @@ class Object:
         self.bakeHeight = scene.bakeSize
         self.bakeImage = None
         self.hidden = object.hide_render
+        self.collection = None
 
 
     def __del__(self):
@@ -455,6 +456,10 @@ class Object:
     def setAsMesh(self):
         if self.type != 'MESH' and self.object.type == 'MESH':
             self.type = 'MESH'
+            if not self.object.visible_get():
+                collection = self.object.users_collection[0]
+                setBpyCollectionVisibility(collection, True)
+                self.scene.hiddenCollections.add(collection)
             self.createMaterials()
             self.createMesh()
             self.object.hide_render = True
@@ -701,6 +706,28 @@ class Object:
         # Add Children
         for child in self.children:
             child.exportUsd(usdObj)
+        if self.collection != None and self.collection in self.scene.usdCollections:
+            usdObj.metadata['references'] = self.scene.usdCollections[self.collection]
+
+
+    def exportInstanced(self, parent):
+        usdObj = None
+        if self.mesh != None and self.mesh.armatueCopy != None and self.scene.animated:
+            # Export Skinned Object
+            usdObj = parent.createChild(self.name, ClassType.SkelRoot)
+        else:
+            # Export Ridgid Object
+            usdObj = parent.createChild(self.name, ClassType.Xform)
+            usdObj['xformOp:transform'] = convertBpyMatrix(self.object.matrix_local)
+            usdObj['xformOp:transform'].addQualifier('custom')
+            usdObj['xformOpOrder'] = ['xformOp:transform']
+            usdObj['xformOpOrder'].addQualifier('uniform')
+        # Add Meshes if Mesh Object
+        if self.type == 'MESH':
+            self.exportMesh(usdObj)
+        # Add Children
+        for child in self.children:
+            child.exportInstanced(usdObj)
 
 
 class Scene:
@@ -711,6 +738,9 @@ class Scene:
         self.objects = []
         self.objMap = {}
         self.meshes = {}
+        self.collections = {}
+        self.hiddenCollections = set()
+        self.usdCollections = {}
         self.bpyObjects = []
         self.bpyActive = None
         self.exportMaterials = False
@@ -737,6 +767,8 @@ class Scene:
         deselectBpyObjects()
         selectBpyObjects(self.bpyObjects)
         setBpyActiveObject(self.bpyActive)
+        for collection in self.hiddenCollections:
+            setBpyCollectionVisibility(collection, False)
         deleteBpyCollection(self.collection)
         self.collection = None
 
@@ -773,6 +805,8 @@ class Scene:
         for obj in self.bpyObjects:
             if (obj.type == 'MESH'):
                 self.addBpyObject(obj, obj.type)
+            elif (obj.type == 'EMPTY' and obj.instance_type == 'COLLECTION'):
+                self.addBpyCollection(obj)
 
 
     def getUnitScale(self):
@@ -810,6 +844,7 @@ class Scene:
             scale = 10.0
         return scale * settings.scale_length
 
+
     def addBpyObject(self, object, type = 'EMPTY'):
         obj = Object(object, self)
         if obj.name in self.objMap:
@@ -824,6 +859,35 @@ class Scene:
         if type == 'MESH':
             obj.setAsMesh()
         return obj
+
+
+    def addBpyCollection(self, collection):
+        name = collection.instance_collection.name.replace('.', '_')
+        obj = Object(collection, self)
+        obj.collection = name
+        if obj.name in self.objMap:
+            obj = self.objMap[obj.name]
+        elif obj.hasParent():
+            obj.parent = self.addBpyObject(collection.parent)
+            obj.parent.children.append(obj)
+            self.objMap[obj.name] = obj
+        else:
+            self.objects.append(obj)
+            self.objMap[obj.name] = obj
+        if not name in self.collections:
+            bpyObjs = list(collection.instance_collection.objects)
+            objs = []
+            for obj in bpyObjs:
+                type = obj.type
+                obj = Object(obj, self)
+                if obj.name in self.objMap:
+                    obj = self.objMap[obj.name]
+                else:
+                    self.objMap[obj.name] = obj
+                objs.append(obj)
+                if type == 'MESH':
+                    obj.setAsMesh()
+            self.collections[name] = objs
 
 
     def exportBakedTextures(self):
@@ -859,6 +923,18 @@ class Scene:
                 mesh.exportShared(meshes)
 
 
+    def exportCollections(self, data):
+        if len(self.collections) > 0:
+            collections = data.createChild('Collections', ClassType.Scope)
+            for name, objs in self.collections.items():
+                collection = collections.createChild(name, None)
+                collection.specifierType = SpecifierType.Over
+                collection.metadata['instanceable'] = True
+                for obj in objs:
+                    obj.exportInstanced(collection)
+                self.usdCollections[name] = collection
+
+
     def exportUsd(self):
         data = UsdData()
         data['upAxis'] = 'Y'
@@ -871,6 +947,7 @@ class Scene:
             self.exportSharedMaterials(data)
         if self.sharedMeshes:
             self.exportSharedMeshes(data)
+        self.exportCollections(data)
         for obj in self.objects:
             obj.exportUsd(data)
         return data
