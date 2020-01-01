@@ -403,10 +403,6 @@ class CrateFile:
         return self.addFieldItem(field, ValueType.TimeSamples, False, False, False, reference)
 
     def addField(self, field, value, vType = ValueType.UnregisteredValue):
-        if type(value) is UsdPrim:
-            if field == 'inherits':
-                return self.addFieldPathListOp('inheritPaths', value.pathIndex)
-            return self.addReferenceListOp(field, value)
         if vType == ValueType.UnregisteredValue:
             vType = getValueType(value)
         if vType == ValueType.token:
@@ -601,7 +597,13 @@ class CrateFile:
         if usdPrim.classType != None:
             fset.append(self.addField('typeName', usdPrim.classType.name))
         for name, value in usdPrim.metadata.items():
-            fset.append(self.addField(name, value))
+            if name == 'inherits':
+                path = value.pathIndex
+                fset.append(self.addFieldPathListOp('inheritPaths', path))
+            elif name == 'references':
+                fset.append(sself.addReferenceListOp(field, value))
+            else:
+                fset.append(self.addField(name, value))
         if len(usdPrim.attributes) > 0:
             tokens = [att.name for att in usdPrim.attributes]
             fset.append(self.addFieldTokenVector('properties', tokens))
