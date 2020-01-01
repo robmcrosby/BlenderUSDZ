@@ -288,6 +288,42 @@ def addToBpyCollection(object, collection = None):
         collection.objects.link(object)
 
 
+def getBpyOrderedCollections():
+    def fn(c, out, addme):
+        if addme:
+            out.append(c)
+        for c1 in c.children:
+            out.append(c1)
+        for c1 in c.children:
+            fn(c1, out, False)
+    collections = []
+    fn(bpy.context.scene.collection, collections, True)
+    return collections
+
+
+def getBpyAreaFromContext(context, areaType):
+    area = None
+    for a in context['screen'].areas:
+        if a.type == areaType:
+            area = a
+            break
+    return area
+
+
+def setBpyCollectionVisibility(collection, visible):
+    if collection != None:
+        collections = getBpyOrderedCollections()
+        if collection in collections:
+            index = collections.index(collection)
+            hidden = not visible
+            try:
+                bpy.ops.object.hide_collection(bpy.context, collection_index=index, toggle=hidden)
+            except:
+                context = bpy.context.copy()
+                context['area'] = getBpyAreaFromContext(context, 'VIEW_3D')
+                bpy.ops.object.hide_collection(context, collection_index=index, toggle=hidden)
+
+
 def exportBpyBoneJoint(bone):
     name = bone.name.replace('.', '_')
     if bone.parent != None:

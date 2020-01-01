@@ -144,9 +144,10 @@ class CrateFile:
         return self.tokenMap[token]
 
     def getStringIndex(self, str):
-        strIndex = len(self.strings)
-        self.strings.append(self.getTokenIndex(str))
-        return strIndex
+        tokenIndex = self.getTokenIndex(str)
+        if not tokenIndex in self.strings:
+            self.strings.append(tokenIndex)
+        return self.strings.index(tokenIndex)
 
     def addFieldSet(self, fset):
         index = len(self.fsets)
@@ -225,6 +226,20 @@ class CrateFile:
         writeInt(self.file, 1, 8)
         writeInt(self.file, pathIndex, 4)
         return self.addFieldItem(field, ValueType.PathVector, False, False, False, ref)
+
+    def addReferenceListOp(self, field, item):
+        field = self.getTokenIndex(field)
+        strIndex = self.getStringIndex('')
+        pathIndex = item.pathIndex
+        ref = self.file.tell()
+        writeInt(self.file, 3, 1) # ListOp Type Flags (Explicit | Explicit Items)
+        writeInt(self.file, 1, 8) # Vector Size (size of 1)
+        writeInt(self.file, strIndex, 4) # Index to empty string for now
+        writeInt(self.file, pathIndex, 8) # Path Index
+        writeInt(self.file, 0, 10) # Write rest of SdfRefrence
+        self.file.write(b'\xf0\x3f')
+        writeInt(self.file, 0, 8)
+        return self.addFieldItem(field, ValueType.ReferenceListOp, False, False, False, ref)
 
     def addFieldSpecifier(self, field, spec):
         field = self.getTokenIndex(field)
@@ -387,33 +402,33 @@ class CrateFile:
             writeInt(self.file, elem, 1)
         return self.addFieldItem(field, ValueType.TimeSamples, False, False, False, reference)
 
-    def addField(self, field, value, type = ValueType.UnregisteredValue):
-        if type == ValueType.UnregisteredValue:
-            type = getValueType(value)
-        if type == ValueType.token:
+    def addField(self, field, value, vType = ValueType.UnregisteredValue):
+        if vType == ValueType.UnregisteredValue:
+            vType = getValueType(value)
+        if vType == ValueType.token:
             return self.addFieldToken(field, value)
-        if type == ValueType.asset:
+        if vType == ValueType.asset:
             return self.addFieldAsset(field, value)
-        if type == ValueType.TokenVector:
+        if vType == ValueType.TokenVector:
             return self.addFieldTokenVector(field, value)
-        if type == ValueType.Specifier:
+        if vType == ValueType.Specifier:
             return self.addFieldSpecifier(field, value)
-        if type == ValueType.int:
+        if vType == ValueType.int:
             return self.addFieldInt(field, value)
-        if type == ValueType.float:
+        if vType == ValueType.float:
             return self.addFieldFloat(field, value)
-        if type.name[:3] == 'vec':
-            return self.addFieldVector(field, value, type)
-        if type.name[:6] == 'matrix':
-            return self.addFieldMatrix(field, value, type)
-        if type == ValueType.bool:
+        if vType.name[:3] == 'vec':
+            return self.addFieldVector(field, value, vType)
+        if vType.name[:6] == 'matrix':
+            return self.addFieldMatrix(field, value, vType)
+        if vType == ValueType.bool:
             return self.addFieldBool(field, value)
-        if type == ValueType.Variability:
+        if vType == ValueType.Variability:
             return self.addFieldVariability(field, value)
-        if type == ValueType.Dictionary:
+        if vType == ValueType.Dictionary:
             return self.addFieldDictionary(field, value)
-        #print('type: ', type.name, value)
-        return self.addFieldItem(field, type, False, True, False, value)
+        #print('type: ', vType.name, value)
+        return self.addFieldItem(field, vType, False, True, False, value)
 
     def addPath(self, path, token, jump, prim):
         if prim:
@@ -578,8 +593,17 @@ class CrateFile:
     def writeUsdPrim(self, usdPrim):
         # Add Prim Properties
         fset = []
-        fset.append(self.addField('typeName', usdPrim.classType.name))
-        fset.append(self.addField('specifier', SpecifierType.Def))
+        fset.append(self.addField('specifier', usdPrim.specifierType))
+        if usdPrim.classType != None:
+            fset.append(self.addField('typeName', usdPrim.classType.name))
+        for name, value in usdPrim.metadata.items():
+            if name == 'inherits':
+                path = value.pathIndex
+                fset.append(self.addFieldPathListOp('inheritPaths', path))
+            elif name == 'references':
+                fset.append(sself.addReferenceListOp(field, value))
+            else:
+                fset.append(self.addField(name, value))
         if len(usdPrim.attributes) > 0:
             tokens = [att.name for att in usdPrim.attributes]
             fset.append(self.addFieldTokenVector('properties', tokens))
@@ -655,7 +679,13 @@ class CrateFile:
                 classType = ClassType[metadata.pop('typeName')]
             prim = parent.createChild(name, classType)
             if 'specifier' in metadata:
-                metadata.pop('specifier')
+                specifier = metadata.pop('specifier')['payload']
+                if specifier == 0:
+                    prim.specifierType = SpecifierType.Def
+                elif specifier == 1:
+                    prim.specifierType = SpecifierType.Over
+                else:
+                    prim.specifierType = SpecifierType.Class
             if 'properties' in metadata:
                 metadata.pop('properties')
             if 'primChildren' in metadata:
@@ -983,14 +1013,11 @@ class CrateFile:
             #print('numPaths', numPaths, 'path', path)
             return path
         elif rep['type'] == ValueType.ReferenceListOp:
-            self.file.seek(rep['payload'])
-            print(self.file.read(32))
             self.file.seek(rep['payload'] + 1)
-            #ref = readInt(self.file, 8)
             numRefs = readInt(self.file, 8)
-            ref = readInt(self.file, 4)
-            print('numRefs:', numRefs, 'ref:', ref)
-            return ref
+            strIndex = readInt(self.file, 4)
+            pathIndex = readInt(self.file, 8)
+            return pathIndex
         elif rep['type'] == ValueType.int:
             if rep['inline']:
                 return rep['payload']
