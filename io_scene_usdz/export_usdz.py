@@ -21,7 +21,9 @@ def export_usdz(context, filepath = '', exportMaterials = True,
                 globalScale = 1.0, useConverter = False,
                 ):
     exportDir, fileName = os.path.split(filepath)
-    fileName, fileType = fileName.split('.')[:2]
+    fileParts = fileName.split('.')
+    fileName = fileParts[0] if len(fileParts) > 0 else 'file'
+    fileType = fileParts[1] if len(fileParts) > 1 else 'usdz'
     filePath = exportDir + '/' + fileName + '.' + fileType
     tempDir = None
     if not fileType in ('usda', 'usdc'):

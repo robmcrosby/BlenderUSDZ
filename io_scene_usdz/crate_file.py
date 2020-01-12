@@ -144,9 +144,10 @@ class CrateFile:
         return self.tokenMap[token]
 
     def getStringIndex(self, str):
-        strIndex = len(self.strings)
-        self.strings.append(self.getTokenIndex(str))
-        return strIndex
+        tokenIndex = self.getTokenIndex(str)
+        if not tokenIndex in self.strings:
+            self.strings.append(tokenIndex)
+        return self.strings.index(tokenIndex)
 
     def addFieldSet(self, fset):
         index = len(self.fsets)
@@ -225,6 +226,20 @@ class CrateFile:
         writeInt(self.file, 1, 8)
         writeInt(self.file, pathIndex, 4)
         return self.addFieldItem(field, ValueType.PathVector, False, False, False, ref)
+
+    def addReferenceListOp(self, field, item):
+        field = self.getTokenIndex(field)
+        strIndex = self.getStringIndex('')
+        pathIndex = item.pathIndex
+        ref = self.file.tell()
+        writeInt(self.file, 3, 1) # ListOp Type Flags (Explicit | Explicit Items)
+        writeInt(self.file, 1, 8) # Vector Size (size of 1)
+        writeInt(self.file, strIndex, 4) # Index to empty string for now
+        writeInt(self.file, pathIndex, 8) # Path Index
+        writeInt(self.file, 0, 10) # Write rest of SdfRefrence
+        self.file.write(b'\xf0\x3f')
+        writeInt(self.file, 0, 8)
+        return self.addFieldItem(field, ValueType.ReferenceListOp, False, False, False, ref)
 
     def addFieldSpecifier(self, field, spec):
         field = self.getTokenIndex(field)
@@ -387,33 +402,33 @@ class CrateFile:
             writeInt(self.file, elem, 1)
         return self.addFieldItem(field, ValueType.TimeSamples, False, False, False, reference)
 
-    def addField(self, field, value, type = ValueType.UnregisteredValue):
-        if type == ValueType.UnregisteredValue:
-            type = getValueType(value)
-        if type == ValueType.token:
+    def addField(self, field, value, vType = ValueType.UnregisteredValue):
+        if vType == ValueType.UnregisteredValue:
+            vType = getValueType(value)
+        if vType == ValueType.token:
             return self.addFieldToken(field, value)
-        if type == ValueType.asset:
+        if vType == ValueType.asset:
             return self.addFieldAsset(field, value)
-        if type == ValueType.TokenVector:
+        if vType == ValueType.TokenVector:
             return self.addFieldTokenVector(field, value)
-        if type == ValueType.Specifier:
+        if vType == ValueType.Specifier:
             return self.addFieldSpecifier(field, value)
-        if type == ValueType.int:
+        if vType == ValueType.int:
             return self.addFieldInt(field, value)
-        if type == ValueType.float:
+        if vType == ValueType.float:
             return self.addFieldFloat(field, value)
-        if type.name[:3] == 'vec':
-            return self.addFieldVector(field, value, type)
-        if type.name[:6] == 'matrix':
-            return self.addFieldMatrix(field, value, type)
-        if type == ValueType.bool:
+        if vType.name[:3] == 'vec':
+            return self.addFieldVector(field, value, vType)
+        if vType.name[:6] == 'matrix':
+            return self.addFieldMatrix(field, value, vType)
+        if vType == ValueType.bool:
             return self.addFieldBool(field, value)
-        if type == ValueType.Variability:
+        if vType == ValueType.Variability:
             return self.addFieldVariability(field, value)
-        if type == ValueType.Dictionary:
+        if vType == ValueType.Dictionary:
             return self.addFieldDictionary(field, value)
-        #print('type: ', type.name, value)
-        return self.addFieldItem(field, type, False, True, False, value)
+        #print('type: ', vType.name, value)
+        return self.addFieldItem(field, vType, False, True, False, value)
 
     def addPath(self, path, token, jump, prim):
         if prim:
@@ -563,7 +578,7 @@ class CrateFile:
                 fset.append(self.addField('variability', True, ValueType.Variability))
             elif q == 'custom':
                 fset.append(self.addField('custom', True))
-        for name, value in usdAtt.properties.items():
+        for name, value in usdAtt.metadata.items():
             fset.append(self.addField(name, value))
         if usdAtt.value != None:
             fset.append(self.addField('default', usdAtt.value, usdAtt.valueType))
@@ -578,8 +593,17 @@ class CrateFile:
     def writeUsdPrim(self, usdPrim):
         # Add Prim Properties
         fset = []
-        fset.append(self.addField('typeName', usdPrim.classType.name))
-        fset.append(self.addField('specifier', SpecifierType.Def))
+        fset.append(self.addField('specifier', usdPrim.specifierType))
+        if usdPrim.classType != None:
+            fset.append(self.addField('typeName', usdPrim.classType.name))
+        for name, value in usdPrim.metadata.items():
+            if name == 'inherits':
+                path = value.pathIndex
+                fset.append(self.addFieldPathListOp('inheritPaths', path))
+            elif name == 'references':
+                fset.append(sself.addReferenceListOp(field, value))
+            else:
+                fset.append(self.addField(name, value))
         if len(usdPrim.attributes) > 0:
             tokens = [att.name for att in usdPrim.attributes]
             fset.append(self.addFieldTokenVector('properties', tokens))
@@ -607,9 +631,9 @@ class CrateFile:
     def writeUsd(self, usdData):
         usdData.updatePathIndices()
         self.writeBootStrap()
-        # Add Root Properties
+        # Add Root Metadata
         fset = []
-        for name, value in usdData.properties.items():
+        for name, value in usdData.metadata.items():
             if type(value) is float:
                 fset.append(self.addFieldDouble(name, value))
             else:
@@ -630,15 +654,15 @@ class CrateFile:
         self.writeSections()
         self.writeTableOfContents()
 
-    def getFieldSetProperties(self, fset):
-        properties = {}
+    def getFieldSetMetadata(self, fset):
+        metadata = {}
         fset = self.getFieldSet(fset)
         for field in fset:
             if field < len(self.reps):
                 name = self.getTokenStr(self.fields[field])
                 value = self.getRepValue(self.reps[field])
-                properties[name] = value
-        return properties
+                metadata[name] = value
+        return metadata
 
 
     def readUsdItem(self, parent = None, index = 0):
@@ -647,11 +671,26 @@ class CrateFile:
             return (index + 1, -1)
         fset, spec = self.specsMap[path]
         specType = SpecType(spec)
-        properties = self.getFieldSetProperties(fset)
+        metadata = self.getFieldSetMetadata(fset)
         name = self.getTokenStr(token)
         if specType == SpecType.Prim:
-            classType = ClassType[properties.pop('typeName')]
+            classType = None
+            if 'typeName' in metadata:
+                classType = ClassType[metadata.pop('typeName')]
             prim = parent.createChild(name, classType)
+            if 'specifier' in metadata:
+                specifier = metadata.pop('specifier')['payload']
+                if specifier == 0:
+                    prim.specifierType = SpecifierType.Def
+                elif specifier == 1:
+                    prim.specifierType = SpecifierType.Over
+                else:
+                    prim.specifierType = SpecifierType.Class
+            if 'properties' in metadata:
+                metadata.pop('properties')
+            if 'primChildren' in metadata:
+                metadata.pop('primChildren')
+            prim.metadata = metadata
             prim.pathIndex = path
             index += 1
             itemJump = jump
@@ -660,29 +699,31 @@ class CrateFile:
             jump = -2 if jump == -1 else -1
             return (index, jump)
         elif specType == SpecType.Attribute:
-            valueTypeStr = properties.pop('typeName').replace('[]', '')
+            valueTypeStr = metadata.pop('typeName').replace('[]', '')
             valueType = getValueTypeFromStr(valueTypeStr)
-            value = properties.pop('default') if 'default' in properties else None
+            value = metadata.pop('default') if 'default' in metadata else None
             if valueType == ValueType.asset and type(value) == str:
                 value = value.replace('@', '')
             att = parent.createAttribute(name, value, valueType)
             att.pathIndex = path
             if att.valueType.name != valueTypeStr:
                 att.valueTypeStr = valueTypeStr
-            if 'variability' in properties and properties.pop('variability') == 1:
+            if 'variability' in metadata and metadata.pop('variability') == 1:
                 att.addQualifier('uniform')
-            if 'custom' in properties and properties.pop('custom') == 1:
+            if 'custom' in metadata and metadata.pop('custom') == 1:
                 att.addQualifier('custom')
-            att.properties = properties
+            if 'timeSamples' in metadata:
+                att.frames = metadata.pop('timeSamples')
+            att.metadata = metadata
         elif specType == SpecType.Relationship:
             rel = parent.createAttribute(name)
             rel.pathIndex = path
             rel.valueTypeStr = 'rel'
-            if 'variability' in properties and properties.pop('variability') == 1:
+            if 'variability' in metadata and metadata.pop('variability') == 1:
                 rel.addQualifier('uniform')
-            if 'custom' in properties and properties.pop('custom') == 1:
+            if 'custom' in metadata and metadata.pop('custom') == 1:
                 rel.addQualifier('custom')
-            rel.properties = properties
+            rel.metadata = metadata
         return (index + 1, jump)
 
     def readUsd(self):
@@ -690,9 +731,9 @@ class CrateFile:
         path, token, jump = self.paths[0]
         fset, spec = self.specsMap[path]
         data = UsdData()
-        data.properties = self.getFieldSetProperties(fset)
-        if 'primChildren' in data.properties:
-            data.properties.pop('primChildren')
+        data.metadata = self.getFieldSetMetadata(fset)
+        if 'primChildren' in data.metadata:
+            data.metadata.pop('primChildren')
         index = 1
         while index < len(self.paths):
             index, jump = self.readUsdItem(data, index)
@@ -818,10 +859,18 @@ class CrateFile:
         return ''
 
     def readFloatVector(self, size):
-        return struct.unpack('<%df'%size, self.file.read(4*size))
+        buffer = self.file.read(4*size)
+        if len(buffer) < 4*size:
+            return (0.0,)*size
+        return struct.unpack('<%df'%size, buffer)
+        #return struct.unpack('<%df'%size, self.file.read(4*size))
 
     def readDoubleVector(self, size):
-        return struct.unpack('<%dd'%size, self.file.read(8*size))
+        buffer = self.file.read(8*size)
+        if len(buffer) < 8*size:
+            return (0.0,)*size
+        return struct.unpack('<%dd'%size, buffer)
+        #return struct.unpack('<%dd'%size, self.file.read(8*size))
 
     def readMatrix(self, size):
         return tuple(self.readDoubleVector(size) for i in range(size))
@@ -844,6 +893,10 @@ class CrateFile:
                     dic[key] = self.getStringStr(readInt(self.file, 4))
                 elif vt == ValueType.bool:
                     dic[key] = readInt(self.file, 4) > 0
+                elif vt == ValueType.float:
+                    dic[key] = struct.unpack('<f', self.file.read(4))[0]
+                elif vt == ValueType.double:
+                    dic[key] = struct.unpack('<d', self.file.read(8))[0]
                 #else:
                 #    print('Unhandled Dictionary Type:', vt.name)
             self.file.seek(loc + itemSize)
@@ -854,11 +907,8 @@ class CrateFile:
 
     def decodeRepFloatVector(self, rep, size):
         if rep['inline']:
-            #data = rep['payload'].to_bytes(12, byteorder='big')
-            #print('inline float:', data)
-            #vec = struct.unpack('>%df'%size, data)
-            #print('inline float:', data, vec)
-            return size*(0.0,)
+            data = rep['payload'].to_bytes(8, byteorder='little')
+            return tuple(float(data[i]) for i in range(size))
         self.file.seek(rep['payload'])
         if rep['array']:
             countBytes = 4 if self.version < 7 else 8
@@ -868,8 +918,8 @@ class CrateFile:
 
     def decodeRepDoubleVector(self, rep, size):
         if rep['inline']:
-            print('inline Double Vec')
-            return size*(0.0,)
+            data = rep['payload'].to_bytes(8, byteorder='little')
+            return tuple(float(data[i]) for i in range(size))
         self.file.seek(rep['payload'])
         if rep['array']:
             countBytes = 4 if self.version < 7 else 8
@@ -885,13 +935,48 @@ class CrateFile:
             return [self.readMatrix(size) for i in range(count)]
         return self.readMatrix(size)
 
+    def readTimeFrames(self, ref):
+        self.file.seek(ref)
+        self.file.seek(ref + readInt(self.file, 8))
+        ref = readInt(self.file, 6) - 8
+        vType = ValueType(readInt(self.file, 1))
+        self.file.seek(ref + 8)
+        if vType == ValueType.DoubleVector:
+            return self.readDoubleVector(readInt(self.file, 8))
+        print('UnHandled frames value type:', vType.name)
+        return []
+
+    def readSampleReps(self, ref):
+        self.file.seek(ref)
+        self.file.seek(ref + readInt(self.file, 8) + 8)
+        count = readInt(self.file, readInt(self.file, 8))
+        reps = []
+        for i in range(count):
+            # Read the refrence and value type
+            payload = readInt(self.file, 6)
+            vType = readInt(self.file, 1)
+            rep = (payload & PAYLOAD_MASK) | (vType << 48)
+            elem = readInt(self.file, 1)
+            if elem > 0:
+                if elem == 64:
+                    rep |= INLINE_BIT
+                else:
+                    rep |= ARRAY_BIT
+            reps.append(rep)
+        return reps
+
+    def readTimeSamples(self, ref):
+        frames = self.readTimeFrames(ref)
+        reps = self.readSampleReps(ref)
+        return [(f, self.getRepValue(r)) for f, r in zip(frames, reps)]
 
     def getRepValue(self, rep):
         rep = decodeRep(rep)
         if rep['type'] == ValueType.token:
             if not rep['inline']:
                 self.file.seek(rep['payload'])
-                numTokens = readInt(self.file, 4)
+                numBytes = 4 if self.version < 7 else 8
+                numTokens = readInt(self.file, numBytes)
                 tokens = []
                 for i in range(numTokens):
                     token = readInt(self.file, 4)
@@ -919,13 +1004,20 @@ class CrateFile:
             listOp['path'] = readInt(self.file, 4)
             return listOp
         elif rep['type'] == ValueType.Variability or rep['type'] == ValueType.bool:
-            return rep['payload']
+            #print('Boolean:', rep)
+            return True if rep['payload'] > 0 else False
         elif rep['type'] == ValueType.PathVector:
             self.file.seek(rep['payload'])
             numPaths = readInt(self.file, 8)
             path = readInt(self.file, 4)
             #print('numPaths', numPaths, 'path', path)
             return path
+        elif rep['type'] == ValueType.ReferenceListOp:
+            self.file.seek(rep['payload'] + 1)
+            numRefs = readInt(self.file, 8)
+            strIndex = readInt(self.file, 4)
+            pathIndex = readInt(self.file, 8)
+            return pathIndex
         elif rep['type'] == ValueType.int:
             if rep['inline']:
                 return rep['payload']
@@ -948,7 +1040,7 @@ class CrateFile:
             return struct.unpack('<f', self.file.read(4))
         elif rep['type'] == ValueType.double:
             if rep['inline']:
-                return struct.unpack('<d', rep['payload'].to_bytes(8, byteorder='little'))[0]
+                return struct.unpack('<f', rep['payload'].to_bytes(4, byteorder='little'))[0]
             self.file.seek(rep['payload'])
             if rep['array']:
                 countBytes = 4 if self.version < 7 else 8
@@ -959,13 +1051,13 @@ class CrateFile:
             return self.decodeRepFloatVector(rep, 2)
         elif rep['type'] == ValueType.vec3f:
             return self.decodeRepFloatVector(rep, 3)
-        elif rep['type'] == ValueType.vec4f:
+        elif rep['type'] in (ValueType.vec4f, ValueType.quatf):
             return self.decodeRepFloatVector(rep, 4)
         elif rep['type'] == ValueType.vec2d:
             return self.decodeRepDoubleVector(rep, 2)
         elif rep['type'] == ValueType.vec3d:
             return self.decodeRepDoubleVector(rep, 3)
-        elif rep['type'] == ValueType.vec4d:
+        elif rep['type'] in (ValueType.vec4d, ValueType.quatd):
             return self.decodeRepDoubleVector(rep, 4)
         elif rep['type'] == ValueType.matrix2d:
             return self.decodeRepMatrix(rep, 2)
@@ -975,6 +1067,8 @@ class CrateFile:
             return self.decodeRepMatrix(rep, 4)
         elif rep['type'] == ValueType.Dictionary:
             return self.readDictionary(rep['payload'])
+        elif rep['type'] == ValueType.TimeSamples:
+            return self.readTimeSamples(rep['payload'])
         #else:
         #    print('UnHandled Type:', rep)
         return rep
