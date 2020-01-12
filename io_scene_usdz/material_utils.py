@@ -77,7 +77,10 @@ def getBpySpecularColor(node):
     return specular
 
 def getBpyEmissiveColor(node, default = (0.0, 0.0, 0.0)):
-    return default
+    input = getBpyNodeInput(node, 'Emission')
+    if input == None:
+        return default
+    return input.default_value[:3]
 
 def getBpyRoughnessValue(node, default = 0.0):
     input = getBpyRoughnessInput(node)
