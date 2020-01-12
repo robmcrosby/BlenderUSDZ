@@ -171,6 +171,15 @@ class Material:
         return False
 
 
+    def setupBakeEmission(self, asset, object):
+        input = getBpyEmissiveInput(self.shaderNode)
+        if self.setupBakeColorInput(input):
+            self.inputs['emissiveColor'].image = asset
+            self.inputs['emissiveColor'].uvMap = object.bakeUVMap
+            return True
+        return False
+
+
     def setupBakeRoughness(self, asset, object):
         input = getBpyRoughnessInput(self.shaderNode)
         if self.setupBakeFloatInput(input):
@@ -524,6 +533,16 @@ class Object:
         self.cleanupBakeNodes()
 
 
+    def bakeEmissionTexture(self):
+        asset = self.name+'_emission.png'
+        bake = False
+        for mat in self.materials:
+            bake = mat.setupBakeEmission(asset, self) or bake
+        if bake:
+            self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
+        self.cleanupBakeNodes()
+
+
     def bakeRoughnessTexture(self):
         asset = self.name+'_roughness.png'
         bake = False
@@ -570,6 +589,7 @@ class Object:
         self.setupBakeOutputNodes()
         if self.scene.bakeTextures:
             self.bakeDiffuseTexture()
+            self.bakeEmissionTexture()
             self.bakeRoughnessTexture()
             self.bakeMetallicTexture()
             self.bakeNormalTexture()

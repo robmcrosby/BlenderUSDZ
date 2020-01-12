@@ -27,6 +27,9 @@ def getBpyDiffuseInput(node):
         input = getBpyNodeInput(node, 'Color')
     return input
 
+def getBpyEmissiveInput(node):
+    return getBpyNodeInput(node, 'Emission')
+
 def getBpySpecularInput(node):
     return getBpyNodeInput(node, 'Specular')
 
@@ -77,7 +80,7 @@ def getBpySpecularColor(node):
     return specular
 
 def getBpyEmissiveColor(node, default = (0.0, 0.0, 0.0)):
-    input = getBpyNodeInput(node, 'Emission')
+    input = getBpyEmissiveInput(node) # getBpyNodeInput(node, 'Emission')
     if input == None:
         return default
     return input.default_value[:3]
