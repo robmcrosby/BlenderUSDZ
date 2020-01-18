@@ -418,76 +418,74 @@ def importMaterials(data, tempDir):
     return materialMap
 
 
-def createMaterial(data, tempDir):
-    mat = bpy.data.materials.new(data.name)
+def createMaterial(usdData, tempDir):
+    mat = bpy.data.materials.new(usdData.name)
     mat.use_nodes = True
-
-    outputNode = outputNode = getBpyOutputNode(mat)
-    posY = outputNode.location.y
-    posY = setMaterialInput(data, mat, tempDir, 'diffuseColor', 'Base Color', posY)
-    posY = setMaterialInput(data, mat, tempDir, 'metallic', 'Metallic', posY)
-    posY = setMaterialInput(data, mat, tempDir, 'specularColor', 'Specular', posY)
-    posY = setMaterialInput(data, mat, tempDir, 'roughness', 'Roughness', posY)
-    posY = setMaterialInput(data, mat, tempDir, 'clearcoat', 'Clearcoat', posY)
-    posY = setMaterialInput(data, mat, tempDir, 'clearcoatRoughness', 'Clearcoat Roughness', posY)
-    posY = setMaterialInput(data, mat, tempDir, 'emissiveColor', 'Emission', posY)
-    posY = setMaterialInput(data, mat, tempDir, 'ior', 'IOR', posY)
-    posY = setMaterialInput(data, mat, tempDir, 'opacity', 'Alpha', posY)
-    posY = setMaterialInput(data, mat, tempDir, 'normal', 'Normal', posY)
-    #setMaterialInput(data, mat, tempDir, 'occlusion', 'Occlusion')
+    data = {'usdData':usdData, 'tempDir':tempDir, 'material':mat}
+    data['outputNode'] = getBpyOutputNode(mat)
+    data['shaderNode'] = getBpyShaderNode(data['outputNode'])
+    data['posY'] = data['shaderNode'].location.y
+    setMaterialInput(data, 'diffuseColor', 'Base Color')
+    setMaterialInput(data, 'metallic', 'Metallic')
+    setMaterialInput(data, 'specularColor', 'Specular')
+    setMaterialInput(data, 'roughness', 'Roughness')
+    setMaterialInput(data, 'clearcoat', 'Clearcoat')
+    setMaterialInput(data, 'clearcoatRoughness', 'Clearcoat Roughness')
+    setMaterialInput(data, 'emissiveColor', 'Emission')
+    setMaterialInput(data, 'ior', 'IOR')
+    setMaterialInput(data, 'opacity', 'Alpha')
+    setMaterialInput(data, 'normal', 'Normal')
+    #setMaterialInput(data, 'occlusion', 'Occlusion')
     return mat
 
 
-def getSurfaceShaderData(materialData):
-    return materialData['outputs:surface'].value.parent
+def getInputData(usdData, inputName):
+    if not 'outputs:surface' in usdData:
+        print('outputs:surface not found in shader', usdData.name)
+        return None
+    shaderData = usdData['outputs:surface'].value.parent
+    inputName = 'inputs:' + inputName
+    if inputName in shaderData:
+        return shaderData[inputName]
+    return None
 
 
-def setMaterialInput(matData, mat, tempDir, valName, inputName, posY):
-    shaderData = getSurfaceShaderData(matData)
-    inputData = shaderData['inputs:' + valName]
+def setMaterialInput(data, valName, inputName):
+    inputData = getInputData(data['usdData'], valName)
     if inputData != None:
         if inputData.isConnection():
-            setShaderInputTexture(inputData, mat, inputName, matData, tempDir, posY)
-            posY -= 300.0
+            setShaderInputTexture(data, inputData, inputName)
         else:
-            setShaderInputValue(inputData, mat, inputName)
-    return posY
+            setShaderInputValue(data, inputData, inputName)
 
 
-def setShaderInputValue(data, mat, inputName):
-    outputNode = getBpyOutputNode(mat)
-    shaderNode = getBpyShaderNode(outputNode)
-    input = getBpyNodeInput(shaderNode, inputName)
-    if input == None:
-        print('Input', inputName, 'Not found')
-    else:
-        valueType = data.valueTypeToString()
+def setShaderInputValue(data, inputData, inputName):
+    input = getBpyNodeInput(data['shaderNode'], inputName)
+    if input != None:
+        valueType = inputData.valueTypeToString()
         if valueType == 'float':
-            input.default_value = data.value
+            input.default_value = inputData.value
         elif valueType == 'color3f':
             if type(input.default_value) == float:
-                input.default_value = data.value[0]
+                input.default_value = inputData.value[0]
             else:
-                input.default_value = data.value + (1,)
+                input.default_value = inputData.value + (1,)
         elif valueType == 'normal3f':
             input.default_value = (0.0, 0.0, 1.0)
         else:
-            print('Value Not Set:', data.printUsda())
+            print('Value Not Set:', inputData)
 
 
-def setShaderInputTexture(data, mat, inputName, matData, tempDir, posY):
-    outputNode = getBpyOutputNode(mat)
-    shaderNode = getBpyShaderNode(outputNode)
-    input = getBpyNodeInput(shaderNode, inputName)
-    if input == None:
-        print('Input', inputName, 'Not found')
-    else:
+def setShaderInputTexture(data, inputData, inputName):
+    input = getBpyNodeInput(data['shaderNode'], inputName)
+    if input != None:
         # Get the Image File Path
-        texData = data.value.parent
-        filePath = tempDir + texData['inputs:file'].value
+        texData = inputData.value.parent
+        filePath = data['tempDir'] + texData['inputs:file'].value
         # Add an Image Texture Node
+        mat = data['material']
         texNode = mat.node_tree.nodes.new('ShaderNodeTexImage')
-        texNode.location.y = posY
+        texNode.location.y = data['posY']
         texNode.location.x = -600.0
         texNode.image = bpy.data.images.load(filePath)
         texNode.image.pack()
@@ -498,7 +496,7 @@ def setShaderInputTexture(data, mat, inputName, matData, tempDir, posY):
             # Add and link a Seperate Color Node
             texNode.image.colorspace_settings.name = 'Non-Color'
             sepNode = mat.node_tree.nodes.new('ShaderNodeSeparateRGB')
-            sepNode.location.y = posY
+            sepNode.location.y = texNode.location.y
             sepNode.location.x = -250.0
             mat.node_tree.links.new(sepNode.inputs[0], texNode.outputs[0])
             mat.node_tree.links.new(input, sepNode.outputs[0])
@@ -506,7 +504,8 @@ def setShaderInputTexture(data, mat, inputName, matData, tempDir, posY):
             # Add and link a Normal Map Node
             texNode.image.colorspace_settings.name = 'Non-Color'
             mapNode = mat.node_tree.nodes.new('ShaderNodeNormalMap')
-            mapNode.location.y = posY
+            mapNode.location.y = texNode.location.y
             mapNode.location.x = -250.0
             mat.node_tree.links.new(mapNode.inputs[1], texNode.outputs[0])
             mat.node_tree.links.new(input, mapNode.outputs[0])
+        data['posY'] -= 300.0
