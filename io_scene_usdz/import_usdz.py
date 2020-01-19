@@ -418,10 +418,10 @@ def importMaterials(data, tempDir):
     return materialMap
 
 
-def createMaterial(usdData, tempDir):
-    mat = bpy.data.materials.new(usdData.name)
+def createMaterial(usdMat, tempDir):
+    mat = bpy.data.materials.new(usdMat.name)
     mat.use_nodes = True
-    data = {'usdData':usdData, 'tempDir':tempDir, 'material':mat}
+    data = {'usdMat':usdMat, 'tempDir':tempDir, 'material':mat}
     data['textureNodes'] = {}
     data['uvMapNodes'] = {}
     data['outputNode'] = getBpyOutputNode(mat)
@@ -437,22 +437,35 @@ def createMaterial(usdData, tempDir):
     setMaterialInput(data, 'opacity', 'Alpha')
     setMaterialInput(data, 'normal', 'Normal')
     #setMaterialInput(data, 'occlusion', 'Occlusion')
+    # Setup Transparent Materials
+    if 'Alpha' in data['shaderNode'].inputs:
+        input = data['shaderNode'].inputs['Alpha']
+        if input.is_linked or input.default_value < 1.0:
+             mat.blend_method = 'CLIP'
+             usdShader = getUsdSurfaceShader(usdMat)
+             if 'inputs:opacityThreshold' in usdShader:
+                 alphaThreshold = usdShader['inputs:opacityThreshold'].value
+                 mat.alpha_threshold = alphaThreshold
     return mat
 
 
-def getInputData(usdData, inputName):
-    if not 'outputs:surface' in usdData:
-        print('outputs:surface not found in shader', usdData.name)
+def getUsdSurfaceShader(usdMat):
+    if not 'outputs:surface' in usdMat:
+        print('outputs:surface not found in shader', usdMat.name)
         return None
-    shaderData = usdData['outputs:surface'].value.parent
+    return usdMat['outputs:surface'].value.parent
+
+
+def getInputData(usdMat, inputName):
+    usdShader = getUsdSurfaceShader(usdMat)
     inputName = 'inputs:' + inputName
-    if inputName in shaderData:
-        return shaderData[inputName]
+    if inputName in usdShader:
+        return usdShader[inputName]
     return None
 
 
 def setMaterialInput(data, valName, inputName):
-    inputData = getInputData(data['usdData'], valName)
+    inputData = getInputData(data['usdMat'], valName)
     if inputData != None:
         if inputData.isConnection():
             setShaderInputTexture(data, inputData, inputName)
@@ -477,8 +490,8 @@ def setShaderInputValue(data, inputData, inputName):
             print('Value Not Set:', inputData)
 
 
-def getTextureMappingNode(data, usdData):
-    stData = usdData['inputs:st'].value.parent
+def getTextureMappingNode(data, usdTexture):
+    stData = usdTexture['inputs:st'].value.parent
     uvMap = stData['inputs:varname'].value.value
     if uvMap in data['uvMapNodes']:
         return data['uvMapNodes'][uvMap]
@@ -491,11 +504,11 @@ def getTextureMappingNode(data, usdData):
     return mapNode
 
 
-def getImageTextureNode(data, usdData):
-    if usdData.name in data['textureNodes']:
-        return data['textureNodes'][usdData.name]
+def getImageTextureNode(data, usdTexture):
+    if usdTexture.name in data['textureNodes']:
+        return data['textureNodes'][usdTexture.name]
     # Get the Image File Path
-    filePath = data['tempDir'] + usdData['inputs:file'].value
+    filePath = data['tempDir'] + usdTexture['inputs:file'].value
     posY = data['shaderNode'].location.y - len(data['textureNodes']) * 300.0
     # Add an Image Texture Node
     texNode = data['material'].node_tree.nodes.new('ShaderNodeTexImage')
@@ -503,9 +516,9 @@ def getImageTextureNode(data, usdData):
     texNode.location.y = posY
     texNode.image = bpy.data.images.load(filePath)
     texNode.image.pack()
-    mapNode = getTextureMappingNode(data, usdData)
+    mapNode = getTextureMappingNode(data, usdTexture)
     data['material'].node_tree.links.new(texNode.inputs[0], mapNode.outputs[0])
-    data['textureNodes'][usdData.name] = texNode
+    data['textureNodes'][usdTexture.name] = texNode
     return texNode
 
 
