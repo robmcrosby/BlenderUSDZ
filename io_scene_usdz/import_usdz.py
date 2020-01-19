@@ -477,20 +477,58 @@ def setShaderInputValue(data, inputData, inputName):
             print('Value Not Set:', inputData)
 
 
+def getTextureMappingNode(data, usdData):
+    stData = usdData['inputs:st'].value.parent
+    uvMap = stData['inputs:varname'].value.value
+    if uvMap in data['uvMapNodes']:
+        return data['uvMapNodes'][uvMap]
+    posY = data['shaderNode'].location.y - len(data['uvMapNodes']) * 200.0
+    mapNode = data['material'].node_tree.nodes.new('ShaderNodeUVMap')
+    mapNode.location.x = -850.0
+    mapNode.location.y = posY
+    mapNode.uv_map = uvMap
+    data['uvMapNodes'][uvMap] = mapNode
+    return mapNode
+
+
 def getImageTextureNode(data, usdData):
     if usdData.name in data['textureNodes']:
         return data['textureNodes'][usdData.name]
     # Get the Image File Path
     filePath = data['tempDir'] + usdData['inputs:file'].value
-    texNode = data['material'].node_tree.nodes.new('ShaderNodeTexImage')
-    # Add an Image Texture Node
     posY = data['shaderNode'].location.y - len(data['textureNodes']) * 300.0
-    texNode.location.y = posY
+    # Add an Image Texture Node
+    texNode = data['material'].node_tree.nodes.new('ShaderNodeTexImage')
     texNode.location.x = -600.0
+    texNode.location.y = posY
     texNode.image = bpy.data.images.load(filePath)
     texNode.image.pack()
+    mapNode = getTextureMappingNode(data, usdData)
+    data['material'].node_tree.links.new(texNode.inputs[0], mapNode.outputs[0])
     data['textureNodes'][usdData.name] = texNode
     return texNode
+
+
+def connectTextureToValueInput(data, texNode, input):
+    texNode.image.colorspace_settings.name = 'Non-Color'
+    # Add a Seperate Color Node
+    sepNode = data['material'].node_tree.nodes.new('ShaderNodeSeparateRGB')
+    sepNode.location.y = texNode.location.y
+    sepNode.location.x = -250.0
+    # Link in new Node
+    data['material'].node_tree.links.new(sepNode.inputs[0], texNode.outputs[0])
+    data['material'].node_tree.links.new(input, sepNode.outputs[0])
+
+
+def connectTextureToNormalInput(data, texNode, input):
+    texNode.image.colorspace_settings.name = 'Non-Color'
+    # Add a Normal Map Node
+    mapNode = data['material'].node_tree.nodes.new('ShaderNodeNormalMap')
+    mapNode.location.y = texNode.location.y
+    mapNode.location.x = -250.0
+    # Link in new Node
+    data['material'].node_tree.links.new(mapNode.inputs[1], texNode.outputs[0])
+    data['material'].node_tree.links.new(input, mapNode.outputs[0])
 
 
 def setShaderInputTexture(data, inputData, inputName):
@@ -502,18 +540,6 @@ def setShaderInputTexture(data, inputData, inputName):
             # Connect to the Color Input
             mat.node_tree.links.new(input, texNode.outputs['Color'])
         elif input.type == 'VALUE':
-            # Add and link a Seperate Color Node
-            texNode.image.colorspace_settings.name = 'Non-Color'
-            sepNode = mat.node_tree.nodes.new('ShaderNodeSeparateRGB')
-            sepNode.location.y = texNode.location.y
-            sepNode.location.x = -250.0
-            mat.node_tree.links.new(sepNode.inputs[0], texNode.outputs[0])
-            mat.node_tree.links.new(input, sepNode.outputs[0])
+            connectTextureToValueInput(data, texNode, input)
         elif input.type == 'VECTOR':
-            # Add and link a Normal Map Node
-            texNode.image.colorspace_settings.name = 'Non-Color'
-            mapNode = mat.node_tree.nodes.new('ShaderNodeNormalMap')
-            mapNode.location.y = texNode.location.y
-            mapNode.location.x = -250.0
-            mat.node_tree.links.new(mapNode.inputs[1], texNode.outputs[0])
-            mat.node_tree.links.new(input, mapNode.outputs[0])
+            connectTextureToNormalInput(data, texNode, input)
