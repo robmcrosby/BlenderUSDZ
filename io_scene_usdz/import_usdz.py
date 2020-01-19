@@ -422,9 +422,10 @@ def createMaterial(usdData, tempDir):
     mat = bpy.data.materials.new(usdData.name)
     mat.use_nodes = True
     data = {'usdData':usdData, 'tempDir':tempDir, 'material':mat}
+    data['textureNodes'] = {}
+    data['uvMapNodes'] = {}
     data['outputNode'] = getBpyOutputNode(mat)
     data['shaderNode'] = getBpyShaderNode(data['outputNode'])
-    data['posY'] = data['shaderNode'].location.y
     setMaterialInput(data, 'diffuseColor', 'Base Color')
     setMaterialInput(data, 'metallic', 'Metallic')
     setMaterialInput(data, 'specularColor', 'Specular')
@@ -476,19 +477,27 @@ def setShaderInputValue(data, inputData, inputName):
             print('Value Not Set:', inputData)
 
 
+def getImageTextureNode(data, usdData):
+    if usdData.name in data['textureNodes']:
+        return data['textureNodes'][usdData.name]
+    # Get the Image File Path
+    filePath = data['tempDir'] + usdData['inputs:file'].value
+    texNode = data['material'].node_tree.nodes.new('ShaderNodeTexImage')
+    # Add an Image Texture Node
+    posY = data['shaderNode'].location.y - len(data['textureNodes']) * 300.0
+    texNode.location.y = posY
+    texNode.location.x = -600.0
+    texNode.image = bpy.data.images.load(filePath)
+    texNode.image.pack()
+    data['textureNodes'][usdData.name] = texNode
+    return texNode
+
+
 def setShaderInputTexture(data, inputData, inputName):
     input = getBpyNodeInput(data['shaderNode'], inputName)
     if input != None:
-        # Get the Image File Path
-        texData = inputData.value.parent
-        filePath = data['tempDir'] + texData['inputs:file'].value
-        # Add an Image Texture Node
+        texNode = getImageTextureNode(data, inputData.value.parent)
         mat = data['material']
-        texNode = mat.node_tree.nodes.new('ShaderNodeTexImage')
-        texNode.location.y = data['posY']
-        texNode.location.x = -600.0
-        texNode.image = bpy.data.images.load(filePath)
-        texNode.image.pack()
         if input.type == 'RGBA':
             # Connect to the Color Input
             mat.node_tree.links.new(input, texNode.outputs['Color'])
@@ -508,4 +517,3 @@ def setShaderInputTexture(data, inputData, inputName):
             mapNode.location.x = -250.0
             mat.node_tree.links.new(mapNode.inputs[1], texNode.outputs[0])
             mat.node_tree.links.new(input, mapNode.outputs[0])
-        data['posY'] -= 300.0
