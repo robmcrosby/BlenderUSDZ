@@ -80,7 +80,8 @@ class Material:
         clearcoatRoughness = getBpyClearcoatRoughnessValue(self.shaderNode)
         metallic = getBpyMetallicValue(self.shaderNode)
         roughness = getBpyRoughnessValue(self.shaderNode, defRoughness)
-        opacity = getBpyOpacityValue(self.shaderNode)
+        opacity = getBpyAlphaValue(self.shaderNode)
+        opacityThreshold = self.material.alpha_threshold
         ior = getBpyIorValue(self.shaderNode)
         useSpecular = 0 if metallic > 0.0 else 1
         self.inputs = {
@@ -94,6 +95,7 @@ class Material:
             'normal':ShaderInput('normal3f', 'normal', (0.0, 0.0, 1.0)),
             'occlusion':ShaderInput('float', 'occlusion', 0.0),
             'opacity':ShaderInput('float', 'opacity', opacity),
+            'opacityThreshold':ShaderInput('float', 'opacityThreshold', opacityThreshold),
             'roughness':ShaderInput('float', 'roughness', roughness),
             'specularColor':ShaderInput('color3f', 'specularColor', specular),
             'useSpecularWorkflow':ShaderInput('int', 'useSpecularWorkflow', useSpecular),
@@ -171,11 +173,29 @@ class Material:
         return False
 
 
+    def setupBakeEmission(self, asset, object):
+        input = getBpyEmissiveInput(self.shaderNode)
+        if self.setupBakeColorInput(input):
+            self.inputs['emissiveColor'].image = asset
+            self.inputs['emissiveColor'].uvMap = object.bakeUVMap
+            return True
+        return False
+
+
     def setupBakeRoughness(self, asset, object):
         input = getBpyRoughnessInput(self.shaderNode)
         if self.setupBakeFloatInput(input):
             self.inputs['roughness'].image = asset
             self.inputs['roughness'].uvMap = object.bakeUVMap
+            return True
+        return False
+
+
+    def setupBakeOpacity(self, asset, object):
+        input = getBpyAlphaInput(self.shaderNode)
+        if self.setupBakeFloatInput(input):
+            self.inputs['opacity'].image = asset
+            self.inputs['opacity'].uvMap = object.bakeUVMap
             return True
         return False
 
@@ -524,11 +544,31 @@ class Object:
         self.cleanupBakeNodes()
 
 
+    def bakeEmissionTexture(self):
+        asset = self.name+'_emission.png'
+        bake = False
+        for mat in self.materials:
+            bake = mat.setupBakeEmission(asset, self) or bake
+        if bake:
+            self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
+        self.cleanupBakeNodes()
+
+
     def bakeRoughnessTexture(self):
         asset = self.name+'_roughness.png'
         bake = False
         for mat in self.materials:
             bake = mat.setupBakeRoughness(asset, self) or bake
+        if bake:
+            self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
+        self.cleanupBakeNodes()
+
+
+    def bakeOpacityTexture(self):
+        asset = self.name+'_opacity.png'
+        bake = False
+        for mat in self.materials:
+            bake = mat.setupBakeOpacity(asset, self) or bake
         if bake:
             self.bakeToFile('EMIT', self.scene.exportPath+'/'+asset)
         self.cleanupBakeNodes()
@@ -570,7 +610,9 @@ class Object:
         self.setupBakeOutputNodes()
         if self.scene.bakeTextures:
             self.bakeDiffuseTexture()
+            self.bakeEmissionTexture()
             self.bakeRoughnessTexture()
+            self.bakeOpacityTexture()
             self.bakeMetallicTexture()
             self.bakeNormalTexture()
         if self.scene.bakeAO:

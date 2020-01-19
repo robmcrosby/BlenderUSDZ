@@ -418,84 +418,141 @@ def importMaterials(data, tempDir):
     return materialMap
 
 
-def createMaterial(data, tempDir):
-    mat = bpy.data.materials.new(data.name)
+def createMaterial(usdMat, tempDir):
+    mat = bpy.data.materials.new(usdMat.name)
     mat.use_nodes = True
-
-    setMaterialInput(data, mat, tempDir, 'diffuseColor', 'Base Color')
-    setMaterialInput(data, mat, tempDir, 'clearcoat', 'Clearcoat')
-    setMaterialInput(data, mat, tempDir, 'clearcoatRoughness', 'Clearcoat Roughness')
-    #setMaterialInput(data, mat, tempDir, 'emissiveColor', 'Emissive')
-    setMaterialInput(data, mat, tempDir, 'ior', 'IOR')
-    setMaterialInput(data, mat, tempDir, 'metallic', 'Metallic')
-    setMaterialInput(data, mat, tempDir, 'normal', 'Normal')
-    #setMaterialInput(data, mat, tempDir, 'occlusion', 'Occlusion')
-    setMaterialInput(data, mat, tempDir, 'roughness', 'Roughness')
-    setMaterialInput(data, mat, tempDir, 'specularColor', 'Specular')
+    data = {'usdMat':usdMat, 'tempDir':tempDir, 'material':mat}
+    data['textureNodes'] = {}
+    data['uvMapNodes'] = {}
+    data['outputNode'] = getBpyOutputNode(mat)
+    data['shaderNode'] = getBpyShaderNode(data['outputNode'])
+    setMaterialInput(data, 'diffuseColor', 'Base Color')
+    setMaterialInput(data, 'metallic', 'Metallic')
+    setMaterialInput(data, 'specularColor', 'Specular')
+    setMaterialInput(data, 'roughness', 'Roughness')
+    setMaterialInput(data, 'clearcoat', 'Clearcoat')
+    setMaterialInput(data, 'clearcoatRoughness', 'Clearcoat Roughness')
+    setMaterialInput(data, 'emissiveColor', 'Emission')
+    setMaterialInput(data, 'ior', 'IOR')
+    setMaterialInput(data, 'opacity', 'Alpha')
+    setMaterialInput(data, 'normal', 'Normal')
+    #setMaterialInput(data, 'occlusion', 'Occlusion')
+    # Setup Transparent Materials
+    if 'Alpha' in data['shaderNode'].inputs:
+        input = data['shaderNode'].inputs['Alpha']
+        if input.is_linked or input.default_value < 1.0:
+             mat.blend_method = 'CLIP'
+             usdShader = getUsdSurfaceShader(usdMat)
+             if 'inputs:opacityThreshold' in usdShader:
+                 alphaThreshold = usdShader['inputs:opacityThreshold'].value
+                 mat.alpha_threshold = alphaThreshold
     return mat
 
 
-def getSurfaceShaderData(materialData):
-    return materialData['outputs:surface'].value.parent
+def getUsdSurfaceShader(usdMat):
+    if not 'outputs:surface' in usdMat:
+        print('outputs:surface not found in shader', usdMat.name)
+        return None
+    return usdMat['outputs:surface'].value.parent
 
 
-def setMaterialInput(matData, mat, tempDir, valName, inputName):
-    shaderData = getSurfaceShaderData(matData)
-    inputData = shaderData['inputs:' + valName]
+def getInputData(usdMat, inputName):
+    usdShader = getUsdSurfaceShader(usdMat)
+    inputName = 'inputs:' + inputName
+    if inputName in usdShader:
+        return usdShader[inputName]
+    return None
+
+
+def setMaterialInput(data, valName, inputName):
+    inputData = getInputData(data['usdMat'], valName)
     if inputData != None:
         if inputData.isConnection():
-            setShaderInputTexture(inputData, mat, inputName, matData, tempDir)
+            setShaderInputTexture(data, inputData, inputName)
         else:
-            setShaderInputValue(inputData, mat, inputName)
+            setShaderInputValue(data, inputData, inputName)
 
 
-def setShaderInputValue(data, mat, inputName):
-    outputNode = getBpyOutputNode(mat)
-    shaderNode = getBpyShaderNode(outputNode)
-    input = getBpyNodeInput(shaderNode, inputName)
-    if input == None:
-        print('Input', inputName, 'Not found')
-    else:
-        valueType = data.valueTypeToString()
+def setShaderInputValue(data, inputData, inputName):
+    input = getBpyNodeInput(data['shaderNode'], inputName)
+    if input != None:
+        valueType = inputData.valueTypeToString()
         if valueType == 'float':
-            input.default_value = data.value
+            input.default_value = inputData.value
         elif valueType == 'color3f':
             if type(input.default_value) == float:
-                input.default_value = data.value[0]
+                input.default_value = inputData.value[0]
             else:
-                input.default_value = data.value + (1,)
+                input.default_value = inputData.value + (1,)
         elif valueType == 'normal3f':
             input.default_value = (0.0, 0.0, 1.0)
         else:
-            print('Value Not Set:', data.printUsda())
+            print('Value Not Set:', inputData)
 
 
-def setShaderInputTexture(data, mat, inputName, matData, tempDir):
-    outputNode = getBpyOutputNode(mat)
-    shaderNode = getBpyShaderNode(outputNode)
-    input = getBpyNodeInput(shaderNode, inputName)
-    if input == None:
-        print('Input', inputName, 'Not found')
-    else:
-        # Get the Image File Path
-        texData = data.value.parent
-        filePath = tempDir + texData['inputs:file'].value
-        # Add an Image Texture Node
-        texNode = mat.node_tree.nodes.new('ShaderNodeTexImage')
-        texNode.image = bpy.data.images.load(filePath)
-        texNode.image.pack()
+def getTextureMappingNode(data, usdTexture):
+    stData = usdTexture['inputs:st'].value.parent
+    uvMap = stData['inputs:varname'].value.value
+    if uvMap in data['uvMapNodes']:
+        return data['uvMapNodes'][uvMap]
+    posY = data['shaderNode'].location.y - len(data['uvMapNodes']) * 200.0
+    mapNode = data['material'].node_tree.nodes.new('ShaderNodeUVMap')
+    mapNode.location.x = -850.0
+    mapNode.location.y = posY
+    mapNode.uv_map = uvMap
+    data['uvMapNodes'][uvMap] = mapNode
+    return mapNode
+
+
+def getImageTextureNode(data, usdTexture):
+    if usdTexture.name in data['textureNodes']:
+        return data['textureNodes'][usdTexture.name]
+    # Get the Image File Path
+    filePath = data['tempDir'] + usdTexture['inputs:file'].value
+    posY = data['shaderNode'].location.y - len(data['textureNodes']) * 300.0
+    # Add an Image Texture Node
+    texNode = data['material'].node_tree.nodes.new('ShaderNodeTexImage')
+    texNode.location.x = -600.0
+    texNode.location.y = posY
+    texNode.image = bpy.data.images.load(filePath)
+    texNode.image.pack()
+    mapNode = getTextureMappingNode(data, usdTexture)
+    data['material'].node_tree.links.new(texNode.inputs[0], mapNode.outputs[0])
+    data['textureNodes'][usdTexture.name] = texNode
+    return texNode
+
+
+def connectTextureToValueInput(data, texNode, input):
+    texNode.image.colorspace_settings.name = 'Non-Color'
+    # Add a Seperate Color Node
+    sepNode = data['material'].node_tree.nodes.new('ShaderNodeSeparateRGB')
+    sepNode.location.y = texNode.location.y
+    sepNode.location.x = -250.0
+    # Link in new Node
+    data['material'].node_tree.links.new(sepNode.inputs[0], texNode.outputs[0])
+    data['material'].node_tree.links.new(input, sepNode.outputs[0])
+
+
+def connectTextureToNormalInput(data, texNode, input):
+    texNode.image.colorspace_settings.name = 'Non-Color'
+    # Add a Normal Map Node
+    mapNode = data['material'].node_tree.nodes.new('ShaderNodeNormalMap')
+    mapNode.location.y = texNode.location.y
+    mapNode.location.x = -250.0
+    # Link in new Node
+    data['material'].node_tree.links.new(mapNode.inputs[1], texNode.outputs[0])
+    data['material'].node_tree.links.new(input, mapNode.outputs[0])
+
+
+def setShaderInputTexture(data, inputData, inputName):
+    input = getBpyNodeInput(data['shaderNode'], inputName)
+    if input != None:
+        texNode = getImageTextureNode(data, inputData.value.parent)
+        mat = data['material']
         if input.type == 'RGBA':
             # Connect to the Color Input
             mat.node_tree.links.new(input, texNode.outputs['Color'])
         elif input.type == 'VALUE':
-            # Add and link a Seperate Color Node
-            texNode.image.colorspace_settings.name = 'Non-Color'
-            sepNode = mat.node_tree.nodes.new('ShaderNodeSeparateRGB')
-            mat.node_tree.links.new(sepNode.inputs[0], texNode.outputs[0])
-            mat.node_tree.links.new(input, sepNode.outputs[0])
+            connectTextureToValueInput(data, texNode, input)
         elif input.type == 'VECTOR':
-            # Add and link a Normal Map Node
-            texNode.image.colorspace_settings.name = 'Non-Color'
-            mapNode = mat.node_tree.nodes.new('ShaderNodeNormalMap')
-            mat.node_tree.links.new(mapNode.inputs[1], texNode.outputs[0])
-            mat.node_tree.links.new(input, mapNode.outputs[0])
+            connectTextureToNormalInput(data, texNode, input)

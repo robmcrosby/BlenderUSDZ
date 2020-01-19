@@ -27,6 +27,9 @@ def getBpyDiffuseInput(node):
         input = getBpyNodeInput(node, 'Color')
     return input
 
+def getBpyEmissiveInput(node):
+    return getBpyNodeInput(node, 'Emission')
+
 def getBpySpecularInput(node):
     return getBpyNodeInput(node, 'Specular')
 
@@ -50,6 +53,9 @@ def getBpyIorInput(node):
 
 def getBpyTransmissionInput(node):
     return getBpyNodeInput(node, 'Transmission')
+
+def getBpyAlphaInput(node):
+    return getBpyNodeInput(node, 'Alpha')
 
 def getBpyNormalInput(node):
     return getBpyNodeInput(node, 'Normal')
@@ -77,7 +83,10 @@ def getBpySpecularColor(node):
     return specular
 
 def getBpyEmissiveColor(node, default = (0.0, 0.0, 0.0)):
-    return default
+    input = getBpyEmissiveInput(node) # getBpyNodeInput(node, 'Emission')
+    if input == None:
+        return default
+    return input.default_value[:3]
 
 def getBpyRoughnessValue(node, default = 0.0):
     input = getBpyRoughnessInput(node)
@@ -91,11 +100,11 @@ def getBpyMetallicValue(node, default = 0.0):
         return default
     return input.default_value
 
-def getBpyOpacityValue(node, default = 1.0):
-    input = getBpyTransmissionInput(node)
+def getBpyAlphaValue(node, default = 1.0):
+    input = getBpyAlphaInput(node)
     if input == None:
         return default
-    return 1.0 - input.default_value
+    return input.default_value
 
 def getBpyIorValue(node, default = 1.5):
     input = getBpyIorInput(node)
