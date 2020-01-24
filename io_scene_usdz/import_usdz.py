@@ -492,7 +492,9 @@ def setShaderInputValue(data, inputData, inputName):
 
 def getTextureMappingNode(data, usdTexture):
     stData = usdTexture['inputs:st'].value.parent
-    uvMap = stData['inputs:varname'].value.value
+    uvMap = stData['inputs:varname'].value
+    if not type(uvMap) is str:
+        uvMap = uvMap.value
     if uvMap in data['uvMapNodes']:
         return data['uvMapNodes'][uvMap]
     posY = data['shaderNode'].location.y - len(data['uvMapNodes']) * 200.0
