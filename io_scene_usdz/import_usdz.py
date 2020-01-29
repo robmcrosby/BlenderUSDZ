@@ -308,9 +308,11 @@ def addMesh(obj, data, uvs, materials):
         normals = data['primvars:normals:indices'].value
     uvMaps = {}
     for uv in uvs:
-        uvCoords = data['primvars:'+uv].value
-        uvIndices = data['primvars:'+uv+':indices'].value
-        uvMaps[uv] = [uvCoords[i] for i in uvIndices]
+        uvPrim = 'primvars:'+uv
+        if uvPrim in data and uvPrim+':indices' in data:
+            uvCoords = data[uvPrim].value
+            uvIndices = data[uvPrim+':indices'].value
+            uvMaps[uv] = [uvCoords[i] for i in uvIndices]
     # Compile Faces
     faces = []
     smooth = []
