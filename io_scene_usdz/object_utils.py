@@ -178,31 +178,37 @@ def exportBpyMeshVertices(mesh, material = -1):
     return (indices, vertices)
 
 
+def addValueIndex(valueMap, values, indices, value, repeats = 1):
+    if value in valueMap:
+        indices += [valueMap[value]] * repeats
+    else:
+        index = len(values)
+        indices += [index] * repeats
+        values.append(value)
+        valueMap[value] = index
+
+
 def exportBpyMeshNormals(mesh, material = -1):
     indices = []
     normals = []
     normalMap = {}
+    if mesh.has_custom_normals:
+        # Calculate and Export Custom Normals
+        mesh.calc_normals_split()
+        for loop in mesh.loops:
+            addValueIndex(normalMap, normals, indices, loop.normal[:])
+        mesh.free_normals_split()
+        return (indices, normals)
     for poly in mesh.polygons:
         if material == -1 or poly.material_index == material:
             if poly.use_smooth:
                 for i in poly.vertices:
                     normal = mesh.vertices[i].normal[:]
-                    if normal in normalMap:
-                        indices.append(normalMap[normal])
-                    else:
-                        normalIndex = len(normals)
-                        indices.append(normalIndex)
-                        normals.append(normal)
-                        normalMap[normal] = normalIndex
+                    addValueIndex(normalMap, normals, indices, normal)
             else:
                 normal = poly.normal[:]
-                if normal in normalMap:
-                    indices += [normalMap[normal]] * len(poly.vertices)
-                else:
-                    normalIndex = len(normals)
-                    indices += [normalIndex] * len(poly.vertices)
-                    normals.append(normal)
-                    normalMap[normal] = normalIndex
+                vertices = len(poly.vertices)
+                addValueIndex(normalMap, normals, indices, normal, vertices)
     return (indices, normals)
 
 
@@ -215,13 +221,7 @@ def exportBpyMeshUvs(mesh, layer, material = -1):
         if material == -1 or poly.material_index == material:
             for i in range(index, index + len(poly.vertices)):
                 uv = layer.data[i].uv[:]
-                if uv in uvMap:
-                    indices.append(uvMap[uv])
-                else:
-                    uvIndex = len(uvs)
-                    indices.append(uvIndex)
-                    uvs.append(uv)
-                    uvMap[uv] = uvIndex
+                addValueIndex(uvMap, uvs, indices, uv)
         index += len(poly.vertices)
     return (indices, uvs)
 
