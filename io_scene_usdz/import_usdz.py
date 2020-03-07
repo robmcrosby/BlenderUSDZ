@@ -41,15 +41,32 @@ def import_usdz(context, filepath = '', materials = True, animations = True):
             # Cleanup Temp Files
             if tempPath != None:
                 shutil.rmtree(tempPath)
+    elif fileType == 'usdc':
+        usdcFile = filepath
+        file = open(usdcFile, 'rb')
+        crate = CrateFile(file)
+        usdData = crate.readUsd()
+        file.close()
+        print(usdData.toString(debug = True))
+        tempDir = usdcFile[:usdcFile.rfind('/')+1]
+        importData(context, usdData, tempDir, materials, animations)
     return {'FINISHED'}
 
 
 def findUsdz(dirpath):
     files = os.listdir(dirpath)
+    dirs = []
     for file in files:
         parts = file.split('.')
-        if len(parts) > 0 and parts[-1] == 'usdc':
-            return dirpath + '/' + file
+        filepath = dirpath + '/' + file
+        if os.path.isdir(filepath):
+            dirs.append(filepath)
+        elif len(parts) > 0 and parts[-1] == 'usdc':
+            return filepath
+    for dir in dirs:
+        file = findUsdz(dir)
+        if file != '':
+            return file
     return ''
 
 
