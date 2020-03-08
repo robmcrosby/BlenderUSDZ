@@ -108,6 +108,9 @@ def decodeRep(data):
     rep['value'] = None
     return rep
 
+def makeIdentityMatrix(size):
+    return tuple((0,)*i + (1,) + (0,)*(size-i-1) for i in range(size))
+
 
 class CrateFile:
     def __init__(self, file):
@@ -928,6 +931,8 @@ class CrateFile:
         return self.readDoubleVector(size)
 
     def decodeRepMatrix(self, rep, size):
+        if rep['inline']:
+            return makeIdentityMatrix(size)
         self.file.seek(rep['payload'])
         if rep['array']:
             countBytes = 4 if self.version < 7 else 8
