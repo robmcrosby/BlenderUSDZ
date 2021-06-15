@@ -24,8 +24,11 @@ from bpy_extras.io_utils import (
         path_reference_mode,
         axis_conversion,
         )
+from bpy.types import (
+        Operator,
+        )
 
-class ImportUSDZ(bpy.types.Operator, ImportHelper):
+class ImportUSDZ(Operator, ImportHelper):
     """Import a USDZ File"""
 
     bl_idname = "import.usdz"
@@ -33,16 +36,16 @@ class ImportUSDZ(bpy.types.Operator, ImportHelper):
     bl_options = {'PRESET', 'UNDO'}
 
     filename_ext = ""
-    filter_glob: StringProperty(
+    filter_glob : StringProperty(
             default="*.usdz;*.usda;*.usdc",
             options={'HIDDEN'},
             )
-    materials = BoolProperty(
+    materials : BoolProperty(
         name="Import Materials",
         description="Import Materials and textures",
         default=True,
         )
-    animations = BoolProperty(
+    animations : BoolProperty(
         name="Import Animations",
         description="Import Animations",
         default=True,
@@ -54,7 +57,7 @@ class ImportUSDZ(bpy.types.Operator, ImportHelper):
         return import_usdz.import_usdz(context, **keywords)
 
 
-class ExportUSDZ(bpy.types.Operator, ExportHelper):
+class ExportUSDZ(Operator, ExportHelper):
     """Save a USDZ File"""
 
     bl_idname = "export.usdz"
@@ -62,51 +65,51 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
     bl_options = {'PRESET'}
 
     filename_ext = ""
-    filter_glob: StringProperty(
+    filter_glob : StringProperty(
             default="*.usdz;*.usda;*.usdc",
             options={'HIDDEN'},
             )
-    exportMaterials = BoolProperty(
+    exportMaterials : BoolProperty(
         name="Export Materials",
         description="Export Materials from Objects",
         default=True,
         )
-    exportAnimations = BoolProperty(
+    exportAnimations : BoolProperty(
         name="Export Animations",
         description="Export Animations",
         default=False,
         )
-    bakeTextures = BoolProperty(
+    bakeTextures : BoolProperty(
         name="Bake Textures",
         description="Bake Diffuse, Roughness, Normal, etc",
         default=False,
         )
-    bakeAO = BoolProperty(
+    bakeAO : BoolProperty(
         name="Bake AO",
         description="Bake Ambiant Occlusion Texture",
         default=False,
         )
-    bakeAOSamples = IntProperty(
+    bakeAOSamples : IntProperty(
         name="AO Samples",
         description="Number of Samples for Ambiant Occlusion",
         min=1,
         max=1000,
         default= 64,
         )
-    bakeTextureSize = IntProperty(
+    bakeTextureSize : IntProperty(
         name="Bake Image Size",
         description="Default Size of any Baked Images",
         min=16,
         max=4096,
         default= 1024,
         )
-    globalScale = FloatProperty(
+    globalScale : FloatProperty(
         name="Scale",
         min=0.01,
         max=1000.0,
         default=1.0,
         )
-    useConverter = BoolProperty(
+    useConverter : BoolProperty(
         name="Use Usdz Converter Tool",
         description="Use Apple's Converter Tool to create the Usdz file",
         default=False,
@@ -135,14 +138,12 @@ classes = (
     ExportUSDZ,
 )
 
-
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
     bpy.types.TOPBAR_MT_file_import.append(menu_func_usdz_import)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_usdz_export)
-
 
 def unregister():
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_usdz_import)
