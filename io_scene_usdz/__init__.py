@@ -50,12 +50,12 @@ class ImportUSDZ(bpy.types.Operator, ImportHelper):
     )
 
     materials: BoolProperty(
-        name="Import Materials",
+        name="Materials",
         description="Import Materials and textures",
         default=True,
     )
     animations: BoolProperty(
-        name="Import Animations",
+        name="Animations",
         description="Import Animations",
         default=True,
     )
@@ -69,10 +69,10 @@ class ImportUSDZ(bpy.types.Operator, ImportHelper):
         pass
 
 
-class USDZ_PT_import_main(bpy.types.Panel):
+class USDZ_PT_import_include(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
-    bl_label = ""
+    bl_label = "Include"
     bl_parent_id = "FILE_PT_operator"
 
     @classmethod
@@ -89,8 +89,10 @@ class USDZ_PT_import_main(bpy.types.Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(operator, 'materials')
-        layout.prop(operator, 'animations')
+        col = layout.column(heading="Import")
+
+        col.prop(operator, 'materials')
+        col.prop(operator, 'animations')
 
 
 class ExportUSDZ(bpy.types.Operator, ExportHelper):
@@ -106,22 +108,22 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
         options={'HIDDEN'},
     )
     exportMaterials: BoolProperty(
-        name="Export Materials",
+        name="Materials",
         description="Export Materials from Objects",
         default=True,
     )
     exportAnimations: BoolProperty(
-        name="Export Animations",
+        name="Animations",
         description="Export Animations",
         default=False,
     )
     bakeTextures: BoolProperty(
-        name="Bake Textures",
+        name="Textures",
         description="Bake Diffuse, Roughness, Normal, etc",
         default=False,
     )
     bakeAO: BoolProperty(
-        name="Bake AO",
+        name="Ambiant Occlusion",
         description="Bake Ambiant Occlusion Texture",
         default=False,
     )
@@ -133,7 +135,7 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
         default= 64,
     )
     bakeTextureSize: IntProperty(
-        name="Bake Image Size",
+        name="Image Size",
         description="Default Size of any Baked Images",
         min=16,
         max=4096,
@@ -151,9 +153,6 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
         default=False,
     )
 
-    #path_mode: path_reference_mode
-    #check_extension = True
-
     def execute(self, context):
         from . import export_usdz
         keywords = self.as_keywords(ignore=("axis_forward",
@@ -168,10 +167,10 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
         pass
 
 
-class USDZ_PT_export_main(bpy.types.Panel):
+class USDZ_PT_export_include(bpy.types.Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
-    bl_label = ""
+    bl_label = "Include"
     bl_parent_id = "FILE_PT_operator"
 
     @classmethod
@@ -188,13 +187,40 @@ class USDZ_PT_export_main(bpy.types.Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(operator, 'exportMaterials')
-        layout.prop(operator, 'exportAnimations')
-        layout.prop(operator, 'bakeTextures')
-        layout.prop(operator, 'bakeAO')
-        layout.prop(operator, 'bakeAOSamples')
-        layout.prop(operator, 'bakeTextureSize')
+        col = layout.column(heading="Export")
+        col.prop(operator, 'exportMaterials')
+        col.prop(operator, 'exportAnimations')
         layout.prop(operator, 'globalScale')
+
+
+class USDZ_PT_export_textures(bpy.types.Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Textures"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+        return operator.bl_idname == "EXPORT_OT_usdz"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        col = layout.column(heading="Bake")
+        col.prop(operator, 'bakeTextures')
+        col.prop(operator, 'bakeAO')
+
+        layout.separator()
+
+        layout.prop(operator, 'bakeTextureSize')
+        layout.prop(operator, 'bakeAOSamples')
 
 
 def menu_func_usdz_import(self, context):
@@ -207,9 +233,10 @@ def menu_func_usdz_export(self, context):
 
 classes = (
     ImportUSDZ,
-    USDZ_PT_import_main,
+    USDZ_PT_import_include,
     ExportUSDZ,
-    USDZ_PT_export_main,
+    USDZ_PT_export_include,
+    USDZ_PT_export_textures,
 )
 
 
