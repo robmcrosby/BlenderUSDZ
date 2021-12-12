@@ -365,11 +365,14 @@ def addMesh(obj, data, uvs, materials):
         bm.verts.new(vert)
     bm.verts.ensure_lookup_table()
     # Add the Faces
-    index = 0
+    ordered = set()
     for i, face in enumerate(faces):
-        f = bm.faces.new((bm.verts[i + vBase] for i in face))
-        f.smooth = smooth[i]
-        f.material_index = matIndex
+        o = tuple(sorted(face))
+        if not o in ordered:
+            ordered.add(o)
+            f = bm.faces.new((bm.verts[i + vBase] for i in face))
+            f.smooth = smooth[i]
+            f.material_index = matIndex
     # Assign Aditional Materials
     bm.faces.ensure_lookup_table()
     for matIndex, indices in matSubsets:
@@ -425,6 +428,8 @@ def getMeshes(data):
     for child in data.children:
         if child.classType == ClassType.Mesh and not 'xformOpOrder' in child:
             meshes.append(child)
+        elif child.classType == ClassType.Scope:
+            meshes += getMeshes(child)
     return meshes
 
 
