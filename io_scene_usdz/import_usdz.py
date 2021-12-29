@@ -16,7 +16,7 @@ from io_scene_usdz.crate_file import *
 
 def import_usdz(context, filepath = '', materials = True, animations = True):
     filePath, fileName = os.path.split(filepath)
-    fileName, fileType = fileName.split('.')
+    fileName, fileType = fileName.rsplit('.', 1)
     if fileType == 'usdz':
         with zipfile.ZipFile(filepath, 'r') as zf:
             # Create a temp directory to extract to
