@@ -158,6 +158,12 @@ def getValueType(value):
 
 def getValueTypeFromStr(typeStr):
     typeStr = typeStr.replace('[]', '')
+    if typeStr in ('half2', 'texCoord2h'):
+        return ValueType.vec2h
+    if typeStr in ('half3', 'color3h', 'normal3h', 'point3h'):
+        return ValueType.vec3h
+    if typeStr in ('half4', 'color4h'):
+        return ValueType.vec4h
     if typeStr in ('float2', 'texCoord2f'):
         return ValueType.vec2f
     if typeStr in ('float3', 'color3f', 'normal3f', 'point3f'):
