@@ -43,6 +43,26 @@ Scale - This value is used to scale the objects exported to the usdz file.
 
 Use Usdz Converter Tool - By selecting this option, the add-on will export a usda file that will be converted to usdz by the external Usdz Converter Tool bundled with Xcode. Note that the Usdz Converter has been deprecated from the current version of Xcode and this option will no longer work.
 
+## Scripting
+
+The bpy scripting support has only been tested on Mac-OS with Blender 3.3.1.
+
+### Import
+
+```
+bpy.ops.import_scene.usdz(filepath = '', materials = True, animations = True)
+```
+
+### Export
+
+```
+bpy.ops.export_scene.usdz(filepath = '', exportMaterials = True,
+                          bakeTextures = False, bakeTextureSize = 1024,
+                          bakeAO = False, bakeAOSamples = 64,
+                          exportAnimations = False,
+                          globalScale = 1.0, useConverter = False)
+```
+
 ## Notes
 
 This add-on has only been tested to work on Mac-OS and there are no guarantees that it will work on Windows or Linux.

@@ -39,7 +39,7 @@ from bpy.types import (
 class ImportUSDZ(bpy.types.Operator, ImportHelper):
     """Import a USDZ File"""
 
-    bl_idname = "import.usdz"
+    bl_idname = "import_scene.usdz"
     bl_label = "Import USDZ File"
     bl_options = {'PRESET', 'UNDO'}
 
@@ -98,7 +98,7 @@ class USDZ_PT_import_include(bpy.types.Panel):
 class ExportUSDZ(bpy.types.Operator, ExportHelper):
     """Save a USDZ File"""
 
-    bl_idname = "export.usdz"
+    bl_idname = "export_scene.usdz"
     bl_label = "Export USDZ File"
     bl_options = {'PRESET'}
 
