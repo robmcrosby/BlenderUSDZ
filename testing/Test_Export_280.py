@@ -47,7 +47,7 @@ export_usdz(
     bakeTextureSize = 512,
     bakeAO = False,
     bakeAOSamples = 64,
-    exportAnimations = True,
+    exportAnimations = False,
     globalScale = 4.0,
     useConverter = False,
     )
