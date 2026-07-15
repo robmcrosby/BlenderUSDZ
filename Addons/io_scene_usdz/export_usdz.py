@@ -54,7 +54,8 @@ def export_usdz(context, filepath = '', collection= '', exportMaterials = True,
         else:
             # Create Binary and Manually zip to a usdz file
             usdcPath = tempDir + '/' + fileName + '.usdc'
-            writeCrateFile(usdcPath, usdData)
+            #writeCrateFile(usdcPath, usdData)
+            usdData.writeUsd(usdcPath)
             writeUsdzFile(filePath, usdcPath, texturePaths)
     if tempDir != None:
         # Cleanup the Temp Directory

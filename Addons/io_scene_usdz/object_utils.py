@@ -56,7 +56,7 @@ def applyBpyArmatureAnimation(dstArmature, srcArmature, startFrame, endFrame):
     selectBpyObject(dstArmature)
     # Select all the pose bones
     for bone in dstArmature.pose.bones:
-            bone.bone.select = True
+        bone.select = True
     bpy.ops.object.mode_set(mode='POSE')
     # Remove all pose bone contraints
     for bone in dstArmature.pose.bones:
@@ -192,13 +192,13 @@ def exportBpyMeshNormals(mesh, material = -1):
     indices = []
     normals = []
     normalMap = {}
-    if mesh.has_custom_normals:
-        # Calculate and Export Custom Normals
-        mesh.calc_normals_split()
-        for loop in mesh.loops:
-            addValueIndex(normalMap, normals, indices, loop.normal[:])
-        mesh.free_normals_split()
-        return (indices, normals)
+#    if mesh.has_custom_normals:
+#        # Calculate and Export Custom Normals
+#        mesh.calc_normals_split()
+#        for loop in mesh.loops:
+#            addValueIndex(normalMap, normals, indices, loop.normal[:])
+#        mesh.free_normals_split()
+#        return (indices, normals)
     for poly in mesh.polygons:
         if material == -1 or poly.material_index == material:
             if poly.use_smooth:

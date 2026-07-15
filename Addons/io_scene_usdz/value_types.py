@@ -1,4 +1,12 @@
 from enum import Enum
+import itertools
+
+try:
+    from pxr import Usd, UsdGeom, UsdShade, UsdSkel, Sdf, Gf
+    pxr_included = True
+except ImportError:
+    pxr_included = False
+
 
 TAB = '   '
 
@@ -347,6 +355,41 @@ class UsdAttribute:
         elif self.isRelationship():
             return ValueType.Invalid
         return getValueType(self.value)
+    
+    def valueTypeRegString(self):
+        if self.valueTypeStr != None:
+            regStr = self.valueTypeStr + ('Array' if self.isArray() else '')
+        else:
+            regStr = self.valueType.toString() + ('Array' if self.isArray() else '')
+        return regStr[:1].upper() + regStr[1:]
+    
+    def getValue(self):
+        if self.valueType == ValueType.matrix4d:
+            return [Gf.Matrix4d(m) for m in self.value] if self.isArray() else Gf.Matrix4d(self.value)
+        return self.value
+    
+    def addToUsdPrim(self, prim):
+        valueType = getattr(Sdf.ValueTypeNames, self.valueTypeRegString(), Sdf.ValueTypeNames.Token)
+        if self.isConnection():
+            print(f'add Connection: {self.name}, {self.value.getPathStr()}')
+            attr = prim.GetPrim().CreateAttribute(self.name, valueType)
+            attr.SetConnections([Sdf.Path(self.value.getPathStr())])
+            attr.SetCustom('custom' in self.qualifiers)
+            if not 'uniform' in self.qualifiers:
+                attr.SetVariability(Sdf.VariabilityVarying)
+        elif self.isRelationship():
+            print(f'add Relationship: {self.name}, {self.value.getPathStr()}')
+            rel = prim.GetPrim().CreateRelationship(self.name)
+            rel.SetTargets([Sdf.Path(self.value.getPathStr())])
+            rel.SetCustom('custom' in self.qualifiers)
+        else:
+            print(f'add Attribute: {self.name}, {self.valueTypeToString()}, {self.valueTypeRegString()}')
+            attr = prim.GetPrim().CreateAttribute(self.name, valueType)
+            attr.SetCustom('custom' in self.qualifiers)
+            if not 'uniform' in self.qualifiers:
+                attr.SetVariability(Sdf.VariabilityVarying)
+            if self.value != None:
+                attr.Set(self.getValue())
 
 
 class UsdPrim:
@@ -504,6 +547,36 @@ class UsdPrim:
             self.pathJump = self.countItems() + 1
         #print(self.name, ':', self.pathJump)
         return self.pathJump
+    
+    def addToUsdStage(self, stage):
+        # Create usd prim
+        if self.classType == ClassType.Scope:
+            prim = UsdGeom.Scope.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.Xform:
+            prim = UsdGeom.Xform.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.Mesh:
+            prim = UsdGeom.Mesh.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.SkelRoot:
+            prim = UsdSkel.Root.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.Skeleton:
+            prim = UsdSkel.Skeleton.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.SkelAnimation:
+            prim = UsdSkel.Animation.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.Material:
+            prim = UsdShade.Material.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.Shader:
+            prim = UsdShade.Shader.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.GeomSubset:
+            prim = UsdGeom.GeomSubset.Define(stage, self.getPathStr())
+        else:
+            print(f'Warning: unknown class type {self.classType}, using Xform in place')
+            prim = UsdGeom.Xform.Define(stage, self.getPathStr())
+        # Add Attributes
+        for attr in self.attributes:
+            attr.addToUsdPrim(prim)
+        # Add Children
+        for child in self.children:
+            child.addToUsdStage(stage)
 
 
 class UsdData:
@@ -584,3 +657,17 @@ class UsdData:
         f = open(filePath, 'w')
         f.write(str(self))
         f.close()
+    
+    def addToUsdStage(self, stage):
+        for key in self.metadata:
+          stage.SetMetadata(key, self.metadata[key])
+        for child in self.children:
+            child.addToUsdStage(stage)
+    
+    def writeUsd(self, filePath):
+        if not pxr_included:
+            self.writeUsda(filePath)
+            return
+        stage = Usd.Stage.CreateNew(filePath)
+        self.addToUsdStage(stage)
+        stage.GetRootLayer().Export(filePath)
