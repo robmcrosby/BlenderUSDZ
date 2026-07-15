@@ -1,6 +1,5 @@
 import bpy
 import os
-import subprocess
 import tempfile
 import shutil
 import time
@@ -11,15 +10,15 @@ try:
 except ImportError:
     crc32 = binascii.crc32
 
-from io_scene_usdz.scene_data import *
-from io_scene_usdz.value_types import *
+from io_scene_usdz.scene_data import Scene
+from io_scene_usdz.value_types import UsdData
 from io_scene_usdz.crate_file import writeCrateFile
 from io_scene_usdz.usd_file import pxrUsdAvailable, writeUsdFile
 
 def export_usdz(context, filepath = '', collection= '', exportMaterials = True,
                 bakeTextures = False, bakeTextureSize = 1024, bakeAO = False,
                 bakeAOSamples = 64, useGpu = True, exportAnimations = False,
-                globalScale = 1.0, usePxrModule = True,
+                globalScale = 1.0, usePxrModule = True, debugMode = False,
                 ):
     exportDir, fileName = os.path.split(filepath)
     fileParts = fileName.split('.')
@@ -42,10 +41,17 @@ def export_usdz(context, filepath = '', collection= '', exportMaterials = True,
                                           useGpu = useGpu,
                                           exportAnimations = exportAnimations,
                                           globalScale = globalScale)
+    if debugMode:
+        print(usdData.toString(debug=True))
     if fileType == 'usda':
         usdData.writeUsda(filePath)
     elif fileType == 'usdc':
         writeCrateFile(filePath, usdData)
+    elif debugMode:
+        usdaPath = tempDir + '/' + fileName + '.usda'
+        #usdData.writeUsda(usdaPath)
+        writeUsdFile(usdaPath, usdData)
+        writeUsdzFile(filePath, usdaPath, texturePaths)
     else:
         # Create Binary and Manually zip to a usdz file
         usdcPath = tempDir + '/' + fileName + '.usdc'

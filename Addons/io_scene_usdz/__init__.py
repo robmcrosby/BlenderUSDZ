@@ -143,6 +143,11 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
     description="Use Blender's built-in Pxr module to export Usd files",
     default=True,
   )
+  debugMode: BoolProperty(
+    name="Debug Enabled",
+    description="Enable various debug features.",
+    default=False,
+  )
   
   def draw(self, context):
     layout = self.layout
@@ -172,6 +177,7 @@ def export_panel_include(layout, operator):
     body.prop(operator, 'exportMaterials')
     body.prop(operator, 'exportAnimations')
     body.prop(operator, 'globalScale')
+    body.prop(operator, 'debugMode')
 
 def export_panel_textures(layout, operator):
   header, body = layout.panel("USDZ_export_textures", default_closed=False)

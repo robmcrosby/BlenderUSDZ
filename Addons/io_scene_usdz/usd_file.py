@@ -67,6 +67,17 @@ def _addAttrToPrim(usdAttr, prim):
         rel = prim.GetPrim().CreateRelationship(usdAttr.name)
         rel.SetTargets([Sdf.Path(usdAttr.value.getPathStr())])
         rel.SetCustom('custom' in usdAttr.qualifiers)
+    elif isinstance(prim, UsdGeom.Mesh) and 'primvars:' == usdAttr.name[:9]:
+        if usdAttr.name[-8:] != ':indices':
+            primVar = UsdGeom.PrimvarsAPI(prim).CreatePrimvar(usdAttr.name[9:], valueType)
+            if 'interpolation' in usdAttr.metadata:
+                if usdAttr.metadata['interpolation'] == 'faceVarying':
+                    primVar.SetInterpolation(UsdGeom.Tokens.faceVarying)
+            if usdAttr.value != None:
+                primVar.Set(_getAttrValue(usdAttr))
+                indices = _getPrimVarIndicesAttr(usdAttr)
+                if indices != None and indices.value != None:
+                    primVar.SetIndices(_getAttrValue(indices))
     else:
         attr = prim.GetPrim().CreateAttribute(usdAttr.name, valueType)
         attr.SetCustom('custom' in usdAttr.qualifiers)
@@ -75,6 +86,14 @@ def _addAttrToPrim(usdAttr, prim):
         if usdAttr.value != None:
             attr.Set(_getAttrValue(usdAttr))
 
+
+def _getPrimVarIndicesAttr(primVar):
+    name = primVar.name + ':indices'
+    if primVar.parent != None:
+        for attr in primVar.parent.attributes:
+            if name == attr.name:
+                return attr
+    return None
 
 def _getAttrValue(attr):
     if attr.valueType == ValueType.matrix4d:

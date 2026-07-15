@@ -200,15 +200,15 @@ def exportBpyMeshNormals(mesh, material = -1):
 #        mesh.free_normals_split()
 #        return (indices, normals)
     for poly in mesh.polygons:
-        if material == -1 or poly.material_index == material:
-            if poly.use_smooth:
-                for i in poly.vertices:
-                    normal = mesh.vertices[i].normal[:]
-                    addValueIndex(normalMap, normals, indices, normal)
-            else:
-                normal = poly.normal[:]
-                vertices = len(poly.vertices)
-                addValueIndex(normalMap, normals, indices, normal, vertices)
+        #if material == -1 or poly.material_index == material:
+        if poly.use_smooth:
+            for i in poly.vertices:
+                normal = mesh.vertices[i].normal[:]
+                addValueIndex(normalMap, normals, indices, normal)
+        else:
+            normal = poly.normal[:]
+            vertices = len(poly.vertices)
+            addValueIndex(normalMap, normals, indices, normal, vertices)
     return (indices, normals)
 
 
