@@ -138,10 +138,10 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
     max=1000.0,
     default=1.0,
   )
-  useConverter: BoolProperty(
-    name="Use Usdz Converter Tool",
-    description="Use Apple's Converter Tool to create the Usdz file",
-    default=False,
+  usePxrModule: BoolProperty(
+    name="Use Blender Pxr",
+    description="Use Blender's built-in Pxr module to export Usd files",
+    default=True,
   )
   
   def draw(self, context):

@@ -3,6 +3,14 @@ import struct
 from io_scene_usdz.compression_utils import *
 from io_scene_usdz.value_types import *
 
+
+def writeCrateFile(filePath, usdData):
+    crateFile = open(filePath, 'wb')
+    crate = CrateFile(crateFile)
+    crate.writeUsd(usdData)
+    crateFile.close()
+
+
 ARRAY_BIT = (1 << 63)
 INLINE_BIT = (1 << 62)
 COMPRESSED_BIT = (1 << 61)

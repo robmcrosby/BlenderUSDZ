@@ -13,12 +13,13 @@ except ImportError:
 
 from io_scene_usdz.scene_data import *
 from io_scene_usdz.value_types import *
-from io_scene_usdz.crate_file import *
+from io_scene_usdz.crate_file import writeInt, writeCrateFile
+from io_scene_usdz.usd_file import pxrUsdAvailable, writeUsdFile
 
 def export_usdz(context, filepath = '', collection= '', exportMaterials = True,
                 bakeTextures = False, bakeTextureSize = 1024, bakeAO = False,
                 bakeAOSamples = 64, useGpu = True, exportAnimations = False,
-                globalScale = 1.0, useConverter = False,
+                globalScale = 1.0, usePxrModule = True,
                 ):
     exportDir, fileName = os.path.split(filepath)
     fileParts = fileName.split('.')
@@ -46,17 +47,13 @@ def export_usdz(context, filepath = '', collection= '', exportMaterials = True,
     elif fileType == 'usdc':
         writeCrateFile(filePath, usdData)
     else:
-        if useConverter:
-            # Crate text usda file and run the USDZ Converter Tool
-            usdaPath = tempDir + '/' + fileName + '.usda'
-            usdData.writeUsda(usdaPath)
-            convertToUsdz(filePath, usdaPath)
+        # Create Binary and Manually zip to a usdz file
+        usdcPath = tempDir + '/' + fileName + '.usdc'
+        if usePxrModule and pxrUsdAvailable():
+            writeUsdFile(usdcPath, usdData)
         else:
-            # Create Binary and Manually zip to a usdz file
-            usdcPath = tempDir + '/' + fileName + '.usdc'
-            #writeCrateFile(usdcPath, usdData)
-            usdData.writeUsd(usdcPath)
-            writeUsdzFile(filePath, usdcPath, texturePaths)
+            writeCrateFile(usdcPath, usdData)
+        writeUsdzFile(filePath, usdcPath, texturePaths)
     if tempDir != None:
         # Cleanup the Temp Directory
         shutil.rmtree(tempDir)
@@ -88,25 +85,12 @@ def exportUsdData(context, collection, exportMaterials, exportDir, bakeTextures,
     return usdData, texturePaths
 
 
-def convertToUsdz(filePath, usdaPath):
-    args = ['xcrun', 'usdz_converter', usdaPath, filePath]
-    args += ['-v']
-    subprocess.run(args)
-
-
 def writeUsdzFile(filePath, usdcPath, texturePaths):
     usdz = UsdzFile(filePath)
     usdz.addFile(usdcPath)
     for texturePath in texturePaths:
         usdz.addFile(texturePath)
     usdz.close()
-
-
-def writeCrateFile(filePath, usdData):
-    crateFile = open(filePath, 'wb')
-    crate = CrateFile(crateFile)
-    crate.writeUsd(usdData)
-    crateFile.close()
 
 
 def readFileContents(filePath):
