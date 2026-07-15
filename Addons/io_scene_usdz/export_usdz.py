@@ -13,7 +13,7 @@ except ImportError:
 
 from io_scene_usdz.scene_data import *
 from io_scene_usdz.value_types import *
-from io_scene_usdz.crate_file import writeInt, writeCrateFile
+from io_scene_usdz.crate_file import writeCrateFile
 from io_scene_usdz.usd_file import pxrUsdAvailable, writeUsdFile
 
 def export_usdz(context, filepath = '', collection= '', exportMaterials = True,
@@ -98,6 +98,10 @@ def readFileContents(filePath):
     contents = file.read()
     file.close()
     return contents
+
+
+def writeInt(file, value, size, byteorder='little', signed=False):
+    file.write(value.to_bytes(size, byteorder=byteorder, signed=signed))
 
 
 class UsdzFile:
