@@ -174,9 +174,9 @@ def export_panel_include(layout, operator):
   header, body = layout.panel("USDZ_export_include", default_closed=False)
   header.label(text="Include")
   if body:
-    body.prop(operator, 'exportMaterials')
     body.prop(operator, 'exportAnimations')
     body.prop(operator, 'globalScale')
+    body.prop(operator, 'usePxrModule')
     body.prop(operator, 'debugMode')
 
 def export_panel_textures(layout, operator):

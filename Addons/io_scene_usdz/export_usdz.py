@@ -43,14 +43,11 @@ def export_usdz(context, filepath = '', collection= '', exportMaterials = True,
                                           globalScale = globalScale)
     if debugMode:
         print(usdData.toString(debug=True))
-    if fileType == 'usda':
-        usdData.writeUsda(filePath)
-    elif fileType == 'usdc':
-        writeCrateFile(filePath, usdData)
-    elif debugMode:
         usdaPath = tempDir + '/' + fileName + '.usda'
-        #usdData.writeUsda(usdaPath)
-        writeUsdFile(usdaPath, usdData)
+        if usePxrModule and pxrUsdAvailable():
+            writeUsdFile(usdaPath, usdData)
+        else:
+            usdData.writeUsda(usdaPath)
         writeUsdzFile(filePath, usdaPath, texturePaths)
     else:
         # Create Binary and Manually zip to a usdz file

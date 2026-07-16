@@ -43,7 +43,7 @@ def _addPrimToStage(usdPrim, stage):
     elif usdPrim.classType == ClassType.Shader:
         prim = UsdShade.Shader.Define(stage, usdPrim.getPathStr())
     elif usdPrim.classType == ClassType.GeomSubset:
-        prim = UsdGeom.GeomSubset.Define(stage, usdPrim.getPathStr())
+        prim = UsdGeom.Subset.Define(stage, usdPrim.getPathStr())
     else:
         print(f'Warning: unknown class type {usdPrim.classType}, using Xform in place')
         prim = UsdGeom.Xform.Define(stage, usdPrim.getPathStr())
