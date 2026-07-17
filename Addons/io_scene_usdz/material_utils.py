@@ -2,7 +2,7 @@ import bpy
 
 
 def getBpyMaterialName(material):
-    return material.name.replace('.', '_')
+    return material.name.replace('.', '_').replace(' ', '_')
 
 def getBpyOutputNode(material):
     if material.use_nodes:

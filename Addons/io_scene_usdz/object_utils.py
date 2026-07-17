@@ -325,7 +325,7 @@ def setBpyCollectionVisibility(collection, visible):
 
 
 def exportBpyBoneJoint(bone):
-    name = bone.name.replace('.', '_')
+    name = bone.name.replace('.', '_').replace(' ', '_')
     if bone.parent != None:
         return exportBpyBoneJoint(bone.parent) + '/' + name
     return name

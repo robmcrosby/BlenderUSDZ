@@ -281,7 +281,7 @@ class Material:
 class Mesh:
     """Wraper for Blender Mesh Data"""
     def __init__(self, object, scene):
-        self.name = object.data.name.replace('.', '_')
+        self.name = object.data.name.replace('.', '_').replace(' ', '_')
         self.object = object
         self.scene = scene
         self.objectCopy = None
@@ -344,7 +344,7 @@ class Mesh:
         mesh = self.objectCopy.data
         for layer in mesh.uv_layers:
             indices, uvs = exportBpyMeshUvs(mesh, layer)
-            name = layer.name.replace('.', '_')
+            name = layer.name.replace('.', '_').replace(' ', '_')
             usdMesh['primvars:'+name] = uvs
             usdMesh['primvars:'+name].valueTypeStr = 'texCoord2f'
             usdMesh['primvars:'+name]['interpolation'] = 'faceVarying'
@@ -369,7 +369,7 @@ class Mesh:
             joints = exportBpyJoints(self.armatueCopy)
             bind = exportBpyBindTransforms(self.armatueCopy)
             rest = exportBpyRestTransforms(self.armatueCopy)
-            name = self.armature.name.replace('.', '_')
+            name = self.armature.name.replace('.', '_').replace(' ', '_')
             usdSkeleton = usdObj.createChild(name, ClassType.Skeleton)
             usdSkeleton['joints'] = joints
             usdSkeleton['joints'].addQualifier('uniform')
@@ -388,7 +388,7 @@ class Mesh:
 
     def exportToObject(self, usdObj, classType = ClassType.Mesh):
         mesh = self.objectCopy.data
-        name = self.object.data.name.replace('.', '_')
+        name = self.object.data.name.replace('.', '_').replace(' ', '_')
         usdMesh = usdObj.createChild(name, classType)
         usdMesh['extent'] = exportBpyExtents(self.objectCopy, self.scene.scale)
         usdMesh['faceVertexCounts'] = exportBpyMeshVertexCounts(mesh)
@@ -417,7 +417,7 @@ class Mesh:
 class Object:
     """Wraper for Blender Objects"""
     def __init__(self, object, scene, type = 'EMPTY'):
-        self.name = object.name.replace('.', '_')
+        self.name = object.name.replace('.', '_').replace(' ', '_')
         self.object = object
         self.scene = scene
         self.type = type
@@ -926,7 +926,7 @@ class Scene:
 
 
     def addBpyCollection(self, collection):
-        name = collection.instance_collection.name.replace('.', '_')
+        name = collection.instance_collection.name.replace('.', '_').replace(' ', '_')
         obj = Object(collection, self)
         obj.collection = name
         if obj.name in self.objMap:
