@@ -106,11 +106,41 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
   bakeTextures: BoolProperty(
     name="Textures",
     description="Bake Diffuse, Roughness, Normal, etc",
+    default=True,
+  )
+  bakeDiffuse: BoolProperty(
+    name="Diffuse",
+    description="Bake Diffuse Textures",
+    default=True,
+  )
+  bakeRoughness: BoolProperty(
+    name="Roughness",
+    description="Bake Roughness Textures",
+    default=True,
+  )
+  bakeMetallic: BoolProperty(
+    name="Metallic",
+    description="Bake Metal Textures",
+    default=True,
+  )
+  bakeOpacity: BoolProperty(
+    name="Opacity",
+    description="Bake Opacity Textures",
+    default=False,
+  )
+  bakeEmission: BoolProperty(
+    name="Emission",
+    description="Bake Emission Textures",
+    default=False,
+  )
+  bakeNormals: BoolProperty(
+    name="Normals",
+    description="Bake Normal Textures",
     default=False,
   )
   bakeAO: BoolProperty(
     name="Ambiant Occlusion",
-    description="Bake Ambiant Occlusion Texture",
+    description="Bake Ambiant Occlusion Textures",
     default=False,
   )
   bakeAOSamples: IntProperty(
@@ -123,7 +153,7 @@ class ExportUSDZ(bpy.types.Operator, ExportHelper):
   useGpu: BoolProperty(
     name="Use GPU Compute",
     description="Use Cycles GPU Compute for baking textures",
-    default=False,
+    default=True,
   )
   bakeTextureSize: IntProperty(
     name="Image Size",
@@ -182,13 +212,17 @@ def export_panel_include(layout, operator):
 def export_panel_textures(layout, operator):
   header, body = layout.panel("USDZ_export_textures", default_closed=False)
   header.use_property_split = False
-  header.prop(operator, "bakeTextures", text="")
   header.label(text="Bake Textures")
   if body:
-    body.enabled = operator.bakeTextures
     body.prop(operator, 'useGpu')
     body.prop(operator, 'bakeTextureSize')
     body.separator()
+    body.prop(operator, 'bakeDiffuse')
+    body.prop(operator, 'bakeRoughness')
+    body.prop(operator, 'bakeMetallic')
+    body.prop(operator, 'bakeOpacity')
+    body.prop(operator, 'bakeEmission')
+    body.prop(operator, 'bakeNormals')
     body.prop(operator, 'bakeAO')
     body.prop(operator, 'bakeAOSamples')
 

@@ -16,7 +16,9 @@ from io_scene_usdz.crate_file import writeCrateFile
 from io_scene_usdz.usd_file import pxrUsdAvailable, writeUsdFile
 
 def export_usdz(context, filepath = '', collection= '', exportMaterials = True,
-                bakeTextures = False, bakeTextureSize = 1024, bakeAO = False,
+                bakeTextures = False, bakeTextureSize = 1024, bakeDiffuse = True,
+                bakeRoughness = True, bakeMetallic = True, bakeOpacity = False,
+                bakeEmission = False, bakeNormals = False, bakeAO = False,
                 bakeAOSamples = 64, useGpu = True, exportAnimations = False,
                 globalScale = 1.0, usePxrModule = True, debugMode = False,
                 ):
@@ -36,6 +38,12 @@ def export_usdz(context, filepath = '', collection= '', exportMaterials = True,
                                           exportDir = exportDir,
                                           bakeTextures = bakeTextures,
                                           bakeTextureSize = bakeTextureSize,
+                                          bakeDiffuse = bakeDiffuse,
+                                          bakeRoughness = bakeRoughness,
+                                          bakeMetallic = bakeMetallic,
+                                          bakeOpacity = bakeOpacity,
+                                          bakeEmission = bakeEmission,
+                                          bakeNormals = bakeNormals,
                                           bakeAO = bakeAO,
                                           bakeAOSamples = bakeAOSamples,
                                           useGpu = useGpu,
@@ -64,13 +72,20 @@ def export_usdz(context, filepath = '', collection= '', exportMaterials = True,
 
 
 def exportUsdData(context, collection, exportMaterials, exportDir, bakeTextures,
-                  bakeTextureSize, bakeAO, bakeAOSamples, useGpu, exportAnimations,
-                  globalScale):
+                  bakeTextureSize, bakeDiffuse, bakeRoughness, bakeMetallic,
+                  bakeOpacity, bakeEmission, bakeNormals, bakeAO, bakeAOSamples,
+                  useGpu, exportAnimations, globalScale):
     scene = Scene()
     scene.exportMaterials = exportMaterials
     scene.exportPath = exportDir
     scene.bakeTextures = bakeTextures
     scene.bakeSize = bakeTextureSize
+    scene.bakeDiffuse = bakeDiffuse
+    scene.bakeRoughness = bakeRoughness
+    scene.bakeMetallic = bakeMetallic
+    scene.bakeOpacity = bakeOpacity
+    scene.bakeEmission = bakeEmission
+    scene.bakeNormals = bakeNormals
     scene.bakeAO = bakeAO
     scene.bakeSamples = bakeAOSamples
     scene.device = 'GPU' if useGpu else 'CPU'
