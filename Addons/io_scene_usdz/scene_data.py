@@ -510,14 +510,14 @@ class Object:
     def createMaterials(self):
         self.materials = []
         if self.scene.exportMaterials:
-            for slot in self.object.material_slots:
-                material = None
-                if slot.material.name in self.scene.materials:
-                    material = self.scene.materials[slot.material.name]
-                else:
-                    material = Material(slot.material)
-                    self.scene.materials[slot.material.name] = material
-                self.materials.append(material)
+            for i, slot in enumerate(self.object.material_slots):
+                if slot.material != None:
+                    if slot.material.name in self.scene.materials:
+                        self.materials.append((i, self.scene.materials[slot.material.name]))
+                    else:
+                        material = Material(slot.material)
+                        self.scene.materials[slot.material.name] = material
+                        self.materials.append((i, material))
 
     def createMesh(self):
         if self.mesh == None:
@@ -550,7 +550,7 @@ class Object:
         self.bakeImage = images.new('BakeImage', self.bakeWidth, self.bakeHeight)
         self.bakeImage.file_format = 'PNG'
         self.bakeImage.filepath = file
-        for mat in self.materials:
+        for _, mat in self.materials:
             mat.setBakeImage(self.bakeImage)
 
     def cleanupBakeImage(self):
@@ -558,21 +558,21 @@ class Object:
             images = bpy.data.images
             images.remove(self.bakeImage)
             self.bakeImage = None
-        for mat in self.materials:
+        for _, mat in self.materials:
             mat.setBakeImage(None)
 
     def setupBakeOutputNodes(self):
         self.bakeUVMap = getBpyActiveUvMap(self.object)
-        for mat in self.materials:
+        for _, mat in self.materials:
             mat.setupBakeOutputNodes(self)
 
     def cleanupBakeOutputNodes(self):
-        for mat in self.materials:
+        for _, mat in self.materials:
             mat.cleanupBakeOutputNodes()
             mat.restoreShaderNodes()
 
     def cleanupBakeNodes(self):
-        for mat in self.materials:
+        for _, mat in self.materials:
             mat.cleanupBakeNodes()
 
     def createBakeImage(self, file):
@@ -583,73 +583,73 @@ class Object:
         return image
 
     def bakeDiffuseTextures(self):
-        for mat in self.materials:
+        for _, mat in self.materials:
             image = self.createBakeImage(self.name+'-'+mat.name+'-diffuse.png')
             mat.setDiffuseImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = 4
         print(f'Select: {self.mesh.objectCopy}')
         bpy.ops.object.bake(type='DIFFUSE', use_clear=True)
-        for mat in self.materials:
+        for _, mat in self.materials:
             mat.bakeImage.save()
             mat.clearBakeImage()
 
     def bakeEmissionTextures(self):
-        for mat in self.materials:
+        for _, mat in self.materials:
             image = self.createBakeImage(self.name+'-'+mat.name+'-emission.png')
             mat.setEmissionImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = 4
         bpy.ops.object.bake(type='EMIT', use_clear=True)
-        for mat in self.materials:
+        for _, mat in self.materials:
             mat.bakeImage.save()
             mat.clearBakeImage()
 
     def bakeRoughnessTextures(self):
-        for mat in self.materials:
+        for _, mat in self.materials:
             image = self.createBakeImage(self.name+'-'+mat.name+'-roughness.png')
             mat.setRoughnessImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = 4
         bpy.ops.object.bake(type='ROUGHNESS', use_clear=True)
-        for mat in self.materials:
+        for _, mat in self.materials:
             mat.bakeImage.save()
             mat.clearBakeImage()
 
     def bakeMetallicTextures(self):
-        for mat in self.materials:
+        for _, mat in self.materials:
             image = self.createBakeImage(self.name+'-'+mat.name+'-metallic.png')
             mat.setMetallicImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = 4
         bpy.ops.object.bake(type='ROUGHNESS', use_clear=True)
-        for mat in self.materials:
+        for _, mat in self.materials:
             mat.bakeImage.save()
             mat.clearBakeImage()
 
     def bakeOpacityTextures(self):
-        for mat in self.materials:
+        for _, mat in self.materials:
             image = self.createBakeImage(self.name+'-'+mat.name+'-opacity.png')
             mat.setOpacityImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = 4
         bpy.ops.object.bake(type='ROUGHNESS', use_clear=True)
-        for mat in self.materials:
+        for _, mat in self.materials:
             mat.bakeImage.save()
             mat.clearBakeImage()
 
     def bakeNormalTextures(self):
-        for mat in self.materials:
+        for _, mat in self.materials:
             image = self.createBakeImage(self.name+'-'+mat.name+'-normal.png')
             mat.setNormalImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = 4
         bpy.ops.object.bake(type='NORMAL', use_clear=True)
-        for mat in self.materials:
+        for _, mat in self.materials:
             mat.bakeImage.save()
             mat.clearBakeImage()
 
     def bakeOcclusionTextures(self):
-        for mat in self.materials:
+        for _, mat in self.materials:
             image = self.createBakeImage(self.name+'-'+mat.name+'-occlusion.png')
             mat.setOcclusionImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = self.scene.bakeSamples
         bpy.ops.object.bake(type='AO', use_clear=True)
-        for mat in self.materials:
+        for _, mat in self.materials:
             mat.bakeImage.save()
             mat.clearBakeImage()
 
@@ -682,9 +682,9 @@ class Object:
 
     def exportMaterialSubsets(self, usdMesh):
         if len(self.materials) == 1:
-            usdMesh['material:binding'] = self.materials[0].usdMaterial
+            usdMesh['material:binding'] = self.materials[0][1].usdMaterial
         elif len(self.materials) > 1:
-            for i, mat in enumerate(self.materials):
+            for i, mat in self.materials:
                 mesh = self.mesh.objectCopy.data
                 subset = usdMesh.createChild(mat.name, ClassType.GeomSubset)
                 subset['elementType'] = 'face'

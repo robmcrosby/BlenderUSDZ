@@ -137,7 +137,14 @@ def exportBpyExtents(object, scale = 1.0):
 
 def applyBpySmartProjection(mesh):
     selectBpyObject(mesh)
-    bpy.ops.uv.smart_project()
+    bpy.ops.object.mode_set(mode='OBJECT')
+    for i, _ in enumerate(mesh.material_slots):
+        for face in mesh.data.polygons:
+            face.select = face.material_index == i
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_mode(type="FACE")
+        bpy.ops.uv.smart_project(angle_limit=66.0, island_margin=0.001)
+        bpy.ops.object.mode_set(mode='OBJECT')
 
 
 def exportBpyMeshVertexCounts(mesh, material = -1):
