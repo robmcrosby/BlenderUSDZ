@@ -405,10 +405,11 @@ class Mesh:
         for layer in mesh.uv_layers:
             indices, uvs = exportBpyMeshUvs(mesh, layer)
             name = layer.name.replace('.', '_').replace(' ', '_')
-            usdMesh['primvars:'+name] = uvs
-            usdMesh['primvars:'+name].valueTypeStr = 'texCoord2f'
-            usdMesh['primvars:'+name]['interpolation'] = 'faceVarying'
-            usdMesh['primvars:'+name+':indices'] = indices
+            usdMesh[name] = uvs
+            usdMesh[name].type = AttrType.Primvar
+            usdMesh[name].valueTypeStr = 'texCoord2f'
+            usdMesh[name].indices = indices
+            usdMesh[name].interpolation = Interpolation.faceVarying
 
 
     def exportJoints(self, usdMesh):
@@ -458,10 +459,11 @@ class Mesh:
         usdMesh['points'].valueTypeStr = 'point3f'
         self.exportMeshUvs(usdMesh)
         indices, normals = exportBpyMeshNormals(mesh)
-        usdMesh['primvars:normals'] = normals
-        usdMesh['primvars:normals'].valueTypeStr = 'normal3f'
-        usdMesh['primvars:normals']['interpolation'] = 'faceVarying'
-        usdMesh['primvars:normals:indices'] = indices
+        usdMesh['normals'] = normals
+        usdMesh['normals'].type = AttrType.Primvar
+        usdMesh['normals'].valueTypeStr = 'normal3f'
+        usdMesh['normals'].indices = indices
+        usdMesh['normals'].interpolation = Interpolation.faceVarying
         usdMesh['subdivisionScheme'] = 'none'
         usdMesh['subdivisionScheme'].addQualifier('uniform')
         return usdMesh

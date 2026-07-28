@@ -10,6 +10,21 @@ class SpecifierType(Enum):
     Class = 2
 
 
+class AttrType(Enum):
+    Attribute    = 0
+    Primvar      = 1
+    Connection   = 2
+    Relationship = 3
+
+
+class Interpolation(Enum):
+    constant    = 0
+    uniform     = 1
+    vertex      = 2
+    varying     = 3
+    faceVarying = 4
+
+
 class SpecType(Enum):
     Attribute   = 1
     Connection  = 2
@@ -226,7 +241,10 @@ def interleaveLists(lists):
 class UsdAttribute:
     def __init__(self, name = '', value = None, type = ValueType.Invalid):
         self.name = name
+        self.type = AttrType.Attribute
         self.value = value
+        self.indices = None
+        self.interpolation = Interpolation.uniform
         self.frames = []
         self.qualifiers = []
         self.metadata = {}
@@ -255,18 +273,24 @@ class UsdAttribute:
         if len(att.qualifiers) > 0:
             ret += ' '.join(q for q in att.qualifiers) + ' '
         ret += att.valueTypeToString()
-        ret += ' ' + self.name
-        if self.isConnection():
-            ret += '.connect = <' + self.value.getPathStr() + '>'
+        if self.type == AttrType.Primvar:
+            ret += f' primvars:{self.name} = {self.valueToString(debug)}'
+            ret += f' (\n{space}    interpolation = "{self.interpolation.name}"\n{space})'
+            if self.indices != None:
+                ret += f'\n{space}int[] primvars:{self.name}:indices = {valueToString(self.indices, debug)}'
+        elif self.isConnection():
+            ret += ' ' + self.name + '.connect = <' + self.value.getPathStr() + '>'
         elif self.isRelationship():
-            ret += ' = <' + self.value.getPathStr() + '>'
+            ret += ' ' + self.name + ' = <' + self.value.getPathStr() + '>'
         elif self.hasTimeSamples():
-            ret += self.framesToString(space, debug)
+            ret += ' ' + self.name + self.framesToString(space, debug)
         else:
             if self.value != None:
-                ret += ' = ' + self.valueToString(debug)
+                ret += ' ' + self.name + ' = ' + self.valueToString(debug)
                 if len(self.metadata) > 0:
                     ret += self.metadataToString(space)
+            else:
+                ret += ' ' + self.name
         return ret + '\n'
 
     def metadataToString(self, space):
