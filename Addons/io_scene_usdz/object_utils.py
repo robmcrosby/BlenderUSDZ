@@ -182,7 +182,7 @@ def exportBpyMeshVertices(mesh, material = -1):
                         map[i] = len(vertices)
                         vertices.append(mesh.vertices[i].co[:])
                     indices.append(map[i])
-    return (indices, vertices)
+    return (vertices, indices)
 
 
 def addValueIndex(valueMap, values, indices, value, repeats = 1):
@@ -216,7 +216,7 @@ def exportBpyMeshNormals(mesh, material = -1):
             normal = poly.normal[:]
             vertices = len(poly.vertices)
             addValueIndex(normalMap, normals, indices, normal, vertices)
-    return (indices, normals)
+    return (normals, indices)
 
 
 def exportBpyMeshUvs(mesh, layer, material = -1):
@@ -230,7 +230,7 @@ def exportBpyMeshUvs(mesh, layer, material = -1):
                 uv = layer.data[i].uv[:]
                 addValueIndex(uvMap, uvs, indices, uv)
         index += len(poly.vertices)
-    return (indices, uvs)
+    return (uvs, indices)
 
 
 def exportBpyVertexWeights(index, groups):

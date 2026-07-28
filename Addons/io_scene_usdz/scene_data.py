@@ -350,14 +350,11 @@ class Mesh:
         self.usdMesh = None
         self.createCopies()
 
-
     def __del__(self):
         self.cleanup()
 
-
     def cleanup(self):
         self.clearCopies()
-
 
     def createCopies(self):
         self.clearCopies()
@@ -383,7 +380,6 @@ class Mesh:
         if self.uvMapNeeded(self.objectCopy):
             applyBpySmartProjection(self.objectCopy)
 
-
     def clearCopies(self):
         if self.objectCopy != None:
             deleteBpyObject(self.objectCopy)
@@ -392,25 +388,18 @@ class Mesh:
             deleteBpyObject(self.armatueCopy)
             self.armatueCopy = None
 
-
     def getArmature(self):
         parent = self.object.parent
         if parent != None and parent.type == 'ARMATURE':
             return parent
         return None
 
-
     def exportMeshUvs(self, usdMesh):
         mesh = self.objectCopy.data
         for layer in mesh.uv_layers:
-            indices, uvs = exportBpyMeshUvs(mesh, layer)
+            uvs, indices = exportBpyMeshUvs(mesh, layer)
             name = layer.name.replace('.', '_').replace(' ', '_')
-            usdMesh[name] = uvs
-            usdMesh[name].type = AttrType.Primvar
-            usdMesh[name].valueTypeStr = 'texCoord2f'
-            usdMesh[name].indices = indices
-            usdMesh[name].interpolation = Interpolation.faceVarying
-
+            usdMesh.addUVMap(name, uvs, indices)
 
     def exportJoints(self, usdMesh):
         mesh = self.objectCopy.data
@@ -422,7 +411,6 @@ class Mesh:
             usdMesh['primvars:skel:jointWeights'] = weights
             usdMesh['primvars:skel:jointWeights']['elementSize'] = size
             usdMesh['primvars:skel:jointWeights']['interpolation'] = 'vertex'
-
 
     def exportSkeleton(self, usdObj):
         usdSkeleton = None
@@ -440,40 +428,37 @@ class Mesh:
             usdSkeleton['restTransforms'].addQualifier('uniform')
         return usdSkeleton
 
-
     def exportShared(self, usdMeshes):
         self.usdMesh = self.exportToObject(usdMeshes, ClassType.Mesh)
         self.usdMesh.specifierType = SpecifierType.Class
         return self.usdMesh
 
-
     def exportToObject(self, usdObj, classType = ClassType.Mesh):
         mesh = self.objectCopy.data
         name = self.object.data.name.replace('.', '_').replace(' ', '_')
         usdMesh = usdObj.createChild(name, classType)
-        usdMesh['extent'] = exportBpyExtents(self.objectCopy, self.scene.scale)
-        usdMesh['faceVertexCounts'] = exportBpyMeshVertexCounts(mesh)
-        indices, points = exportBpyMeshVertices(mesh)
-        usdMesh['faceVertexIndices'] = indices
-        usdMesh['points'] = points
-        usdMesh['points'].valueTypeStr = 'point3f'
+        
+        # Gather Mesh Components
+        extent = exportBpyExtents(self.objectCopy, self.scene.scale)
+        counts = exportBpyMeshVertexCounts(mesh)
+        points, indices = exportBpyMeshVertices(mesh)
+        usdMesh.setMesh(extent, points, indices, counts)
+        
         self.exportMeshUvs(usdMesh)
-        indices, normals = exportBpyMeshNormals(mesh)
-        usdMesh['normals'] = normals
-        usdMesh['normals'].type = AttrType.Primvar
-        usdMesh['normals'].valueTypeStr = 'normal3f'
-        usdMesh['normals'].indices = indices
-        usdMesh['normals'].interpolation = Interpolation.faceVarying
+        
+        # Export Normals
+        normals, indices = exportBpyMeshNormals(mesh)
+        usdMesh.setNormals(normals, indices)
+        
+        # Set Subdivision Scheme
         usdMesh['subdivisionScheme'] = 'none'
         usdMesh['subdivisionScheme'].addQualifier('uniform')
         return usdMesh
-
 
     def uvMapNeeded(self, mesh):
         if self.scene.bakeTextures or self.scene.bakeAO:
             return len(mesh.data.uv_layers) == 0
         return False
-
 
 
 class Object:
@@ -674,13 +659,11 @@ class Object:
             self.bakeOcclusionTextures()
         self.cleanupBakeOutputNodes()
 
-
     def getTransform(self):
         if self.parent == None:
             scale = self.scene.scale
             return convertBpyRootMatrix(self.object.matrix_world, scale)
         return convertBpyMatrix(self.object.matrix_local)
-
 
     def exportMaterialSubsets(self, usdMesh):
         if len(self.materials) == 1:
@@ -696,7 +679,6 @@ class Object:
                 subset['indices'] = exportBpyFaceIndices(mesh, i)
                 subset['material:binding'] = mat.usdMaterial
                 #subset['material:binding'].addQualifier('uniform')
-
 
     def exportMesh(self, usdObj):
         if self.mesh != None:
@@ -717,7 +699,6 @@ class Object:
                     usdMesh['skel:animationSource'].addQualifier('prepend')
                     usdMesh['skel:skeleton'] = usdSkeleton
                     usdMesh['skel:skeleton'].addQualifier('prepend')
-
 
     def exportArmatureAnimation(self, armature, usdAnimation):
         usdAnimation['rotations'] = ValueType.quatf
@@ -758,7 +739,6 @@ class Object:
         self.scene.context.scene.frame_set(self.scene.curFrame)
         bpy.ops.object.mode_set(mode='OBJECT')
 
-
     def exportAnimation(self, usdObj):
         usdAnimation = None
         if self.mesh.armatueCopy != None and self.scene.animated:
@@ -769,7 +749,6 @@ class Object:
             self.exportArmatureAnimation(self.mesh.armatueCopy, usdAnimation)
         return usdAnimation
 
-
     def exportTimeSamples(self, item):
         item['xformOp:transform:transforms'] = ValueType.matrix4d
         item = item['xformOp:transform:transforms']
@@ -779,7 +758,6 @@ class Object:
             self.scene.context.scene.frame_set(frame)
             item.addTimeSample(frame, self.getTransform())
         self.scene.context.scene.frame_set(self.scene.curFrame)
-
 
     def exportUsd(self, parent):
         usdObj = None
@@ -807,7 +785,6 @@ class Object:
         if self.collection != None and self.collection in self.scene.usdCollections:
             usdObj.metadata['inherits'] = self.scene.usdCollections[self.collection]
             usdObj.metadata['instanceable'] = True
-
 
     def exportInstanced(self, parent):
         usdObj = None
@@ -875,7 +852,6 @@ class Scene:
         self.customLayerData = {'creator':'Blender USDZ Plugin'}
         self.collection = None
 
-
     def cleanup(self):
         self.clearObjects()
         deselectBpyObjects()
@@ -886,13 +862,11 @@ class Scene:
         deleteBpyCollection(self.collection)
         self.collection = None
 
-
     def clearObjects(self):
         for obj in self.objMap.values():
             obj.cleanup()
         self.objects = []
         self.objMap = {}
-
 
     def loadContext(self, context, collection):
         if context == None:
@@ -922,7 +896,6 @@ class Scene:
         self.scale *= self.getUnitScale()
         self.loadObjects()
 
-
     def loadObjects(self):
         deleteBpyCollection(self.collection)
         self.collection = createBpyCollection('TempCollection')
@@ -932,13 +905,11 @@ class Scene:
             elif (obj.type == 'EMPTY' and obj.instance_type == 'COLLECTION'):
                 self.addBpyCollection(obj)
 
-
     def getUnitScale(self):
         settings = self.context.scene.unit_settings
         if settings.system == 'NONE':
             return 10.0
         return 100.0 * settings.scale_length
-
 
     def getSceneScale(self):
         settings = self.context.scene.unit_settings
@@ -968,7 +939,6 @@ class Scene:
             scale = 10.0
         return scale * settings.scale_length
 
-
     def addBpyObject(self, object, type = 'EMPTY'):
         obj = Object(object, self)
         if obj.name in self.objMap:
@@ -983,7 +953,6 @@ class Scene:
         if type == 'MESH':
             obj.setAsMesh()
         return obj
-
 
     def addBpyCollection(self, collection):
         name = collection.instance_collection.name.replace('.', '_').replace(' ', '_')
@@ -1013,7 +982,6 @@ class Scene:
                     obj.setAsMesh()
             self.collections[name] = objs
 
-
     def exportBakedTextures(self):
         # Set the Render Engine to Cycles and set Samples
         renderEngine = self.context.scene.render.engine
@@ -1037,13 +1005,11 @@ class Scene:
         self.context.scene.cycles.device = renderDevice
         self.context.scene.render.engine = renderEngine
 
-
     def exportSharedMaterials(self, data):
         if len(self.materials) > 0:
             looks = data.createChild('Looks', ClassType.Scope)
             for mat in self.materials.values():
                 mat.exportUsd(looks)
-
 
     def exportSharedMeshes(self, data):
         objs = []
@@ -1056,7 +1022,6 @@ class Scene:
                 usdMesh = meshObj.mesh.exportShared(meshes)
                 meshObj.exportMaterialSubsets(usdMesh)
 
-
     def exportCollections(self, data):
         if len(self.collections) > 0:
             collections = data.createChild('Collections', ClassType.Scope)
@@ -1066,7 +1031,6 @@ class Scene:
                 for obj in objs:
                     obj.exportInstanced(collection)
                 self.usdCollections[name] = collection
-
 
     def exportUsd(self):
         data = UsdData()

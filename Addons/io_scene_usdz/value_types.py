@@ -1,7 +1,16 @@
 from enum import Enum
 import itertools
+try:
+    from pxr import Usd, UsdGeom, UsdShade, UsdSkel, Sdf, Gf
+    pxr_included = True
+except ImportError:
+    pxr_included = False
 
 TAB = '   '
+
+
+def pxrUsdAvailable():
+    return pxr_included
 
 
 class SpecifierType(Enum):
@@ -293,6 +302,44 @@ class UsdAttribute:
                 ret += ' ' + self.name
         return ret + '\n'
 
+    def toUsdPrim(self, prim):
+        valueType = getattr(Sdf.ValueTypeNames, self.getUsdValueTypeRegString(), Sdf.ValueTypeNames.Token)
+        if self.isConnection():
+            attr = prim.GetPrim().CreateAttribute(self.name, valueType)
+            attr.SetConnections([Sdf.Path(self.value.getPathStr())])
+            attr.SetCustom('custom' in self.qualifiers)
+            if not 'uniform' in self.qualifiers:
+                attr.SetVariability(Sdf.VariabilityVarying)
+        elif self.isRelationship():
+            rel = prim.GetPrim().CreateRelationship(self.name)
+            rel.SetTargets([Sdf.Path(self.value.getPathStr())])
+            rel.SetCustom('custom' in self.qualifiers)
+        elif self.type == AttrType.Primvar:
+            primVar = UsdGeom.PrimvarsAPI(prim).CreatePrimvar(self.name, valueType)
+            primVar.SetInterpolation(self.interpolation.name)
+            primVar.Set(self.getUsdAttrValue())
+            if self.indices:
+                primVar.SetIndices(self.indices)
+        else:
+            attr = prim.GetPrim().CreateAttribute(self.name, valueType)
+            attr.SetCustom('custom' in self.qualifiers)
+            if not 'uniform' in self.qualifiers:
+                attr.SetVariability(Sdf.VariabilityVarying)
+            if self.value != None:
+                attr.Set(self.getUsdAttrValue())
+
+    def getUsdValueTypeRegString(self):
+        if self.valueTypeStr != None:
+            regStr = self.valueTypeStr + ('Array' if self.isArray() else '')
+        else:
+            regStr = self.valueType.toString() + ('Array' if self.isArray() else '')
+        return regStr[:1].upper() + regStr[1:]
+
+    def getUsdAttrValue(self):
+        if self.valueType == ValueType.matrix4d:
+            return [Gf.Matrix4d(m) for m in self.value] if self.isArray() else Gf.Matrix4d(self.value)
+        return self.value
+
     def metadataToString(self, space):
         indent = space + TAB
         ret = ' (\n'
@@ -424,6 +471,35 @@ class UsdPrim:
             ret += space + TAB + k + ' = ' + propertyToString(v, TAB) + '\n'
         return ret + space + ')\n'
 
+    def toUsdStage(self, stage):
+        if self.classType == ClassType.Scope:
+            prim = UsdGeom.Scope.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.Xform:
+            prim = UsdGeom.Xform.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.Mesh:
+            prim = UsdGeom.Mesh.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.SkelRoot:
+            prim = UsdSkel.Root.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.Skeleton:
+            prim = UsdSkel.Skeleton.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.SkelAnimation:
+            prim = UsdSkel.Animation.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.Material:
+            prim = UsdShade.Material.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.Shader:
+            prim = UsdShade.Shader.Define(stage, self.getPathStr())
+        elif self.classType == ClassType.GeomSubset:
+            prim = UsdGeom.Subset.Define(stage, self.getPathStr())
+        else:
+            print(f'Warning: unknown class type {self.classType}, using Xform in place')
+            prim = UsdGeom.Xform.Define(stage, self.getPathStr())
+        # Add Attributes
+        for attr in self.attributes:
+            attr.toUsdPrim(prim)
+        # Add Children
+        for child in self.children:
+            child.toUsdStage(stage)
+
     def addAttribute(self, attribute):
         attribute.parent = self
         self.attributes.append(attribute)
@@ -431,6 +507,26 @@ class UsdPrim:
 
     def createAttribute(self, name, value = None, type = ValueType.Invalid):
         return self.addAttribute(UsdAttribute(name, value, type))
+
+    def setMesh(self, extent, points, indices, counts):
+        self.createAttribute('extent', extent)
+        self.createAttribute('faceVertexCounts', counts)
+        self.createAttribute('faceVertexIndices', indices)
+        self.createAttribute('points', points).valueTypeStr = 'point3f'
+
+    def setNormals(self, normals, indices):
+        primvar = self.createAttribute('normals', normals)
+        primvar.type = AttrType.Primvar
+        primvar.valueTypeStr = 'normal3f'
+        primvar.indices = indices
+        primvar.interpolation = Interpolation.faceVarying
+
+    def addUVMap(self, name, uvs, indices):
+        primvar = self.createAttribute(name, uvs)
+        primvar.type = AttrType.Primvar
+        primvar.valueTypeStr = 'texCoord2f'
+        primvar.indices = indices
+        primvar.interpolation = Interpolation.faceVarying
 
     def addChild(self, child):
         child.parent = self
@@ -609,3 +705,18 @@ class UsdData:
         f = open(filePath, 'w')
         f.write(str(self))
         f.close()
+    
+    def toUsdStage(self, stage):
+        for key in self.metadata:
+            stage.SetMetadata(key, self.metadata[key])
+        for prim in self.children:
+            prim.toUsdStage(stage)
+    
+    def writeUsd(self, filePath):
+        if not pxr_included:
+            self.writeUsda(filePath)
+        else:
+            stage = Usd.Stage.CreateNew(filePath)
+            self.toUsdStage(stage)
+            stage.GetRootLayer().Export(filePath)
+

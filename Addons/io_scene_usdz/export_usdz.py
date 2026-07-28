@@ -11,16 +11,15 @@ except ImportError:
     crc32 = binascii.crc32
 
 from io_scene_usdz.scene_data import Scene
-from io_scene_usdz.value_types import UsdData
-from io_scene_usdz.crate_file import writeCrateFile
-from io_scene_usdz.usd_file import pxrUsdAvailable, writeUsdFile
+from io_scene_usdz.value_types import pxrUsdAvailable, UsdData
+
 
 def export_usdz(context, filepath = '', collection= '', exportMaterials = True,
                 bakeTextures = False, bakeTextureSize = 1024, bakeDiffuse = True,
                 bakeRoughness = True, bakeMetallic = True, bakeOpacity = False,
                 bakeEmission = False, bakeNormals = False, bakeAO = False,
                 bakeAOSamples = 64, useGpu = True, exportAnimations = False,
-                globalScale = 1.0, usePxrModule = True, debugMode = False,
+                globalScale = 1.0, debugMode = False,
                 ):
     exportDir, fileName = os.path.split(filepath)
     fileParts = fileName.split('.')
@@ -49,21 +48,15 @@ def export_usdz(context, filepath = '', collection= '', exportMaterials = True,
                                           useGpu = useGpu,
                                           exportAnimations = exportAnimations,
                                           globalScale = globalScale)
-    if debugMode:
+    if debugMode or not pxrUsdAvailable():
         print(usdData.toString(debug=True))
         usdaPath = tempDir + '/' + fileName + '.usda'
-        if usePxrModule and pxrUsdAvailable():
-            writeUsdFile(usdaPath, usdData)
-        else:
-            usdData.writeUsda(usdaPath)
+        usdData.writeUsd(usdaPath)
         writeUsdzFile(filePath, usdaPath, texturePaths)
     else:
         # Create Binary and Manually zip to a usdz file
         usdcPath = tempDir + '/' + fileName + '.usdc'
-        if usePxrModule and pxrUsdAvailable():
-            writeUsdFile(usdcPath, usdData)
-        else:
-            writeCrateFile(usdcPath, usdData)
+        usdData.writeUsd(usdcPath)
         writeUsdzFile(filePath, usdcPath, texturePaths)
     if tempDir != None:
         # Cleanup the Temp Directory
