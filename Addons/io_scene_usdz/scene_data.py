@@ -667,7 +667,7 @@ class Object:
 
     def exportMaterialSubsets(self, usdMesh):
         if len(self.materials) == 1:
-            usdMesh.addRelationship('material:binding', self.materials[0][1].usdMaterial)
+            usdMesh['material:binding'] = self.materials[0][1].usdMaterial
         elif len(self.materials) > 1:
             for i, mat in self.materials:
                 mesh = self.mesh.objectCopy.data

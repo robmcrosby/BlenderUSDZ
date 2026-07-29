@@ -264,6 +264,8 @@ class UsdAttribute:
         self.pathJump = 0
         if type == ValueType.Invalid:
             self.valueType = self.getValueType()
+        if self.isConnection():
+            self.type = AttrType.Connection
 
     def __str__(self):
         return self.toString()
@@ -434,7 +436,9 @@ class UsdPrim:
         return self.toString()
 
     def __setitem__(self, key, item):
-        if type(item) is ValueType:
+        if type(item) is UsdPrim:
+            self.addRelationship(key, item)
+        elif type(item) is ValueType:
             self.createAttribute(key, type=item)
         else:
             self.createAttribute(key, item)
@@ -530,6 +534,7 @@ class UsdPrim:
         rel.type = AttrType.Relationship
         if uniform:
             rel.addQualifier('uniform')
+        return rel
 
     def addChild(self, child):
         child.parent = self
