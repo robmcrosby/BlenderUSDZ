@@ -667,7 +667,7 @@ class Object:
 
     def exportMaterialSubsets(self, usdMesh):
         if len(self.materials) == 1:
-            usdMesh['material:binding'] = self.materials[0][1].usdMaterial
+            usdMesh.addRelationship('material:binding', self.materials[0][1].usdMaterial)
         elif len(self.materials) > 1:
             for i, mat in self.materials:
                 mesh = self.mesh.objectCopy.data
@@ -677,8 +677,7 @@ class Object:
                 subset['familyName'] = 'materialBind'
                 subset['familyName'].addQualifier('uniform')
                 subset['indices'] = exportBpyFaceIndices(mesh, i)
-                subset['material:binding'] = mat.usdMaterial
-                #subset['material:binding'].addQualifier('uniform')
+                subset.addRelationship('material:binding', mat.usdMaterial, uniform=True)
 
     def exportMesh(self, usdObj):
         if self.mesh != None:

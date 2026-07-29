@@ -264,8 +264,6 @@ class UsdAttribute:
         self.pathJump = 0
         if type == ValueType.Invalid:
             self.valueType = self.getValueType()
-        if self.isRelationship():
-            self.valueTypeStr = 'rel'
 
     def __str__(self):
         return self.toString()
@@ -288,18 +286,18 @@ class UsdAttribute:
             if self.indices != None:
                 ret += f'\n{space}int[] primvars:{self.name}:indices = {valueToString(self.indices, debug)}'
         elif self.isConnection():
-            ret += ' ' + self.name + '.connect = <' + self.value.getPathStr() + '>'
-        elif self.isRelationship():
-            ret += ' ' + self.name + ' = <' + self.value.getPathStr() + '>'
+            ret += f' {self.name}.connect = <{self.value.getPathStr()}>'
+        elif self.type == AttrType.Relationship:
+            ret += f' {self.name} = <{self.value[0].getPathStr()}>'
         elif self.hasTimeSamples():
-            ret += ' ' + self.name + self.framesToString(space, debug)
+            ret += ' {self.name}{self.framesToString(space, debug)}'
         else:
             if self.value != None:
-                ret += ' ' + self.name + ' = ' + self.valueToString(debug)
+                ret += f' {self.name} = {self.valueToString(debug)}'
                 if len(self.metadata) > 0:
                     ret += self.metadataToString(space)
             else:
-                ret += ' ' + self.name
+                ret += f' {self.name}'
         return ret + '\n'
 
     def toUsdPrim(self, prim):
@@ -310,9 +308,9 @@ class UsdAttribute:
             attr.SetCustom('custom' in self.qualifiers)
             if not 'uniform' in self.qualifiers:
                 attr.SetVariability(Sdf.VariabilityVarying)
-        elif self.isRelationship():
+        elif self.type == AttrType.Relationship:
             rel = prim.GetPrim().CreateRelationship(self.name)
-            rel.SetTargets([Sdf.Path(self.value.getPathStr())])
+            rel.SetTargets([target.getPathStr() for target in self.value])
             rel.SetCustom('custom' in self.qualifiers)
         elif self.type == AttrType.Primvar:
             primVar = UsdGeom.PrimvarsAPI(prim).CreatePrimvar(self.name, valueType)
@@ -379,6 +377,8 @@ class UsdAttribute:
         return valueToString(self.value, debug)
 
     def valueTypeToString(self):
+        if self.type == AttrType.Relationship:
+            return 'rel'
         if self.valueTypeStr != None:
             return self.valueTypeStr + ('[]' if self.isArray() else '')
         return self.valueType.toString() + ('[]' if self.isArray() else '')
@@ -392,9 +392,6 @@ class UsdAttribute:
 
     def isConnection(self):
         return type(self.value) is UsdAttribute
-
-    def isRelationship(self):
-        return type(self.value) is UsdPrim
 
     def hasTimeSamples(self):
         return len(self.frames) > 0
@@ -416,7 +413,7 @@ class UsdAttribute:
     def getValueType(self):
         if self.isConnection():
             return self.value.getValueType()
-        elif self.isRelationship():
+        elif self.type == AttrType.Relationship:
             return ValueType.Invalid
         return getValueType(self.value)
 
@@ -527,6 +524,12 @@ class UsdPrim:
         primvar.valueTypeStr = 'texCoord2f'
         primvar.indices = indices
         primvar.interpolation = Interpolation.faceVarying
+    
+    def addRelationship(self, name, prim, uniform=False):
+        rel = self.createAttribute(name, [prim])
+        rel.type = AttrType.Relationship
+        if uniform:
+            rel.addQualifier('uniform')
 
     def addChild(self, child):
         child.parent = self
