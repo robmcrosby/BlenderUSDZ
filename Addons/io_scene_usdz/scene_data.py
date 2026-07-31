@@ -16,6 +16,7 @@ class ShaderInput:
         self.image = None
         self.uvMap = None
         self.usdAtt = None
+        self.colorSpace = 'raw'
 
     def exportShaderInput(self, material, usdShader):
         if self.usdAtt != None:
@@ -35,6 +36,11 @@ class ShaderInput:
             usdShader['inputs:fallback'] = default
             usdShader['inputs:file'] = self.image
             usdShader['inputs:file'].valueType = ValueType.asset
+            usdShader['inputs:sourceColorSpace'] = 'sRGB' if self.colorSpace == 'sRGB' else 'raw'
+            if self.colorSpace == 'normal':
+                usdShader['inputs:fallback'] = (0.5, 0.5, 1.0, 1.0)
+                usdShader['inputs:scale'] = (2.0, 2.0, 2.0, 1.0)
+                usdShader['inputs:bias'] = (-1.0, -1.0, -1.0, 0.0)
             primUsdShader = usdMaterial.getChild('primvar_'+self.uvMap)
             if primUsdShader != None:
                 usdShader['inputs:st'] = primUsdShader['outputs:result']
@@ -239,28 +245,30 @@ class Material:
         self.setForDiffuseBake()
         self.bakeImage = image
         self.setBakeImage(image)
-        self.inputs['diffuseColor'].image = image.name
+        self.inputs['diffuseColor'].image = '0/' + image.name
         self.inputs['diffuseColor'].uvMap = uvMap
+        self.inputs['diffuseColor'].colorSpace = 'sRGB'
     
     def setEmissionImage(self, image, uvMap):
         self.setForDiffuseBake()
         self.bakeImage = image
         self.setBakeImage(image)
-        self.inputs['emissiveColor'].image = image.name
+        self.inputs['emissiveColor'].image = '0/' + image.name
         self.inputs['emissiveColor'].uvMap = uvMap
+        self.inputs['emissiveColor'].colorSpace = 'sRGB'
     
     def setRoughnessImage(self, image, uvMap):
         self.setForRoughnessBake()
         self.bakeImage = image
         self.setBakeImage(image)
-        self.inputs['roughness'].image = image.name
+        self.inputs['roughness'].image = '0/' + image.name
         self.inputs['roughness'].uvMap = uvMap
     
     def setMetallicImage(self, image, uvMap):
         self.setForMetallicBake()
         self.bakeImage = image
         self.setBakeImage(image)
-        self.inputs['metallic'].image = image.name
+        self.inputs['metallic'].image = '0/' + image.name
         self.inputs['metallic'].uvMap = uvMap
         self.inputs['useSpecularWorkflow'].value = 0
     
@@ -268,21 +276,22 @@ class Material:
         self.setForAlphaBake()
         self.bakeImage = image
         self.setBakeImage(image)
-        self.inputs['opacity'].image = image.name
+        self.inputs['opacity'].image = '0/' + image.name
         self.inputs['opacity'].uvMap = uvMap
     
     def setNormalImage(self, image, uvMap):
         self.setForDiffuseBake()
         self.bakeImage = image
         self.setBakeImage(image)
-        self.inputs['normal'].image = image.name
+        self.inputs['normal'].image = '0/' + image.name
         self.inputs['normal'].uvMap = uvMap
+        self.inputs['normal'].colorSpace = 'normal'
     
     def setOcclusionImage(self, image, uvMap):
         self.setForDiffuseBake()
         self.bakeImage = image
         self.setBakeImage(image)
-        self.inputs['occlusion'].image = image.name
+        self.inputs['occlusion'].image = '0/' + image.name
         self.inputs['occlusion'].uvMap = uvMap
 
     def cleanupBakeNodes(self):
@@ -571,7 +580,7 @@ class Object:
 
     def bakeDiffuseTextures(self):
         for _, mat in self.materials:
-            image = self.createBakeImage(self.name+'-'+mat.name+'-diffuse.png')
+            image = self.createBakeImage(self.name+'-'+mat.name+'-diff.png')
             mat.setDiffuseImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = 4
         print(f'Select: {self.mesh.objectCopy}')
@@ -582,7 +591,7 @@ class Object:
 
     def bakeEmissionTextures(self):
         for _, mat in self.materials:
-            image = self.createBakeImage(self.name+'-'+mat.name+'-emission.png')
+            image = self.createBakeImage(self.name+'-'+mat.name+'-emit.png')
             mat.setEmissionImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = 4
         bpy.ops.object.bake(type='EMIT', use_clear=True)
@@ -592,7 +601,7 @@ class Object:
 
     def bakeRoughnessTextures(self):
         for _, mat in self.materials:
-            image = self.createBakeImage(self.name+'-'+mat.name+'-roughness.png')
+            image = self.createBakeImage(self.name+'-'+mat.name+'-r.png')
             mat.setRoughnessImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = 4
         bpy.ops.object.bake(type='ROUGHNESS', use_clear=True)
@@ -602,7 +611,7 @@ class Object:
 
     def bakeMetallicTextures(self):
         for _, mat in self.materials:
-            image = self.createBakeImage(self.name+'-'+mat.name+'-metallic.png')
+            image = self.createBakeImage(self.name+'-'+mat.name+'-m.png')
             mat.setMetallicImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = 4
         bpy.ops.object.bake(type='ROUGHNESS', use_clear=True)
@@ -612,7 +621,7 @@ class Object:
 
     def bakeOpacityTextures(self):
         for _, mat in self.materials:
-            image = self.createBakeImage(self.name+'-'+mat.name+'-opacity.png')
+            image = self.createBakeImage(self.name+'-'+mat.name+'-o.png')
             mat.setOpacityImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = 4
         bpy.ops.object.bake(type='ROUGHNESS', use_clear=True)
@@ -622,7 +631,7 @@ class Object:
 
     def bakeNormalTextures(self):
         for _, mat in self.materials:
-            image = self.createBakeImage(self.name+'-'+mat.name+'-normal.png')
+            image = self.createBakeImage(self.name+'-'+mat.name+'-norm.png')
             mat.setNormalImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = 4
         bpy.ops.object.bake(type='NORMAL', use_clear=True)
@@ -632,7 +641,7 @@ class Object:
 
     def bakeOcclusionTextures(self):
         for _, mat in self.materials:
-            image = self.createBakeImage(self.name+'-'+mat.name+'-occlusion.png')
+            image = self.createBakeImage(self.name+'-'+mat.name+'-ao.png')
             mat.setOcclusionImage(image, self.bakeUVMap)
         self.scene.context.scene.cycles.samples = self.scene.bakeSamples
         bpy.ops.object.bake(type='AO', use_clear=True)
