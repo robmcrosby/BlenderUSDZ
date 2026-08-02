@@ -448,7 +448,7 @@ class Mesh:
         usdMesh = usdObj.createChild(name, classType)
         
         # Gather Mesh Components
-        extent = exportBpyExtents(self.objectCopy, self.scene.scale)
+        extent = exportBpyExtents(self.objectCopy)
         counts = exportBpyMeshVertexCounts(mesh)
         points, indices = exportBpyMeshVertices(mesh)
         usdMesh.setMesh(extent, points, indices, counts)
@@ -1042,17 +1042,20 @@ class Scene:
 
     def exportUsd(self):
         data = UsdData()
+        data['defaultPrim'] = 'Root'
+        data['metersPerUnit'] = 1.0
         data['upAxis'] = 'Y'
         if self.animated:
             data['startTimeCode'] = float(self.startFrame)
             data['endTimeCode'] = float(self.endFrame)
             data['timeCodesPerSecond'] = float(self.fps)
         data['customLayerData'] = self.customLayerData
+        root = data.createChild('Root', ClassType.Xform)
         if self.exportMaterials:
-            self.exportSharedMaterials(data)
+            self.exportSharedMaterials(root)
         if self.sharedMeshes:
-            self.exportSharedMeshes(data)
-        self.exportCollections(data)
+            self.exportSharedMeshes(root)
+        self.exportCollections(root)
         for obj in self.objects:
-            obj.exportUsd(data)
+            obj.exportUsd(root)
         return data
